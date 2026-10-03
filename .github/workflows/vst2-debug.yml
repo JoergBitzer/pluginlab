@@ -8,6 +8,9 @@ on:
       os:
         description: 'Runner (windows-latest, macos-latest, ubuntu-22.04)'
         default: 'macos-latest'
+      build_type:
+        description: 'CMake build type (RelWithDebInfo has symbols; Release is what CI uses)'
+        default: 'RelWithDebInfo'
 
 jobs:
   debug:
@@ -27,11 +30,11 @@ jobs:
 
       - name: Configure
         shell: bash
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ github.event.inputs.build_type }}
 
       - name: Build scanner and VST2 test plugin
         shell: bash
-        run: cmake --build build --config RelWithDebInfo --parallel 4 --target PluginLabScanner PluginLabTestGain_VST
+        run: cmake --build build --config ${{ github.event.inputs.build_type }} --parallel 4 --target PluginLabScanner PluginLabTestGain_VST
 
       - name: Scan the VST2 plugin on macOS, plain run and then under lldb
         if: runner.os == 'macOS'
@@ -40,7 +43,7 @@ jobs:
           scanner=$(find build/apps/scanner -name PluginLabScanner -type f | head -1)
           plugin=$PWD/build/test_plugins/PluginLabTestGain.vst
           echo "--- plain run"
-          "$scanner" "$plugin" /tmp/scan_result_plain.xml; echo "exit code $?"
+          "$scanner" "$plugin" /tmp/scan_result_plain.xml || echo "plain run failed with exit code $?"
           printf 'run\nbt all\nregister read pc\nquit\n' > /tmp/lldb_commands.txt
           echo "--- lldb"
           lldb -s /tmp/lldb_commands.txt -- "$scanner" "$plugin" /tmp/scan_result.xml 2>&1 | head -150 || true
@@ -51,8 +54,9 @@ jobs:
         run: |
           scanner=$(find build/apps/scanner -name PluginLabScanner.exe -type f | head -1)
           plugin=$PWD/build/test_plugins/PluginLabTestGain.dll
+          export MSYS_NO_PATHCONV=1   # Git Bash would turn /p into a path
           echo "--- plain run (no debugger)"
-          "$scanner" "$plugin" "C:\\Temp\\scan_result_plain.xml"; echo "exit code $?"
+          "$scanner" "$plugin" "C:\\Temp\\scan_result_plain.xml" || echo "plain run failed with exit code $?"
           debuggers="/c/Program Files (x86)/Windows Kits/10/Debuggers/x64"
           echo "--- enabling page heap for the scanner (finds heap overruns at the faulty write)"
           "$debuggers/gflags.exe" /p /enable PluginLabScanner.exe /full || true
