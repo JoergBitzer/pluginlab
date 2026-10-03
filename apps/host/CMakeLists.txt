@@ -29,6 +29,7 @@ add_custom_command(TARGET PluginLabHost POST_BUILD
 target_link_libraries(PluginLabHost
     PRIVATE
         pluginlab_core
+        pluginlab_hosting_ui
         juce::juce_gui_basics
         juce::juce_audio_processors
     PUBLIC

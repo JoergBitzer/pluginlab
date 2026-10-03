@@ -1,18 +1,31 @@
 #include "LoaderProcessor.h"
 
-#include "pluginlab/PluginLabVersion.h"
+#include "LoaderEditor.h"
+#include "pluginlab/hosting/LoaderState.h"
+#include "pluginlab/ui/GuiFormats.h"
 
 namespace
 {
 constexpr int kNumberOfPrograms = 1;
 constexpr int kOnlyProgramIndex = 0;
+constexpr double kDefaultSampleRate = 44100.0;
+constexpr int kDefaultBlockSize = 512;
 }
 
 LoaderProcessor::LoaderProcessor()
     : juce::AudioProcessor(BusesProperties()
                                .withInput("Input", juce::AudioChannelSet::stereo(), true)
-                               .withOutput("Output", juce::AudioChannelSet::stereo(), true))
+                               .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
+      m_sampleRate(kDefaultSampleRate),
+      m_blockSize(kDefaultBlockSize)
 {
+    pluginlab::ui::addGuiFormats(m_formatManager);
+}
+
+LoaderProcessor::~LoaderProcessor()
+{
+    const juce::ScopedLock lock(m_hostedLock);
+    m_hosted.reset();
 }
 
 const juce::String LoaderProcessor::getName() const
@@ -22,11 +35,31 @@ const juce::String LoaderProcessor::getName() const
 
 void LoaderProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused(sampleRate, samplesPerBlock);
+    m_sampleRate = sampleRate;
+    m_blockSize = samplesPerBlock;
+    const juce::ScopedLock lock(m_hostedLock);
+    configureHostedPlugin();
 }
 
 void LoaderProcessor::releaseResources()
 {
+    const juce::ScopedLock lock(m_hostedLock);
+    if (m_hosted != nullptr)
+    {
+        m_hosted->getInstance().releaseResources();
+    }
+}
+
+// Caller holds the lock. The loaded plugin gets the channel layout and the sample rate / block size of the loader.
+void LoaderProcessor::configureHostedPlugin()
+{
+    if (m_hosted == nullptr)
+    {
+        return;
+    }
+    juce::AudioPluginInstance& instance = m_hosted->getInstance();
+    instance.setPlayConfigDetails(getTotalNumInputChannels(), getTotalNumOutputChannels(), m_sampleRate, m_blockSize);
+    instance.prepareToPlay(m_sampleRate, m_blockSize);
 }
 
 bool LoaderProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -39,14 +72,19 @@ bool LoaderProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 
 void LoaderProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    juce::ignoreUnused(buffer, midiMessages);
     juce::ScopedNoDenormals noDenormals;
-    // pass-through: the audio stays in the buffer unchanged
+
+    const juce::ScopedTryLock lock(m_hostedLock);
+    if (! lock.isLocked() || m_hosted == nullptr)
+    {
+        return; // pass-through: the audio stays in the buffer unchanged
+    }
+    m_hosted->getInstance().processBlock(buffer, midiMessages);
 }
 
 juce::AudioProcessorEditor* LoaderProcessor::createEditor()
 {
-    return new juce::GenericAudioProcessorEditor(*this);
+    return new LoaderEditor(*this);
 }
 
 bool LoaderProcessor::hasEditor() const
@@ -95,14 +133,102 @@ void LoaderProcessor::changeProgramName(int index, const juce::String& newName)
     juce::ignoreUnused(index, newName);
 }
 
+pluginlab::hosting::HostedPlugin* LoaderProcessor::getHostedPlugin()
+{
+    return m_hosted.get();
+}
+
+bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juce::String& errorMessage)
+{
+    std::unique_ptr<pluginlab::hosting::HostedPlugin> plugin =
+        pluginlab::hosting::HostedPlugin::load(m_formatManager, description, m_sampleRate, m_blockSize, errorMessage);
+    if (plugin == nullptr)
+    {
+        return false;
+    }
+
+    if (onBeforeHostedPluginChanged)
+    {
+        onBeforeHostedPluginChanged(); // the editor of the old plugin goes first
+    }
+    {
+        const juce::ScopedLock lock(m_hostedLock);
+        if (m_hosted != nullptr)
+        {
+            m_hosted->getInstance().releaseResources();
+        }
+        m_hosted = std::move(plugin);
+        configureHostedPlugin();
+    }
+    setLatencySamples(m_hosted->getInstance().getLatencySamples());
+    if (onHostedPluginChanged)
+    {
+        onHostedPluginChanged();
+    }
+    return true;
+}
+
+void LoaderProcessor::unloadPlugin()
+{
+    if (onBeforeHostedPluginChanged)
+    {
+        onBeforeHostedPluginChanged();
+    }
+    {
+        const juce::ScopedLock lock(m_hostedLock);
+        m_hosted.reset();
+    }
+    setLatencySamples(0);
+    if (onHostedPluginChanged)
+    {
+        onHostedPluginChanged();
+    }
+}
+
 void LoaderProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    juce::ignoreUnused(destData);
+    if (m_hosted == nullptr)
+    {
+        return;
+    }
+    juce::MemoryBlock hostedState;
+    m_hosted->getInstance().getStateInformation(hostedState);
+    destData = pluginlab::hosting::createLoaderState(m_hosted->getDescription(), hostedState);
+}
+
+void LoaderProcessor::restoreState(const juce::MemoryBlock& state)
+{
+    juce::PluginDescription description;
+    juce::MemoryBlock hostedState;
+    if (! pluginlab::hosting::parseLoaderState(state.getData(), static_cast<int>(state.getSize()), description, hostedState))
+    {
+        juce::Logger::writeToLog("PluginLabLoader: the saved state is not a loader state");
+        return;
+    }
+    juce::String error;
+    if (! loadPlugin(description, error))
+    {
+        // the plugin is gone or does not load: the loader stays empty
+        juce::Logger::writeToLog("PluginLabLoader: cannot load " + description.fileOrIdentifier + ": " + error);
+        return;
+    }
+    if (hostedState.getSize() > 0)
+    {
+        m_hosted->getInstance().setStateInformation(hostedState.getData(), static_cast<int>(hostedState.getSize()));
+    }
 }
 
 void LoaderProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused(data, sizeInBytes);
+    // Loading needs the message thread. Some hosts call this from another thread: then it is done there, a moment later.
+    const juce::MemoryBlock state(data, static_cast<size_t>(sizeInBytes));
+    if (juce::MessageManager::getInstance()->isThisTheMessageThread())
+    {
+        restoreState(state);
+        return;
+    }
+    juce::Logger::writeToLog("PluginLabLoader: the state is restored later on the message thread");
+    juce::MessageManager::callAsync([this, state] { restoreState(state); });
 }
 
 // the entry point that the plugin wrappers call

@@ -10,7 +10,8 @@ target_sources(PluginLabTests
         VersionTests.cpp
         ScannerTests.cpp
         HostedPluginTests.cpp
-        ValidatorTests.cpp)
+        ValidatorTests.cpp
+        LoaderTests.cpp)
 
 target_compile_definitions(PluginLabTests
     PRIVATE
@@ -24,6 +25,7 @@ target_compile_definitions(PluginLabTests
 target_link_libraries(PluginLabTests
     PRIVATE
         pluginlab_core
+        pluginlab_loader_core
         juce::juce_core
         juce::juce_events
     PUBLIC

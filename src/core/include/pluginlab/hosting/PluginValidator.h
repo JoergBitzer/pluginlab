@@ -39,6 +39,10 @@ public:
 
     ValidationResult validate(const juce::File& pluginFile);
 
+    // The remembered result for this plugin file, without running pluginval. Returns false if there is none (not validated yet,
+    // or the plugin file changed since).
+    bool getCachedResult(const juce::File& pluginFile, ValidationResult& result) const;
+
     // How many times pluginval was started by this object (a cache hit does not start it).
     int getNumberOfPluginvalRuns() const;
 

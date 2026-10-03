@@ -7,13 +7,15 @@ The plan, the decisions and the work packages are in `planning.md`; the lessons 
 ## The project
 pluginlab (mission: divide the myth from reality) measures, compares and matches audio plugins; the product is JUCE/C++
 (Python is only the oracle for the measurements, in the separate repository `measurement_tool`).
-- `src/core/`: static library `pluginlab_core` (no GUI code); the plugin-hosting core grows here.
+- `src/core/`: static library `pluginlab_core` (no GUI code): plugin scanning (`PluginScanner`, one scanner process per file), `HostedPlugin`, `PluginValidator`
+  (pluginval in a child process, cached), `LoaderState`, VST2/VST3 formats. `src/ui/`: `pluginlab_hosting_ui` (browser, parameter table, editor factory), used by host and loader.
+- `cmake/Vst2Sdk.cmake` + `vst2_shim/` + `external/FST`: the free VST2 headers (GPL) with five patches; read the comments before touching them.
 - `apps/host/`: stand-alone host application `PluginLabHost` (GUI; command line: `--write-version <file>`, `--report <folder> <file>`,
   `--scan <folder> --load <plugin name>`). `apps/scanner/`: `PluginLabScanner`, scans one plugin file in its own process
   (crash isolation); it is copied next to the host after the build.
-- `plugins/loader/`: the loader plugin `PluginLabLoader` (VST3).
+- `plugins/loader/`: `pluginlab_loader_core` (LoaderProcessor + LoaderEditor, also used by the tests) and the plugin `PluginLabLoader` (VST3).
 - `tests/`: `PluginLabTests` (`juce::UnitTest` console app, registered with CTest), `CheckHostVersion.cmake`, `CheckHostReport.cmake`;
-  `tests/plugins/`: test plugins with known behavior (Gain: 4 parameters; Crash: crashes when created), built into `<build>/test_plugins`.
+  `tests/plugins/`: test plugins with known behavior (Gain: 4 parameters, state, VST3 + VST2; Crash: crashes when created; Crash Process: crashes while processing), built into `<build>/test_plugins`.
 - `tools/`: `run_pluginval.sh` / `.ps1`.
 - `docs/`: `design/` (one design note per work package), `prototype/` (evidence from the prototype), `reference/`.
 - `CMakeLists.txt`: the version of the whole project (`project(pluginlab VERSION x.y.z)`).
@@ -53,6 +55,9 @@ on a machine without one). CI (`.github/workflows/ci.yml`) builds, tests and run
 - Headers include as little as possible: forward declare, include only what is used, no includes in headers just to pass them on.
 - Member variables `m_...`, constants `kName`; algorithm and core code free of GUI code (no `juce_gui_*` includes in `src/core`).
 - GUI text: only Latin-1 characters (Windows fonts lack more).
+
+- CI installs pluginval before the tests and sets `PLUGINLAB_REQUIRE_PLUGINVAL=1` (the validator tests must not be skipped). Locally they are skipped without pluginval.
+- `.github/workflows/vst2-debug.yml` runs the scanner under a debugger (lldb/cdb/gdb) on a runner: use it to get a stack of a crash that only happens on Windows or macOS.
 
 ## Traps
 - Never change anything in `JUCE/` (submodule).

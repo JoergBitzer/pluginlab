@@ -68,3 +68,26 @@ taken over as copies, nothing depends on it.
   the stack layout. Patch 5 in `cmake/Vst2Sdk.cmake` adds the padding.
 - The Windows run under the debugger (cdb) and the plain RelWithDebInfo run did not crash: stack-protector failures depend on the
   build configuration, so "works under a debugger" is no proof.
+
+## Findings and decisions of W3b and W3c
+- **Validation** (`PluginValidator`): pluginval runs in a child process (`--strictness-level 5 --timeout-ms ... --validate <file>`); on Linux and
+  macOS with a temporary `HOME` (`env HOME=...`), like `tools/run_pluginval.sh`. "Passed" needs exit code 0 *and* the line `SUCCESS` in the output
+  (a child killed by a signal reports exit code 0 on POSIX). pluginval 1.0.4 validates VST3 and VST2 plugins; level 5 takes about 2 s for the test
+  plugin. The result is remembered per plugin file (path + size + modification time of every file in a bundle, strictness level, pluginval file),
+  in `<application data>/pluginlab/validation_cache.xml`.
+- **Policy in the UIs** (`PluginBrowserComponent`): a plugin is loaded only after it passed; validation runs when the user presses Load (not for
+  the whole list: it can take a minute per plugin); a plugin that failed or timed out is never loaded; if pluginval is missing or "Load without
+  validation" is ticked, a not yet validated plugin can be loaded. Test plugins: the one that crashes while processing fails the validation
+  without taking the host down, a file that is not a plugin fails.
+- **Loader plugin** (`plugins/loader`): `LoaderProcessor` hosts one plugin and passes the audio through it (the audio thread only try-locks: while the
+  plugin is replaced the audio passes through unchanged); its state is the description of the hosted plugin plus the hosted plugin's state
+  (`hosting/LoaderState.h`); the editor is the browser, the parameter table and the editor of the hosted plugin (a generic one if there is none).
+  The processor and the editor are the static library `pluginlab_loader_core`: the plugin links it, and the tests use `LoaderProcessor` directly.
+  Reason: a JUCE host hands a hosted VST3 plugin only states in the plugin wrapper's own format, so the loader's state cannot be injected through a
+  hosted wrapper in a test. The wrapper itself is covered by pluginval.
+- **Shared UI** (`src/ui`, `pluginlab_hosting_ui`): `PluginBrowserComponent`, `ParameterTableComponent`, `TextTableModel`, `createEditorFor`,
+  `addGuiFormats`; the host window (`apps/host`) is built from them.
+- **Not done / limits:** the loader runs effects only, no latency compensation, no sample-accurate parameter handling, no MIDI; restoring a session state
+  loads the stored plugin without a new validation; the loader and the host were tried with the test plugins and on Linux with a screenshot, not in a
+  real DAW (Bitwig Studio 5.2.7 is installed on the development machine, not used yet); Cubase and Windows/macOS DAWs not tried; VST2 on Windows and
+  macOS only with the test plugins (CI), on Linux also with the author's third-party VST2 plugins (scan and load).

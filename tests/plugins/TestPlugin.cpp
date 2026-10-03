@@ -12,6 +12,7 @@ constexpr float kMaxFrequencyHz = 20000.0f;
 constexpr float kFrequencySkew = 0.3f;
 constexpr float kDefaultFrequencyHz = 1000.0f;
 constexpr int kGainDecimals = 1;
+const juce::String kStateTag = "TestPluginState";
 constexpr int kNumberOfPrograms = 1;
 constexpr int kOnlyProgramIndex = 0;
 
@@ -144,12 +145,25 @@ void TestPluginProcessor::changeProgramName(int index, const juce::String& newNa
 
 void TestPluginProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    juce::ignoreUnused(destData);
+    juce::XmlElement state(kStateTag);
+    state.setAttribute("gain", static_cast<double>(m_gain->get()));
+    state.setAttribute("frequency", static_cast<double>(m_frequency->get()));
+    state.setAttribute("mode", m_mode->getIndex());
+    state.setAttribute("bypass", m_bypass->get());
+    copyXmlToBinary(state, destData);
 }
 
 void TestPluginProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused(data, sizeInBytes);
+    const std::unique_ptr<juce::XmlElement> state = getXmlFromBinary(data, sizeInBytes);
+    if (state == nullptr || ! state->hasTagName(kStateTag))
+    {
+        return;
+    }
+    *m_gain = static_cast<float>(state->getDoubleAttribute("gain", kDefaultGainDb));
+    *m_frequency = static_cast<float>(state->getDoubleAttribute("frequency", kDefaultFrequencyHz));
+    *m_mode = state->getIntAttribute("mode", 0);
+    *m_bypass = state->getBoolAttribute("bypass", false);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

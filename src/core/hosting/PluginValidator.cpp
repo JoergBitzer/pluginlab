@@ -262,6 +262,23 @@ ValidationResult PluginValidator::runPluginval(const juce::File& pluginFile) con
     return result;
 }
 
+bool PluginValidator::getCachedResult(const juce::File& pluginFile, ValidationResult& result) const
+{
+    if (! pluginFile.exists())
+    {
+        return false;
+    }
+    const auto cached = m_cache.find(makeCacheKey(pluginFile));
+    if (cached == m_cache.end())
+    {
+        return false;
+    }
+    result.status = cached->second.status;
+    result.message = cached->second.message;
+    result.fromCache = true;
+    return true;
+}
+
 ValidationResult PluginValidator::validate(const juce::File& pluginFile)
 {
     if (! m_pluginvalExecutable.existsAsFile() && m_pluginvalExecutable.getFullPathName() != kPluginvalName)
