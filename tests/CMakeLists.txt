@@ -9,7 +9,8 @@ target_sources(PluginLabTests
         TestMain.cpp
         VersionTests.cpp
         ScannerTests.cpp
-        HostedPluginTests.cpp)
+        HostedPluginTests.cpp
+        ValidatorTests.cpp)
 
 target_compile_definitions(PluginLabTests
     PRIVATE
@@ -30,7 +31,7 @@ target_link_libraries(PluginLabTests
         juce::juce_recommended_warning_flags)
 
 # the tests need the scanner and the test plugins built first
-add_dependencies(PluginLabTests PluginLabScanner PluginLabTestGain_VST3 PluginLabTestCrash_VST3 PluginLabHost)
+add_dependencies(PluginLabTests PluginLabScanner PluginLabTestGain_VST3 PluginLabTestCrash_VST3 PluginLabTestCrashProcess_VST3 PluginLabHost)
 if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()

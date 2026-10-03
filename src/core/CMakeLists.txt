@@ -8,6 +8,7 @@ add_library(pluginlab_core STATIC
     hosting/HostedPlugin.cpp
     hosting/PluginDisplayName.cpp
     hosting/PluginScanner.cpp
+    hosting/PluginValidator.cpp
     hosting/PluginScanXml.cpp)
 
 target_include_directories(pluginlab_core

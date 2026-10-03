@@ -73,6 +73,12 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     juce::ignoreUnused(midiMessages);
     juce::ScopedNoDenormals noDenormals;
 
+#if PLUGINLAB_TEST_PLUGIN_CRASHES_IN_PROCESS
+    // a plugin that scans and loads fine, but crashes when it processes audio: only a validation with processing finds it
+    volatile int* nothing = nullptr;
+    *nothing = 1;
+#endif
+
     if (m_bypass->get())
     {
         return;

@@ -1,0 +1,67 @@
+# Debugging aid: builds only the scanner and the VST2 test plugin with debug symbols and runs the scanner on the VST2 plugin
+# under a debugger (lldb on macOS, cdb on Windows) to get a stack trace of a crash. Start it with "Run workflow".
+name: VST2 debug
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: 'Runner (windows-latest, macos-latest, ubuntu-22.04)'
+        default: 'macos-latest'
+
+jobs:
+  debug:
+    runs-on: ${{ github.event.inputs.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libxi-dev \
+            libglu1-mesa-dev mesa-common-dev xvfb gdb
+
+      - name: Configure
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build scanner and VST2 test plugin
+        shell: bash
+        run: cmake --build build --config RelWithDebInfo --parallel 4 --target PluginLabScanner PluginLabTestGain_VST
+
+      - name: Scan the VST2 plugin under lldb (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          scanner=$(find build/apps/scanner -name PluginLabScanner -type f | head -1)
+          plugin=build/test_plugins/PluginLabTestGain.vst
+          ls -la build/test_plugins
+          lldb --batch -o "run" -o "bt" -o "thread backtrace all" -o "quit" -- "$scanner" "$plugin" /tmp/scan_result.xml || true
+
+      - name: Scan the VST2 plugin under cdb (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          scanner=$(find build/apps/scanner -name PluginLabScanner.exe -type f | head -1)
+          plugin=$(ls build/test_plugins/*.dll | head -1)
+          ls -la build/test_plugins
+          cdb=$(ls "/c/Program Files (x86)/Windows Kits/10/Debuggers/x64/cdb.exe" 2>/dev/null | head -1)
+          echo "cdb: $cdb"
+          if [ -n "$cdb" ]; then
+            "$cdb" -g -G -c "g;.lines;kb 60;q" "$scanner" "$plugin" "C:\\Temp\\scan_result.xml" || true
+          else
+            echo "no cdb found; plain run:"
+            "$scanner" "$plugin" "C:\\Temp\\scan_result.xml"; echo "exit code $?"
+          fi
+
+      - name: Scan the VST2 plugin under gdb (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          scanner=$(find build/apps/scanner -name PluginLabScanner -type f | head -1)
+          plugin=$(ls build/test_plugins/*PluginLabTestGain*.so | head -1)
+          xvfb-run -a gdb -batch -ex run -ex bt --args "$scanner" "$plugin" /tmp/scan_result.xml || true

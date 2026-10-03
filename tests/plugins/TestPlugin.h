@@ -6,7 +6,8 @@
 //   parameters (in this order): Gain (-24 ... 24 dB, default 0), Frequency (20 ... 20000 Hz, default 1000),
 //                               Mode (choice A, B, C), Bypass (switch)
 //   processing: multiplies the audio with the gain, unless bypassed
-// Built with PLUGINLAB_TEST_PLUGIN_CRASHES=1 it crashes as soon as the plugin object is created (a plugin that cannot be scanned).
+// Built with PLUGINLAB_TEST_PLUGIN_CRASHES=1 it crashes as soon as the plugin object is created (a plugin that cannot be scanned);
+// with PLUGINLAB_TEST_PLUGIN_CRASHES_IN_PROCESS=1 it crashes in processBlock (scanning and loading work).
 class TestPluginProcessor : public juce::AudioProcessor
 {
 public:

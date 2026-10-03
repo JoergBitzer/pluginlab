@@ -37,6 +37,11 @@ inline juce::File getCrashPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestCrash.vst3");
 }
 
+inline juce::File getCrashInProcessPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestCrashProcess.vst3");
+}
+
 inline juce::File getNotAPluginFile()
 {
     return getTestPluginFolder().getChildFile("NotAPlugin.vst3");
