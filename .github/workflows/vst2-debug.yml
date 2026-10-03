@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: cmake --build build --config RelWithDebInfo --parallel 4 --target PluginLabScanner PluginLabTestGain_VST
 
-      - name: Scan the VST2 plugin (macOS: plain run, then under lldb with a command file)
+      - name: Scan the VST2 plugin on macOS, plain run and then under lldb
         if: runner.os == 'macOS'
         shell: bash
         run: |
@@ -45,7 +45,7 @@ jobs:
           echo "--- lldb"
           lldb -s /tmp/lldb_commands.txt -- "$scanner" "$plugin" /tmp/scan_result.xml 2>&1 | head -150 || true
 
-      - name: Scan the VST2 plugin (Windows: plain run, then under cdb with page heap)
+      - name: Scan the VST2 plugin on Windows, plain run and then under cdb with page heap
         if: runner.os == 'Windows'
         shell: bash
         run: |
