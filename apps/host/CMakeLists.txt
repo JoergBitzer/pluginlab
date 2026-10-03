@@ -1,4 +1,5 @@
-# PluginLabHost: the stand-alone host application (W1: an empty window with the version).
+# PluginLabHost: the stand-alone host application. W2: plugin list (scanned by PluginLabScanner processes), load/unload,
+# parameter table, editor windows; command line modes --write-version and --report for CI.
 juce_add_gui_app(PluginLabHost
     PRODUCT_NAME "PluginLabHost"
     COMPANY_NAME "Jade_Hochschule"
@@ -6,7 +7,10 @@ juce_add_gui_app(PluginLabHost
 
 target_sources(PluginLabHost
     PRIVATE
-        Main.cpp)
+        Main.cpp
+        HostMainComponent.cpp
+        HostReport.cpp
+        PluginWindow.cpp)
 
 target_compile_definitions(PluginLabHost
     PRIVATE
@@ -15,10 +19,18 @@ target_compile_definitions(PluginLabHost
         JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabHost,JUCE_PRODUCT_NAME>"
         JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PluginLabHost,JUCE_VERSION>")
 
+# the scanner is started by the host and is expected in the folder of the host executable (on macOS inside the app bundle):
+# build it first and copy it there after the host is built
+add_dependencies(PluginLabHost PluginLabScanner)
+add_custom_command(TARGET PluginLabHost POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:PluginLabScanner> $<TARGET_FILE_DIR:PluginLabHost>
+    COMMENT "Copying PluginLabScanner next to PluginLabHost")
+
 target_link_libraries(PluginLabHost
     PRIVATE
         pluginlab_core
         juce::juce_gui_basics
+        juce::juce_audio_processors
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

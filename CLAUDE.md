@@ -8,9 +8,12 @@ The plan, the decisions and the work packages are in `planning.md`; the lessons 
 pluginlab (mission: divide the myth from reality) measures, compares and matches audio plugins; the product is JUCE/C++
 (Python is only the oracle for the measurements, in the separate repository `measurement_tool`).
 - `src/core/`: static library `pluginlab_core` (no GUI code); the plugin-hosting core grows here.
-- `apps/host/`: stand-alone host application `PluginLabHost`.
+- `apps/host/`: stand-alone host application `PluginLabHost` (GUI; command line: `--write-version <file>`, `--report <folder> <file>`,
+  `--scan <folder> --load <plugin name>`). `apps/scanner/`: `PluginLabScanner`, scans one plugin file in its own process
+  (crash isolation); it is copied next to the host after the build.
 - `plugins/loader/`: the loader plugin `PluginLabLoader` (VST3).
-- `tests/`: `PluginLabTests` (`juce::UnitTest` console app, registered with CTest), `CheckHostVersion.cmake`.
+- `tests/`: `PluginLabTests` (`juce::UnitTest` console app, registered with CTest), `CheckHostVersion.cmake`, `CheckHostReport.cmake`;
+  `tests/plugins/`: test plugins with known behavior (Gain: 4 parameters; Crash: crashes when created), built into `<build>/test_plugins`.
 - `tools/`: `run_pluginval.sh` / `.ps1`.
 - `docs/`: `design/` (one design note per work package), `prototype/` (evidence from the prototype), `reference/`.
 - `CMakeLists.txt`: the version of the whole project (`project(pluginlab VERSION x.y.z)`).

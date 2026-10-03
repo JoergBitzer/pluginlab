@@ -2,51 +2,39 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "HostMainComponent.h"
+#include "HostReport.h"
 #include "pluginlab/PluginLabVersion.h"
 
 namespace
 {
-constexpr int kWindowWidth = 600;
-constexpr int kWindowHeight = 300;
-constexpr float kLabelFontHeight = 20.0f;
 
-// Command line: "--write-version <file>" writes the version into the file and quits without opening a window.
-// (A file, because a GUI program on Windows has no console; CI checks the file.)
+// Command line modes without a window (files, because a GUI program on Windows has no console; CI checks the files):
+//   --write-version <file>              writes the version into the file and quits
+//   --report <plugin folder> <file>     scans the folder, loads the plugins, writes a report (see HostReport.h) and quits
+// Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
+// after the scan
 const juce::String kWriteVersionOption = "--write-version";
+const juce::String kReportOption = "--report";
+const juce::String kScanOption = "--scan";
+const juce::String kLoadOption = "--load";
+constexpr int kArgumentsOfOneValue = 1;
+constexpr int kArgumentsOfWriteVersion = 1;
+constexpr int kArgumentsOfReport = 2;
+constexpr int kExitOk = 0;
+constexpr int kExitReportFailed = 1;
 }
-
-// The content of the window: W1 shows only the name and the version.
-class MainContent : public juce::Component
-{
-public:
-    MainContent()
-    {
-        m_label.setText("pluginlab host, version " + juce::String(pluginlab::getVersionString()), juce::dontSendNotification);
-        m_label.setJustificationType(juce::Justification::centred);
-        m_label.setFont(juce::FontOptions(kLabelFontHeight));
-        addAndMakeVisible(m_label);
-        setSize(kWindowWidth, kWindowHeight);
-    }
-
-    void resized() override
-    {
-        m_label.setBounds(getLocalBounds());
-    }
-
-private:
-    juce::Label m_label;
-};
 
 class MainWindow : public juce::DocumentWindow
 {
 public:
-    explicit MainWindow(const juce::String& name)
+    MainWindow(const juce::String& name, const pluginlab::host::StartupOptions& options)
         : juce::DocumentWindow(name,
                                juce::Desktop::getInstance().getDefaultLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId),
                                juce::DocumentWindow::allButtons)
     {
         setUsingNativeTitleBar(true);
-        setContentOwned(new MainContent(), true);
+        setContentOwned(new pluginlab::host::HostMainComponent(options), true);
         setResizable(true, true);
         centreWithSize(getWidth(), getHeight());
         setVisible(true);
@@ -79,17 +67,44 @@ public:
     void initialise(const juce::String& commandLine) override
     {
         const juce::StringArray arguments = juce::StringArray::fromTokens(commandLine, true);
-        const int optionIndex = arguments.indexOf(kWriteVersionOption);
-        const bool writeVersionOnly = optionIndex >= 0 && optionIndex + 1 < arguments.size();
-        if (writeVersionOnly)
+        const int versionIndex = arguments.indexOf(kWriteVersionOption);
+        if (versionIndex >= 0 && versionIndex + kArgumentsOfWriteVersion < arguments.size())
         {
-            const juce::File versionFile(arguments[optionIndex + 1].unquoted());
+            const juce::File versionFile(arguments[versionIndex + 1].unquoted());
             versionFile.replaceWithText(juce::String(pluginlab::getVersionString()));
             quit();
             return;
         }
 
-        m_mainWindow = std::make_unique<MainWindow>(getApplicationName());
+        const int reportIndex = arguments.indexOf(kReportOption);
+        if (reportIndex >= 0 && reportIndex + kArgumentsOfReport < arguments.size())
+        {
+            const juce::File pluginFolder(arguments[reportIndex + 1].unquoted());
+            const juce::File reportFile(arguments[reportIndex + 2].unquoted());
+            const bool written = pluginlab::host::writeReport(pluginFolder, reportFile);
+            int returnValue = kExitOk;
+            if (! written)
+            {
+                returnValue = kExitReportFailed;
+            }
+            setApplicationReturnValue(returnValue);
+            quit();
+            return;
+        }
+
+        pluginlab::host::StartupOptions options;
+        const int scanIndex = arguments.indexOf(kScanOption);
+        if (scanIndex >= 0 && scanIndex + kArgumentsOfOneValue < arguments.size())
+        {
+            options.scanFolder = juce::File(arguments[scanIndex + 1].unquoted());
+        }
+        const int loadIndex = arguments.indexOf(kLoadOption);
+        if (loadIndex >= 0 && loadIndex + kArgumentsOfOneValue < arguments.size())
+        {
+            options.pluginNameToLoad = arguments[loadIndex + 1].unquoted();
+        }
+
+        m_mainWindow = std::make_unique<MainWindow>(getApplicationName(), options);
     }
 
     void shutdown() override
