@@ -47,16 +47,8 @@ jobs:
         shell: bash
         run: cmake --build build --config Release --parallel 4
 
-      # PluginLabTests (juce::UnitTest) and the smoke test of PluginLabHost (it writes its version and quits)
-      - name: Test (Linux)
-        if: runner.os == 'Linux'
-        run: xvfb-run -a ctest --test-dir build -C Release --output-on-failure
-
-      - name: Test (Windows, macOS)
-        if: runner.os != 'Linux'
-        shell: bash
-        run: ctest --test-dir build -C Release --output-on-failure
-
+      # pluginval first: the scripts download it (tools/run_pluginval.*), the validator tests of PluginLabTests then find it
+      # and must not be skipped (PLUGINLAB_REQUIRE_PLUGINVAL)
       - name: Validate the loader plugin with pluginval (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a tools/run_pluginval.sh "$LOADER_VST3" 1
@@ -69,3 +61,17 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: tools/run_pluginval.ps1 "$env:LOADER_VST3" 1
+
+      # PluginLabTests (juce::UnitTest), the end-to-end report of the host and the smoke test of PluginLabHost
+      - name: Test (Linux)
+        if: runner.os == 'Linux'
+        env:
+          PLUGINLAB_REQUIRE_PLUGINVAL: "1"
+        run: xvfb-run -a ctest --test-dir build -C Release --output-on-failure
+
+      - name: Test (Windows, macOS)
+        if: runner.os != 'Linux'
+        shell: bash
+        env:
+          PLUGINLAB_REQUIRE_PLUGINVAL: "1"
+        run: ctest --test-dir build -C Release --output-on-failure
