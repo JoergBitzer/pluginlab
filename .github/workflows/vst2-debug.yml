@@ -33,30 +33,32 @@ jobs:
         shell: bash
         run: cmake --build build --config RelWithDebInfo --parallel 4 --target PluginLabScanner PluginLabTestGain_VST
 
-      - name: Scan the VST2 plugin under lldb (macOS)
+      - name: Scan the VST2 plugin (macOS: plain run, then under lldb with a command file)
         if: runner.os == 'macOS'
         shell: bash
         run: |
           scanner=$(find build/apps/scanner -name PluginLabScanner -type f | head -1)
-          plugin=build/test_plugins/PluginLabTestGain.vst
-          ls -la build/test_plugins
-          lldb --batch -o "run" -o "bt" -o "thread backtrace all" -o "quit" -- "$scanner" "$plugin" /tmp/scan_result.xml || true
+          plugin=$PWD/build/test_plugins/PluginLabTestGain.vst
+          echo "--- plain run"
+          "$scanner" "$plugin" /tmp/scan_result_plain.xml; echo "exit code $?"
+          printf 'run\nbt all\nregister read pc\nquit\n' > /tmp/lldb_commands.txt
+          echo "--- lldb"
+          lldb -s /tmp/lldb_commands.txt -- "$scanner" "$plugin" /tmp/scan_result.xml 2>&1 | head -150 || true
 
-      - name: Scan the VST2 plugin under cdb (Windows)
+      - name: Scan the VST2 plugin (Windows: plain run, then under cdb with page heap)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           scanner=$(find build/apps/scanner -name PluginLabScanner.exe -type f | head -1)
-          plugin=$(ls build/test_plugins/*.dll | head -1)
-          ls -la build/test_plugins
-          cdb=$(ls "/c/Program Files (x86)/Windows Kits/10/Debuggers/x64/cdb.exe" 2>/dev/null | head -1)
-          echo "cdb: $cdb"
-          if [ -n "$cdb" ]; then
-            "$cdb" -g -G -c "g;.lines;kb 60;q" "$scanner" "$plugin" "C:\\Temp\\scan_result.xml" || true
-          else
-            echo "no cdb found; plain run:"
-            "$scanner" "$plugin" "C:\\Temp\\scan_result.xml"; echo "exit code $?"
-          fi
+          plugin=$PWD/build/test_plugins/PluginLabTestGain.dll
+          echo "--- plain run (no debugger)"
+          "$scanner" "$plugin" "C:\\Temp\\scan_result_plain.xml"; echo "exit code $?"
+          debuggers="/c/Program Files (x86)/Windows Kits/10/Debuggers/x64"
+          echo "--- enabling page heap for the scanner (finds heap overruns at the faulty write)"
+          "$debuggers/gflags.exe" /p /enable PluginLabScanner.exe /full || true
+          echo "--- cdb"
+          "$debuggers/cdb.exe" -g -G -c "g;.lines;kb 60;q" "$scanner" "$plugin" "C:\\Temp\\scan_result.xml" 2>&1 | grep -v "ModLoad\|NatVis" | head -150 || true
+          "$debuggers/gflags.exe" /p /disable PluginLabScanner.exe || true
 
       - name: Scan the VST2 plugin under gdb (Linux)
         if: runner.os == 'Linux'
