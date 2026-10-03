@@ -1,10 +1,16 @@
+# build folders
+build/
+build-*/
+
+# downloaded third-party plugins, test audio and rendered output are not versioned
+/downloaded_plugins/
+/audio/
+/renders/
+
+# Python helper scripts (oracle) and editors
 __pycache__/
 *.pyc
 .venv/
-.ipynb_checkpoints/
 .pytest_cache/
+.ipynb_checkpoints/
 *.egg-info/
-# third-party plugins, test audio and rendered output are not versioned
-plugins/
-audio/
-renders/
