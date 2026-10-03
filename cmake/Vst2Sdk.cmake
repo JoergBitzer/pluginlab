@@ -17,6 +17,21 @@
 # Binaries with VST2 are GPL v3 (compatible with the AGPL v3 of JUCE).
 set(PLUGINLAB_VST2 OFF)
 
+# Fallback, only if FST turns out not to be good enough: the official Steinberg VST2 SDK, for someone who holds a Steinberg VST2 licence
+# (the author does). It is never part of this repository and never put into CI by the project: point the environment variable (or
+# the CMake variable) PLUGINLAB_VST2_SDK_DIR to the folder that contains pluginterfaces/vst2.x/aeffectx.h. FST and its patches are then
+# not used. NOT TESTED so far (no SDK available when this was written). Binaries built with the official SDK are under the Steinberg
+# licence terms as well: check the licence before publishing them.
+set(PLUGINLAB_VST2_SDK_DIR "$ENV{PLUGINLAB_VST2_SDK_DIR}" CACHE PATH "Folder with the official Steinberg VST2 SDK (optional fallback instead of FST)")
+if(PLUGINLAB_VST2_SDK_DIR AND EXISTS "${PLUGINLAB_VST2_SDK_DIR}/pluginterfaces/vst2.x/aeffectx.h")
+    juce_set_vst2_sdk_path("${PLUGINLAB_VST2_SDK_DIR}")
+    set(PLUGINLAB_VST2 ON)
+    message(STATUS "VST2 support: ON (official Steinberg SDK in ${PLUGINLAB_VST2_SDK_DIR}; FST is not used)")
+    return()
+elseif(PLUGINLAB_VST2_SDK_DIR)
+    message(FATAL_ERROR "PLUGINLAB_VST2_SDK_DIR is set, but ${PLUGINLAB_VST2_SDK_DIR}/pluginterfaces/vst2.x/aeffectx.h does not exist")
+endif()
+
 set(FST_HEADER_DIR "${CMAKE_SOURCE_DIR}/external/FST/fst")
 if(EXISTS "${FST_HEADER_DIR}/aeffect.h" AND EXISTS "${FST_HEADER_DIR}/aeffectx.h")
     set(VST2_SDK_DIR "${CMAKE_BINARY_DIR}/vst2_sdk")

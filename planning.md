@@ -67,6 +67,7 @@ Details and evidence: [docs/prototype/LESSONS_LEARNED.md](docs/prototype/LESSONS
 | EQ first, then compressor, delay, reverb; mono/stereo first | **DECIDED** |
 | "Equal": technical (frequency response within 0.1 dB, null depth below -60 dB, in a settings file/preset), perceptual models later | **DECIDED** |
 | Test audio: free sample packs (MusicRadar SampleRadar) via download scripts, not stored in the repo | **DECIDED** |
+| **VST2 headers: FST is the default; the official Steinberg VST2 SDK is only a fallback if FST is not good enough.** The author holds a Steinberg VST2 licence; the SDK is never committed and never put into CI by the project (switch: `PLUGINLAB_VST2_SDK_DIR`, prepared in `cmake/Vst2Sdk.cmake`, untested) | **DECIDED** (2026-10-04) |
 | Plugin format: VST3 first; **VST2 early in the project** (via the GPL project named in the reference; licence confirmed by the author) so that plugins can be tested as VST2 as well | **DECIDED** |
 | Name: `pluginlab` (repository and CMake project) | **DECIDED** |
 | One **plugin-hosting core** shared by the stand-alone host and the loader plugin; the loader plugin is built right after the first host part (work package W3) | **DECIDED** |
