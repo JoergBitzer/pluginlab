@@ -2,6 +2,10 @@
 
 #include <map>
 
+#if JUCE_WINDOWS
+#include <windows.h>
+#endif
+
 namespace pluginlab::hosting
 {
 namespace
@@ -224,16 +228,35 @@ ValidationResult PluginValidator::runPluginval(const juce::File& pluginFile) con
     arguments.add("--validate");
     arguments.add(pluginFile.getFullPathName());
 
+    // A plugin that crashes inside pluginval must not open a Windows error dialog that nobody can click: the child process inherits
+    // the error mode of this process at the moment it is created. The old mode is restored right after the start.
+#if JUCE_WINDOWS
+    const UINT oldErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+#endif
     juce::ChildProcess pluginval;
-    if (! pluginval.start(arguments))
+    const bool started = pluginval.start(arguments);
+#if JUCE_WINDOWS
+    SetErrorMode(oldErrorMode);
+#endif
+    if (! started)
     {
         result.status = ValidationStatus::NotAvailable;
         result.message = "pluginval could not be started";
         return result;
     }
 
-    // pluginval has its own timeout between test outputs; this is the limit for the whole run
-    if (! pluginval.waitForProcessToFinish(m_timeoutMs * 2))
+    // The output is read while pluginval runs: if it is only read afterwards, a long log fills the pipe, pluginval blocks on writing and
+    // never finishes. The read ends when the process ends. Time limits: pluginval's own (--timeout-ms: no output for that long).
+    juce::String output;
+    constexpr int kReadBufferSize = 4096;
+    char buffer[kReadBufferSize];
+    int bytesRead = pluginval.readProcessOutput(buffer, kReadBufferSize);
+    while (bytesRead > 0)
+    {
+        output += juce::String::fromUTF8(buffer, bytesRead);
+        bytesRead = pluginval.readProcessOutput(buffer, kReadBufferSize);
+    }
+    if (! pluginval.waitForProcessToFinish(m_timeoutMs))
     {
         pluginval.kill();
         result.status = ValidationStatus::TimedOut;
@@ -241,7 +264,6 @@ ValidationResult PluginValidator::runPluginval(const juce::File& pluginFile) con
         return result;
     }
 
-    const juce::String output = pluginval.readAllProcessOutput();
     result.log = tailOf(output);
     // exit code 0 alone is not enough: a child killed by a signal reports 0 on POSIX; pluginval prints SUCCESS at the end
     const bool passed = pluginval.getExitCode() == 0 && output.contains(kSuccessLine);

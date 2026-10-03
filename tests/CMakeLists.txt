@@ -39,6 +39,8 @@ if(PLUGINLAB_VST2)
 endif()
 
 add_test(NAME PluginLabTests COMMAND PluginLabTests)
+# a hanging test (a dialog nobody can click, a plugin that never returns) must fail soon, not after the default 25 minutes
+set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 600)
 
 # Smoke test of the stand-alone app: it starts, writes its version into a file and quits; the version is the one of CMake.
 add_test(NAME PluginLabHostVersion
