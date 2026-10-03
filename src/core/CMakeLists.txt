@@ -11,6 +11,13 @@ target_include_directories(pluginlab_core
     PRIVATE
         "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
+# JUCE switches that every target using the core must share (curl and the web browser are not needed; without
+# JUCE_USE_CURL=0 juce_core wants libcurl headers, which CI runners do not have)
+target_compile_definitions(pluginlab_core
+    PUBLIC
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0)
+
 target_link_libraries(pluginlab_core
     PUBLIC
         juce::juce_core
