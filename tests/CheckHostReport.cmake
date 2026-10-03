@@ -18,8 +18,12 @@ endif()
 file(READ "${REPORT_FILE}" REPORT)
 message(STATUS "Report:\n${REPORT}")
 
-foreach(EXPECTED
-        "PLUGIN PluginLab Test Gain | parameters 4"
+if(WITH_VST2)
+    list(APPEND EXPECTED_VST2 "PLUGIN PluginLab Test Gain (VST) | parameters 4")
+endif()
+
+foreach(EXPECTED ${EXPECTED_VST2}
+        "PLUGIN PluginLab Test Gain (VST3) | parameters 4"
         "PARAMETER 0 Gain = 0.0 dB"
         "FILE PluginLabTestCrash.vst3 | Crashed")
     string(FIND "${REPORT}" "${EXPECTED}" POSITION)

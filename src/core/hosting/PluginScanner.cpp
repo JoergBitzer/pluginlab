@@ -16,9 +16,49 @@ PluginScanner::PluginScanner(const juce::File& scannerExecutable, int timeoutMs)
 {
 }
 
-juce::StringArray PluginScanner::findPluginFiles(juce::AudioPluginFormat& format, const juce::FileSearchPath& folders)
+namespace
 {
-    return format.searchPathsForPlugins(folders, kSearchRecursively, kOnlySynchronousPlugins);
+// Inside a VST3 bundle (and an AU component) are shared libraries that look like VST2 plugins to the VST2 format; they belong to
+// the bundle and are not plugins of their own.
+bool isInsideOtherPluginBundle(const juce::String& path)
+{
+    return path.containsIgnoreCase(".vst3" + juce::File::getSeparatorString())
+        || path.containsIgnoreCase(".component" + juce::File::getSeparatorString());
+}
+
+void addFilesOfFormat(juce::StringArray& files, juce::AudioPluginFormat& format, const juce::FileSearchPath& folders)
+{
+    const juce::StringArray found = format.searchPathsForPlugins(folders, kSearchRecursively, kOnlySynchronousPlugins);
+    for (const juce::String& path : found)
+    {
+        const bool isVst3 = format.getName() == "VST3";
+        if (isVst3 || ! isInsideOtherPluginBundle(path))
+        {
+            files.addIfNotAlreadyThere(path);
+        }
+    }
+}
+}
+
+juce::StringArray PluginScanner::findPluginFiles(juce::AudioPluginFormatManager& formatManager, const juce::FileSearchPath& folders)
+{
+    juce::StringArray files;
+    for (int formatIndex = 0; formatIndex < formatManager.getNumFormats(); ++formatIndex)
+    {
+        addFilesOfFormat(files, *formatManager.getFormat(formatIndex), folders);
+    }
+    return files;
+}
+
+juce::StringArray PluginScanner::findPluginFilesInStandardFolders(juce::AudioPluginFormatManager& formatManager)
+{
+    juce::StringArray files;
+    for (int formatIndex = 0; formatIndex < formatManager.getNumFormats(); ++formatIndex)
+    {
+        juce::AudioPluginFormat& format = *formatManager.getFormat(formatIndex);
+        addFilesOfFormat(files, format, format.getDefaultLocationsToSearch());
+    }
+    return files;
 }
 
 juce::File PluginScanner::getDefaultScannerExecutable()
@@ -63,20 +103,28 @@ PluginScanResult PluginScanner::scanFile(const juce::File& pluginFile) const
     if (! resultRead)
     {
         result.status = ScanStatus::Crashed;
-        result.message = "The scanner process ended with exit code " + juce::String(static_cast<int>(scanner.getExitCode()))
-                       + " without a result";
+        // (on POSIX a child that was killed by a signal reports exit code 0)
+        result.message = "The scanner process ended without a result (it crashed or was killed; exit code "
+                       + juce::String(static_cast<int>(scanner.getExitCode())) + ")";
     }
     result.file = pluginFile;
     return result;
 }
 
-PluginScanResult PluginScanner::scanFileInProcess(juce::AudioPluginFormat& format, const juce::File& pluginFile)
+PluginScanResult PluginScanner::scanFileInProcess(juce::AudioPluginFormatManager& formatManager, const juce::File& pluginFile)
 {
     PluginScanResult result;
     result.file = pluginFile;
 
     juce::OwnedArray<juce::PluginDescription> found;
-    format.findAllTypesForFile(found, pluginFile.getFullPathName());
+    for (int formatIndex = 0; formatIndex < formatManager.getNumFormats(); ++formatIndex)
+    {
+        juce::AudioPluginFormat& format = *formatManager.getFormat(formatIndex);
+        if (format.fileMightContainThisPluginType(pluginFile.getFullPathName()))
+        {
+            format.findAllTypesForFile(found, pluginFile.getFullPathName());
+        }
+    }
     for (const juce::PluginDescription* description : found)
     {
         result.descriptions.add(*description);
@@ -86,7 +134,7 @@ PluginScanResult PluginScanner::scanFileInProcess(juce::AudioPluginFormat& forma
     if (result.descriptions.isEmpty())
     {
         result.status = ScanStatus::NoPluginInFile;
-        result.message = "No plugin of the format " + format.getName() + " in this file";
+        result.message = "No plugin of a known format in this file";
     }
     return result;
 }

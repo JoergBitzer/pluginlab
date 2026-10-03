@@ -4,7 +4,7 @@ namespace pluginlab::hosting
 {
 namespace
 {
-constexpr int kMaxTextLength = 64;
+constexpr int kMaxTextLength = 64; // for names
 // VST3 has no boolean parameters: a switch is a discrete parameter with two values (two steps)
 constexpr int kBooleanLikeStepCount = 2;
 }
@@ -49,7 +49,9 @@ ParameterInfo HostedPlugin::describe(const juce::AudioProcessorParameter& parame
     info.index = parameter.getParameterIndex();
     info.name = parameter.getName(kMaxTextLength);
     info.label = parameter.getLabel();
-    info.valueText = parameter.getText(parameter.getValue(), kMaxTextLength);
+    // getCurrentValueAsText(): the text that the plugin itself displays (VST2: effGetParamDisplay); getText(value) would give
+    // the normalised number for hosted VST2 parameters
+    info.valueText = parameter.getCurrentValueAsText();
     info.normalisedValue = parameter.getValue();
     info.defaultNormalisedValue = parameter.getDefaultValue();
     info.numSteps = parameter.getNumSteps();

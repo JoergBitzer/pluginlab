@@ -13,14 +13,18 @@ public:
 
     PluginScanner(const juce::File& scannerExecutable, int timeoutMs = kDefaultTimeoutMs);
 
-    // The plugin files (bundles/DLLs) of the format found in the folders, searched recursively.
-    static juce::StringArray findPluginFiles(juce::AudioPluginFormat& format, const juce::FileSearchPath& folders);
+    // The plugin files (bundles/DLLs) of all formats of the manager found in the folders, searched recursively.
+    static juce::StringArray findPluginFiles(juce::AudioPluginFormatManager& formatManager, const juce::FileSearchPath& folders);
+
+    // The plugin files of every format in the standard folders of that format.
+    static juce::StringArray findPluginFilesInStandardFolders(juce::AudioPluginFormatManager& formatManager);
 
     // Scans one file in a scanner process. Never throws, never crashes: problems are reported in the status.
     PluginScanResult scanFile(const juce::File& pluginFile) const;
 
     // The work of the scanner process: examines one file in this process. A crashing plugin crashes this process.
-    static PluginScanResult scanFileInProcess(juce::AudioPluginFormat& format, const juce::File& pluginFile);
+    // The format that can read the file is taken from the manager.
+    static PluginScanResult scanFileInProcess(juce::AudioPluginFormatManager& formatManager, const juce::File& pluginFile);
 
     // The scanner executable next to the executable of the running program (PluginLabScanner, .exe on Windows).
     static juce::File getDefaultScannerExecutable();

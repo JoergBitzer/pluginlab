@@ -1,3 +1,6 @@
 [submodule "JUCE"]
 	path = JUCE
 	url = https://github.com/juce-framework/JUCE.git
+[submodule "external/FST"]
+	path = external/FST
+	url = https://github.com/pierreguillot/FTS.git

@@ -2,9 +2,11 @@
 
 #include <memory>
 
-#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_processors_headless/juce_audio_processors_headless.h>
 
+#include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/HostedPlugin.h"
+#include "pluginlab/hosting/PluginDisplayName.h"
 #include "pluginlab/hosting/PluginScanner.h"
 
 namespace pluginlab::host
@@ -27,12 +29,12 @@ void appendLoadedPlugin(juce::String& report, juce::AudioPluginFormatManager& fo
         hosting::HostedPlugin::load(formatManager, description, kSampleRate, kBlockSize, error);
     if (plugin == nullptr)
     {
-        appendLine(report, "LOADERROR " + description.name + " | " + error);
+        appendLine(report, "LOADERROR " + hosting::getDisplayName(description) + " | " + error);
         return;
     }
 
     const std::vector<hosting::ParameterInfo> parameters = plugin->getParameters();
-    appendLine(report, "PLUGIN " + description.name + " | parameters " + juce::String(static_cast<int>(parameters.size())));
+    appendLine(report, "PLUGIN " + hosting::getDisplayName(description) + " (" + description.pluginFormatName + ") | parameters " + juce::String(static_cast<int>(parameters.size())));
     for (const hosting::ParameterInfo& parameter : parameters)
     {
         appendLine(report, "PARAMETER " + juce::String(parameter.index) + " " + parameter.name + " = " + parameter.valueText);
@@ -46,12 +48,11 @@ bool writeReport(const juce::File& pluginFolder, const juce::File& reportFile)
     appendLine(report, "FOLDER " + pluginFolder.getFullPathName());
 
     juce::AudioPluginFormatManager formatManager;
-    formatManager.addFormat(std::make_unique<juce::VST3PluginFormat>());
-    juce::VST3PluginFormatHeadless searchFormat;
+    hosting::addHeadlessFormats(formatManager);
 
     const hosting::PluginScanner scanner(hosting::PluginScanner::getDefaultScannerExecutable());
     const juce::StringArray files =
-        hosting::PluginScanner::findPluginFiles(searchFormat, juce::FileSearchPath(pluginFolder.getFullPathName()));
+        hosting::PluginScanner::findPluginFiles(formatManager, juce::FileSearchPath(pluginFolder.getFullPathName()));
     for (const juce::String& path : files)
     {
         const hosting::PluginScanResult result = scanner.scanFile(juce::File(path));

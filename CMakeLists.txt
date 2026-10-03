@@ -17,6 +17,7 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
     message(FATAL_ERROR "JUCE not found: run 'git submodule update --init'")
 endif()
 add_subdirectory(JUCE)
+include(cmake/Vst2Sdk.cmake) # sets PLUGINLAB_VST2: VST2 hosting and VST2 test plugins
 
 if(PLUGINLAB_BUILD_TESTS)
     enable_testing()

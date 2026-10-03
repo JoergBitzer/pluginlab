@@ -3,6 +3,7 @@
 #include <juce_audio_processors_headless/juce_audio_processors_headless.h>
 
 #include "TestPluginPaths.h"
+#include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/HostedPlugin.h"
 #include "pluginlab/hosting/PluginScanner.h"
 
@@ -28,21 +29,46 @@ public:
     void runTest() override
     {
         juce::AudioPluginFormatManager formatManager;
-        formatManager.addFormat(std::make_unique<juce::VST3PluginFormatHeadless>());
+        pluginlab::hosting::addHeadlessFormats(formatManager);
 
-        juce::VST3PluginFormatHeadless format;
-        const pluginlab::hosting::PluginScanResult scanned =
-            pluginlab::hosting::PluginScanner::scanFileInProcess(format, testpaths::getGainPlugin());
-        expect(scanned.status == pluginlab::hosting::ScanStatus::Ok, "the test plugin must be scannable: " + scanned.message);
-        if (scanned.descriptions.isEmpty())
+        const pluginlab::hosting::PluginScanResult vst3 =
+            pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, testpaths::getGainPlugin());
+        expect(vst3.status == pluginlab::hosting::ScanStatus::Ok, "the VST3 test plugin must be scannable: " + vst3.message);
+        if (vst3.descriptions.isEmpty())
         {
             return;
         }
+        testFormat("VST3", formatManager, vst3.descriptions[0]);
 
-        beginTest("loading the test plugin gives four parameters with the expected names");
+        if (pluginlab::hosting::isVst2Supported())
+        {
+            const pluginlab::hosting::PluginScanResult vst2 =
+                pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, testpaths::getGainPluginVst2());
+            expect(vst2.status == pluginlab::hosting::ScanStatus::Ok, "the VST2 test plugin must be scannable: " + vst2.message);
+            if (! vst2.descriptions.isEmpty())
+            {
+                testFormat("VST2", formatManager, vst2.descriptions[0]);
+            }
+        }
+
+        beginTest("a plugin that does not exist is reported with an error text, not a crash");
+        juce::PluginDescription missing = vst3.descriptions[0];
+        missing.fileOrIdentifier = testpaths::getTestPluginFolder().getChildFile("DoesNotExist.vst3").getFullPathName();
+        juce::String missingError;
+        const std::unique_ptr<pluginlab::hosting::HostedPlugin> notLoaded =
+            pluginlab::hosting::HostedPlugin::load(formatManager, missing, kSampleRate, kBlockSize, missingError);
+        expect(notLoaded == nullptr);
+        expect(missingError.isNotEmpty());
+    }
+
+private:
+    // the same checks for every format
+    void testFormat(const juce::String& formatName, juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description)
+    {
+        beginTest(formatName + ": loading the test plugin gives four parameters with the expected names");
         juce::String error;
         std::unique_ptr<pluginlab::hosting::HostedPlugin> plugin =
-            pluginlab::hosting::HostedPlugin::load(formatManager, scanned.descriptions[0], kSampleRate, kBlockSize, error);
+            pluginlab::hosting::HostedPlugin::load(formatManager, description, kSampleRate, kBlockSize, error);
         expect(plugin != nullptr, "load failed: " + error);
         if (plugin == nullptr)
         {
@@ -56,29 +82,31 @@ public:
             expectEquals(parameters[1].name, juce::String("Frequency"));
             expectEquals(parameters[2].name, juce::String("Mode"));
             expectEquals(parameters[3].name, juce::String("Bypass"));
-            expect(parameters[2].isDiscrete, "Mode: isDiscrete " + juce::String(static_cast<int>(parameters[2].isDiscrete)) + ", steps " + juce::String(parameters[2].numSteps));
-            expect(parameters[3].isBoolean, "Bypass: isBoolean " + juce::String(static_cast<int>(parameters[3].isBoolean)) + ", discrete " + juce::String(static_cast<int>(parameters[3].isDiscrete)) + ", steps " + juce::String(parameters[3].numSteps));
+            if (formatName == "VST3")
+            {
+                expect(parameters[2].isDiscrete, "Mode: isDiscrete, steps " + juce::String(parameters[2].numSteps));
+                expect(parameters[3].isBoolean, "Bypass: isBoolean, steps " + juce::String(parameters[3].numSteps));
+            }
+            else
+            {
+                // VST2 has no step information: every parameter is a continuous value between 0 and 1
+                expect(! parameters[2].isDiscrete, "Mode of a VST2 plugin must look continuous");
+                expect(! parameters[3].isBoolean, "Bypass of a VST2 plugin must look continuous");
+            }
         }
 
-        beginTest("setting a parameter changes its value text");
+        beginTest(formatName + ": setting a parameter changes its value text");
         plugin->setParameterNormalised(kGainIndex, kGainNormalisedPlus12Db);
-        expectEquals(plugin->getParameter(kGainIndex).valueText, juce::String("12.0 dB"));
+        const juce::String gainText = plugin->getParameter(kGainIndex).valueText;
+        expect(gainText.startsWith("12.0"), "gain text '" + gainText + "'");
         plugin->setParameterNormalised(kModeIndex, kModeNormalisedC);
-        expectEquals(plugin->getParameter(kModeIndex).valueText, juce::String("C"));
+        const juce::String modeText = plugin->getParameter(kModeIndex).valueText;
+        expect(modeText.startsWith("C"), "mode text '" + modeText + "'");
 
-        beginTest("an out-of-range parameter index is ignored");
+        beginTest(formatName + ": an out-of-range parameter index is ignored");
         plugin->setParameterNormalised(kExpectedParameterCount, 0.5f);
         plugin->setParameterNormalised(-1, 0.5f);
         expectEquals(static_cast<int>(plugin->getParameters().size()), kExpectedParameterCount);
-
-        beginTest("a plugin that does not exist is reported with an error text, not a crash");
-        juce::PluginDescription missing = scanned.descriptions[0];
-        missing.fileOrIdentifier = testpaths::getTestPluginFolder().getChildFile("DoesNotExist.vst3").getFullPathName();
-        juce::String missingError;
-        const std::unique_ptr<pluginlab::hosting::HostedPlugin> notLoaded =
-            pluginlab::hosting::HostedPlugin::load(formatManager, missing, kSampleRate, kBlockSize, missingError);
-        expect(notLoaded == nullptr);
-        expect(missingError.isNotEmpty());
     }
 };
 

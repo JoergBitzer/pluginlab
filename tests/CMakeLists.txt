@@ -31,6 +31,9 @@ target_link_libraries(PluginLabTests
 
 # the tests need the scanner and the test plugins built first
 add_dependencies(PluginLabTests PluginLabScanner PluginLabTestGain_VST3 PluginLabTestCrash_VST3 PluginLabHost)
+if(PLUGINLAB_VST2)
+    add_dependencies(PluginLabTests PluginLabTestGain_VST)
+endif()
 
 add_test(NAME PluginLabTests COMMAND PluginLabTests)
 
@@ -48,4 +51,5 @@ add_test(NAME PluginLabHostReport
         -DHOST_APPLICATION=$<TARGET_FILE:PluginLabHost>
         -DPLUGIN_FOLDER=${PLUGINLAB_TEST_PLUGIN_DIR}
         -DREPORT_FILE=${CMAKE_CURRENT_BINARY_DIR}/host_report.txt
+        -DWITH_VST2=${PLUGINLAB_VST2}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostReport.cmake)

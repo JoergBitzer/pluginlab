@@ -3,6 +3,7 @@
 #include <juce_audio_processors_headless/juce_audio_processors_headless.h>
 #include <juce_events/juce_events.h>
 
+#include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanXml.h"
 #include "pluginlab/hosting/PluginScanner.h"
 
@@ -41,8 +42,9 @@ int main(int argc, char* argv[])
     const juce::File pluginFile = juce::File::getCurrentWorkingDirectory().getChildFile(argv[1]);
     const juce::File resultFile = juce::File::getCurrentWorkingDirectory().getChildFile(argv[2]);
 
-    juce::VST3PluginFormatHeadless format;
-    const pluginlab::hosting::PluginScanResult result = pluginlab::hosting::PluginScanner::scanFileInProcess(format, pluginFile);
+    juce::AudioPluginFormatManager formatManager;
+    pluginlab::hosting::addHeadlessFormats(formatManager);
+    const pluginlab::hosting::PluginScanResult result = pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, pluginFile);
 
     if (! pluginlab::hosting::writeScanResult(result, resultFile))
     {

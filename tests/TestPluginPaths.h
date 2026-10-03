@@ -15,6 +15,23 @@ inline juce::File getGainPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestGain.vst3");
 }
 
+// The VST2 version of the gain plugin: .so (Linux, may start with "lib"), .dll (Windows) or .vst bundle (macOS); an invalid File if
+// there is none (a build without VST2).
+inline juce::File getGainPluginVst2()
+{
+    const juce::Array<juce::File> candidates = getTestPluginFolder().findChildFiles(juce::File::findFilesAndDirectories, false, "*PluginLabTestGain*");
+    for (const juce::File& candidate : candidates)
+    {
+        const bool isVst3 = candidate.hasFileExtension(".vst3");
+        const bool isVst2 = candidate.hasFileExtension(".so") || candidate.hasFileExtension(".dll") || candidate.hasFileExtension(".vst");
+        if (isVst2 && ! isVst3)
+        {
+            return candidate;
+        }
+    }
+    return {};
+}
+
 inline juce::File getCrashPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestCrash.vst3");

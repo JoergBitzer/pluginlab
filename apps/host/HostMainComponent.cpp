@@ -3,6 +3,8 @@
 #include <functional>
 
 #include "PluginWindow.h"
+#include "pluginlab/hosting/FormatManager.h"
+#include "pluginlab/hosting/PluginDisplayName.h"
 #include "pluginlab/hosting/PluginScanner.h"
 
 namespace pluginlab::host
@@ -123,6 +125,7 @@ private:
 class PluginScanThread : public juce::Thread
 {
 public:
+    // folders empty: the standard folders of every format
     PluginScanThread(HostMainComponent& owner, const juce::FileSearchPath& folders)
         : juce::Thread("PluginScan"), m_owner(owner), m_folders(folders)
     {
@@ -135,8 +138,17 @@ public:
 
     void run() override
     {
-        juce::VST3PluginFormatHeadless format;
-        const juce::StringArray files = hosting::PluginScanner::findPluginFiles(format, m_folders);
+        juce::AudioPluginFormatManager formatManager;
+        hosting::addHeadlessFormats(formatManager);
+        juce::StringArray files;
+        if (m_folders.getNumPaths() == 0)
+        {
+            files = hosting::PluginScanner::findPluginFilesInStandardFolders(formatManager);
+        }
+        else
+        {
+            files = hosting::PluginScanner::findPluginFiles(formatManager, m_folders);
+        }
         const hosting::PluginScanner scanner(hosting::PluginScanner::getDefaultScannerExecutable());
         const juce::Component::SafePointer<HostMainComponent> owner(&m_owner);
 
@@ -173,6 +185,9 @@ HostMainComponent::HostMainComponent(const StartupOptions& options)
     : m_pluginNameToLoad(options.pluginNameToLoad)
 {
     m_formatManager.addFormat(std::make_unique<juce::VST3PluginFormat>());
+#if PLUGINLAB_WITH_VST2
+    m_formatManager.addFormat(std::make_unique<juce::VSTPluginFormat>());
+#endif
 
     m_scanModel = std::make_unique<TextTableModel>([this] { return static_cast<int>(m_scanRows.size()); },
                                                    [this](int row, int column) { return getScanCellText(row, column); });
@@ -228,7 +243,7 @@ HostMainComponent::HostMainComponent(const StartupOptions& options)
     m_parameterTable.getHeader().addColumn("Value", kParameterColumnValue, 140);
     m_parameterTable.getHeader().addColumn("", kParameterColumnSlider, 300);
 
-    m_scanButton.onClick = [this] { startScan(juce::VST3PluginFormatHeadless().getDefaultLocationsToSearch()); };
+    m_scanButton.onClick = [this] { startScan(juce::FileSearchPath()); };
     m_addFolderButton.onClick = [this] { chooseFolderToScan(); };
     m_loadButton.onClick = [this] { loadSelectedPlugin(); };
     m_unloadButton.onClick = [this] { unloadSelectedPlugin(); };
@@ -304,7 +319,7 @@ juce::String HostMainComponent::getScanCellText(int row, int columnId) const
     {
         if (scanRow.hasDescription)
         {
-            return scanRow.description.name;
+            return hosting::getDisplayName(scanRow.description);
         }
         return scanRow.file.getFileNameWithoutExtension();
     }
@@ -328,7 +343,7 @@ juce::String HostMainComponent::getLoadedCellText(int row, int columnId) const
     const hosting::HostedPlugin& plugin = *m_loadedPlugins[static_cast<size_t>(row)]->plugin;
     if (columnId == kLoadedColumnName)
     {
-        return plugin.getDescription().name;
+        return hosting::getDisplayName(plugin.getDescription());
     }
     if (columnId == kLoadedColumnParameters)
     {
@@ -447,7 +462,7 @@ void HostMainComponent::loadSelectedPlugin()
         hosting::HostedPlugin::load(m_formatManager, scanRow.description, kSampleRate, kBlockSize, error);
     if (plugin == nullptr)
     {
-        setStatus("Cannot load " + scanRow.description.name + ": " + error);
+        setStatus("Cannot load " + hosting::getDisplayName(scanRow.description) + ": " + error);
         return;
     }
 
@@ -458,7 +473,7 @@ void HostMainComponent::loadSelectedPlugin()
     m_loadedTable.updateContent();
     m_loadedTable.selectRow(static_cast<int>(m_loadedPlugins.size()) - 1);
     showEditor(loadedReference);
-    setStatus("Loaded " + scanRow.description.name + ".");
+    setStatus("Loaded " + hosting::getDisplayName(scanRow.description) + ".");
 }
 
 void HostMainComponent::unloadSelectedPlugin()
@@ -500,7 +515,7 @@ void HostMainComponent::showEditor(LoadedPlugin& loaded)
     LoadedPlugin* loadedPointer = &loaded;
     const juce::Component::SafePointer<HostMainComponent> self(this);
     loaded.window = std::make_unique<PluginWindow>(
-        loaded.plugin->getInstance(), loaded.plugin->getDescription().name,
+        loaded.plugin->getInstance(), hosting::getDisplayName(loaded.plugin->getDescription()),
         [self, loadedPointer]
         {
             // closing the window does not unload the plugin; delete the window after the close handler has returned
