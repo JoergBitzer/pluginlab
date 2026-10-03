@@ -54,3 +54,17 @@ taken over as copies, nothing depends on it.
 - On POSIX a child process killed by a signal reports exit code 0; "no result file" is the reliable sign of a crash.
 - The VST2 format also "finds" the shared libraries inside VST3 bundles (`Contents/x86_64-linux/X.so`); the scanner ignores files
   inside `.vst3` and `.component` folders when searching for VST2 plugins.
+
+## Findings of W3a, second part: why the VST2 hosting crashed on Windows and macOS (found with the debug workflow)
+- First CI run: on Windows (exit code 0xc0000409) and macOS (SIGABRT) the host crashed when it created a VST2 instance; Linux was fine.
+  A debug workflow (`.github/workflows/vst2-debug.yml`: scanner under lldb/cdb) gave the stack on macOS:
+  `__stack_chk_fail` in `juce::VSTPluginInstanceHeadless::queryBusIO` (JUCE's VST2 host code), i.e. a stack buffer overrun that
+  the stack protector detected.
+- Cause: JUCE's VST2 plugin wrapper writes one byte more than the label arrays hold into the `VstPinProperties` structure that the
+  host passes (`copyToUTF8(properties.shortLabel, kVstMaxShortLabelLen + 1)`), relying on the 48 bytes of padding that the official
+  structure has behind `shortLabel`. FST's structure has no padding. **Only a host built with FST's structure is affected** (our
+  host: it allocates the structure on its stack); hosts built with the official SDK have the padding, so a plugin built with FST
+  (SimplePeakEQ) is not endangered in them. (An earlier remark that Cubase would be hit by this was wrong.) Linux survived by luck of
+  the stack layout. Patch 5 in `cmake/Vst2Sdk.cmake` adds the padding.
+- The Windows run under the debugger (cdb) and the plain RelWithDebInfo run did not crash: stack-protector failures depend on the
+  build configuration, so "works under a debugger" is no proof.

@@ -9,7 +9,7 @@
 #   3. the arrays speakers[] and events[] have zero size in FST, JUCE sizes its buffers assuming 8 speakers and 2 events
 #      (heap corruption); given their usual length
 #   5. fstPinProperties has no padding behind shortLabel, JUCE's wrapper writes one byte more than the arrays hold (stack
-#      protector abort in the host on macOS and Windows): 48 bytes of padding added
+#      protector abort in a host built with FST, such as pluginlab's host, on macOS and Windows): 48 bytes of padding added
 #   4. JUCE's VST2 hosting code forward-declares "struct AEffect;": FST's structure is called _fstEffect (AEffect is a
 #      typedef): the structure tag is renamed to AEffect
 # A build error stops the configuration if FST changes in a way that breaks a patch.
@@ -54,7 +54,9 @@ if(EXISTS "${FST_HEADER_DIR}/aeffect.h" AND EXISTS "${FST_HEADER_DIR}/aeffectx.h
     # JUCE's VST2 wrapper writes label.copyToUTF8(properties.label, kVstMaxLabelLen + 1) and the same for shortLabel into the
     # structure that the host passes for effGetInputProperties/effGetOutputProperties: one byte more than the arrays hold, which is
     # harmless only because the official structure has 48 bytes of padding ("future") behind shortLabel. FST's structure has none:
-    # the byte lands behind the host's variable (stack protector abort on macOS and Windows, found with the debug workflow).
+    # a host that is built with FST's structure (like pluginlab's own host) gets the byte behind its variable (stack protector
+    # abort on macOS and Windows, found with the debug workflow). Hosts built with the official SDK (Cubase, ...) have the
+    # padding and are not affected, so plugins built with FST are safe in them.
     string(FIND "${FST_PATCHED_TEXT}" "  char shortLabel[8];\n} FST_UNKNOWN(t_fstPinProperties);" FST_PIN_PROPERTIES_POSITION)
     if(FST_PIN_PROPERTIES_POSITION EQUAL -1)
         message(FATAL_ERROR "FST header changed: the end of fstPinProperties was not found (cmake/Vst2Sdk.cmake)")
