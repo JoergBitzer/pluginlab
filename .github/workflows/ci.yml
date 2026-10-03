@@ -37,7 +37,7 @@ jobs:
           sudo apt-get install -y libasound2-dev libjack-jackd2-dev \
             libfreetype-dev libfontconfig1-dev \
             libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libxi-dev \
-            libglu1-mesa-dev mesa-common-dev xvfb
+            libglu1-mesa-dev mesa-common-dev xvfb openbox
 
       - name: Configure
         shell: bash
@@ -67,7 +67,9 @@ jobs:
         if: runner.os == 'Linux'
         env:
           PLUGINLAB_REQUIRE_PLUGINVAL: "1"
-        run: xvfb-run -a ctest --test-dir build -C Release --output-on-failure
+        # a window manager (openbox) runs in the virtual display: VST2 editors (XEmbed) need atoms that only exist then;
+        # without it the hosted VST2 editor dies with an X "BadAtom" error
+        run: xvfb-run -a bash -c 'openbox & sleep 2; ctest --test-dir build -C Release --output-on-failure'
 
       - name: Test (Windows, macOS)
         if: runner.os != 'Linux'
