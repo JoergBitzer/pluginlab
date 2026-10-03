@@ -1,6 +1,6 @@
 # pluginlab - planning (fresh start)
 
-Status: draft v3 (2026-10-03). Second attempt, **product only (JUCE/C++)**. The first prototype (repo `measurement_tool`,
+Status: draft v4 (2026-10-03), open questions of v3 answered. Second attempt, **product only (JUCE/C++)**. The first prototype (repo `measurement_tool`,
 tag `prototype-0.6.0`) was a learning vehicle; its results are in [docs/prototype/](docs/prototype/). The vision, personas,
 feature list, development path and rules come from the author's document
 [docs/reference/Measurement Tool Development plan.md](docs/reference/Measurement%20Tool%20Development%20plan.md),
@@ -38,9 +38,9 @@ This repository is **the product only: JUCE/C++**. The Python work stays where i
 ## 4. Development path (reference)
 The project is huge and is divided into parts that can be developed and optimized independently.
 
-**A. Stand-alone host (JUCE, C++, Windows/Mac/Linux, VST3 only; VST2 later via the project the reference names).** Pre-test to learn how to load plugins and render audio. Required abilities (reference list): scan for plugins and list them; load one plugin and show its parameters; show its GUI in a window; load several plugins with separate GUI windows; load audio from disk and render through the plugins (save or listen); render through multiple plugins in parallel; switch between plugins gaplessly without stopping the audio engine; measure latency and gain of each plugin and compensate; save each plugin's output to a separate file; simple GUI. It can become a stand-alone product without a DAW; audio files in an easily switchable list, each with loop positions that can be set in the GUI.
+**A. Stand-alone host (JUCE, C++, Windows/Mac/Linux, VST3 and, early in the project, VST2 via the GPL project the reference names).** Pre-test to learn how to load plugins and render audio. Required abilities (reference list): scan for plugins and list them; load one plugin and show its parameters; show its GUI in a window; load several plugins with separate GUI windows; load audio from disk and render through the plugins (save or listen); render through multiple plugins in parallel; switch between plugins gaplessly without stopping the audio engine; measure latency and gain of each plugin and compensate; save each plugin's output to a separate file; simple GUI. It can become a stand-alone product without a DAW; audio files in an easily switchable list, each with loop positions that can be set in the GUI.
 
-**B. Simple VST plugin that loads other plugins:** scan the standard installation paths, list the plugins, load one, show its parameters and GUI.
+**B. Simple VST plugin that loads other plugins:** scan the standard installation paths, list the plugins, load one, show its parameters and GUI. Together with A it forms the **plugin-hosting core** (scan, validate, load VST3 and VST2, parameters, GUI, delivery protocol) that the stand-alone host and the plugins share: one solution for all plugin-related issues (decision, section 6).
 
 **C. Measurement units** (C++, tested against the oracle and ground truth).
 
@@ -52,7 +52,7 @@ Details and evidence: [docs/prototype/LESSONS_LEARNED.md](docs/prototype/LESSONS
 2. **Plugin fingerprint** as the first deliverable per plugin: parameters and ranges, reported and measured latency, delivery behavior, determinism, behavior at 44.1/48/96 kHz, block-size independence, reachable knob ranges. In the product this is the "developer page".
 3. **Ground truth before real plugins:** reference processors (RBJ, Orfanidis, Zölzer) and analytic tests for every measurement.
 4. **A general EQ band model** (type, frequency, gain, Q, slope, phase behavior) separated from per-plugin mapping data; a tool that lists all parameters of a plugin and proposes a mapping for the matcher. The prototype's "one peaking band" model was too narrow (shelves, high/low-pass, multiple bands, fixed-Q bands).
-5. **Crash isolation:** some plugins crash on load (LSP: bus error), are not thread-safe, or refuse loading off the main thread. A plugin that loads other plugins in-process (product B, D) is taken down by a crashing plugin: to be designed (e.g. out-of-process scanning/loading as DAWs do). Open question 4.
+5. **Crash isolation:** some plugins crash on load (LSP: bus error), are not thread-safe, or refuse loading off the main thread. A plugin that loads other plugins in-process (product B, D) is taken down by a crashing plugin. **Idea of the author:** include pluginval in the product and test each plugin with it before loading, so that only plugins known to be loadable are offered. Design notes (to verify before building on them): pluginval is a separate JUCE-based program (GPLv3, compatible with this project) that can be run as a child process per plugin and reports through its exit code, which gives the crash isolation for the validation step; it does not protect against a crash later during processing. The AAT2 template already has `tools/run_pluginval.*`. What the validation level and time per plugin should be (scan time, caching of results per plugin file and version) is open.
 6. **Experiments and tests:** save results incrementally, several optimizer seeds, state the frequency band a test covers, separate knob-range limits from filter behavior, report what the data does not show, do not conclude from the first measurement of a new plugin.
 
 ## 6. Decisions
@@ -67,37 +67,50 @@ Details and evidence: [docs/prototype/LESSONS_LEARNED.md](docs/prototype/LESSONS
 | EQ first, then compressor, delay, reverb; mono/stereo first | **DECIDED** |
 | "Equal": technical (frequency response within 0.1 dB, null depth below -60 dB, in a settings file/preset), perceptual models later | **DECIDED** |
 | Test audio: free sample packs (MusicRadar SampleRadar) via download scripts, not stored in the repo | **DECIDED** |
-| Plugin format: VST3 first | **DECIDED** (reference) |
+| Plugin format: VST3 first; **VST2 early in the project** (via the GPL project named in the reference; licence confirmed by the author) so that plugins can be tested as VST2 as well | **DECIDED** |
+| Name: `pluginlab` (repository and CMake project) | **DECIDED** |
+| One **plugin-hosting core** shared by the stand-alone host and the loader plugin; the loader plugin is built right after the first host part (work package W3) | **DECIDED** |
+| First fingerprint test case: the open PeakEQ question (frequency knob 1.0875 too high; 44.1 kHz design?), source code available | **DECIDED** |
+| Test set: **at most 5 EQs**: the author's own, 2 open source, 2 free but closed source. All others only for case studies. Selection later. | **DECIDED** (selection open) |
+| CI plugins: own + 2 open-source plugins are **built from source** in CI; the 2 free closed-source plugins are downloaded directly | **DECIDED** |
+| Oracle comparison: shared test signals and reference result files (generated by Python, read by the C++ tests) | **DECIDED** |
+| Reuse of existing code: stand-alone host only what helps; for the plugin AAT2 (AdvancedAudioTemplate) is a candidate starting point, to be discussed in detail | **DECIDED** (details later) |
+| Pluginval inside the product to test every plugin for loadability | **idea of the author, design open (section 5, item 5)** |
 
-## 7. Development rules (reference, binding for all code in this project)
+## 7. Development rules (reference and author's additions, binding for all code in this project)
 - Step by step. For each new feature: design, implementation, function testing; then code review and documentation.
 - Readable code: no one-liners, no magic numbers, no magic constants, no magic strings.
 - Readability is more important than performance (but not too much).
-- Versioning (author's global rule): `project(... VERSION X.Y.Z)` in CMake; a new feature raises the second number and sets the third to zero, a fix or other change raises the third; bumped once per logical change.
+- C++ style rules of the author:
+  - no ternary operators; no `if`/`else` inside expressions; no `goto`;
+  - no `using namespace` in headers;
+  - constants with `constexpr`, not `#define`; no `#define` macros (use inline functions or templates);
+  - headers include as little as possible: forward declare where possible, include only what is used, no includes in headers just to pass them on.
+- Versioning (author's global rule): `project(... VERSION X.Y.Z)` in CMake; a new feature raises the second number and sets the third to zero, a fix or other change raises the third; bumped once per logical change; documentation-only changes need no new version.
+- **CLAUDE.md of this project** is based on the `CLAUDE.md` of the AdvancedAudioTemplate, branch `AAT2` (`~/AudioDev/AdvancedAudioTemplate`). It contains, among others, the workflow rules to follow here as well: a new git branch per request with a descriptive name; merge into main and push only when the author says so; release tags only on explicit request; build without warnings and run pluginval before every commit; documentation updated in the same change as the code; report results honestly (failed tests, skipped steps, things not tested on Windows/macOS). It is created in work package W1 and adapted to this project (no template placeholders, plugin hosting instead of one plugin).
 
 ## 8. Work packages and milestones (proposal, each with a definition of done)
+The loader plugin was moved forward (W3) on the author's request: the plugin-hosting core is solved once and used by every later part.
+
 | # | Work package | Done when |
 |---|---|---|
-| W1 | **Project skeleton**: CMake + JUCE (submodule), CI on Linux/Windows/macOS, pluginval, test framework | Builds and runs an empty stand-alone app and a test target on all three OSes in CI. |
-| W2 | **Stand-alone host, part 1**: plugin scan and list, load one plugin, parameter list, plugin GUI window, several plugins with separate windows | Works with the test plugin set; failures (crash on load) are reported, not fatal. |
-| W3 | **Stand-alone host, part 2**: audio file list with loops, render through several plugins in parallel, gapless switching, latency measurement and compensation, per-plugin output files | Gapless switching without xruns; latency of each test plugin measured and compensated; files written. |
-| W4 | **Delivery protocol + plugin fingerprint report** (section 5, items 1 and 2) | Fingerprint of all test plugins; behavior at 44.1/48/96 kHz and different block sizes recorded; quirks documented. |
-| W5 | **Reference processors (RBJ, Orfanidis, Zölzer) + test signals** in C++ | Analytic ground truth available for the measurement tests. |
-| W6 | **Measurement units** (frequency response, phase, group delay, latency, THD, THD+N, noise, SNR, crosstalk, null test with alignment), easy to add new ones | Each agrees with analytic ground truth and with the Python oracle within a stated tolerance; band of validity documented. |
-| W7 | **Loader plugin** (scan standard paths, list, load one plugin, parameters, GUI) | Runs inside a DAW; pluginval passes. |
+| W1 | **Project skeleton**: CMake + JUCE (submodule), CI on Linux/Windows/macOS, pluginval in CI, test framework, `CLAUDE.md` (from AAT2, section 7), `LICENSE`, version in CMake | Builds and runs an empty stand-alone app and a test target on all three OSes in CI; CLAUDE.md in place. |
+| W2 | **Stand-alone host, part 1** (plugin-hosting core, first version): scan and list plugins, load one plugin (VST3), parameter list, plugin GUI window, several plugins with separate windows | Works with the test plugin set; a plugin that fails to load is reported, not fatal. |
+| W3 | **Loader plugin + plugin-hosting core consolidated**: scan the standard paths, list, load one plugin, parameters, GUI; **VST2 loading** (GPL project of the reference); **pluginval validation per plugin** before loading (design from section 5, item 5); shared code between host and plugin | Loader plugin runs inside a DAW and passes pluginval; VST3 and VST2 test plugins load in both the stand-alone host and the loader plugin; a crashing plugin is caught by the validation step. |
+| W4 | **Stand-alone host, part 2**: audio file list with loops, render through several plugins in parallel, gapless switching, latency measurement and compensation, per-plugin output files | Gapless switching without xruns; latency of each test plugin measured and compensated; files written. |
+| W5 | **Delivery protocol + plugin fingerprint report** (section 5, items 1 and 2), first case: PeakEQ frequency question | Fingerprint of all test plugins; behavior at 44.1/48/96 kHz and different block sizes recorded; quirks documented; PeakEQ question answered (with source code). |
+| W6 | **Reference processors (RBJ, Orfanidis, Zölzer) + test signals** in C++, plus shared test signals and reference result files from the Python oracle | Analytic ground truth and oracle files available for the measurement tests. |
+| W7 | **Measurement units** (frequency response, phase, group delay, latency, THD, THD+N, noise, SNR, crosstalk, null test with alignment), easy to add new ones | Each agrees with analytic ground truth and with the oracle files within a stated tolerance; band of validity documented. |
 | W8 | **EQ band model + parameter mapping**, calibration of knobs by measurement | Mapping data validated for the test EQs. |
 | W9 | **Matcher** (user chooses parameters, start point, frequency range, tolerance; real-time deviation display) | Master reproduced on each test plugin or the residual quantified and attributed. |
 | W10 | **Final plugin**: 4 slots, parallel rendering, real-time transfer function display, three-level GUI, measurement presets | Persona walkthroughs succeed (musician compares a demo with an owned plugin; developer checks an algorithm). |
 | W11 | **Further measurement units** (dynamics, delay, reverb) | Each with ground-truth tests. |
-Later: perceptual metrics, multichannel/sidechain, VST2 support.
+Later: perceptual metrics, multichannel/sidechain.
 
-## 9. Open questions
-1. Repository/package and CMake project name (proposal: `pluginlab`).
-2. Reuse of the author's existing JUCE material: the JUCE checkout, `AdvancedAudioTemplate`, and the CMake/CI/pluginval setup of `stereo_widening` (not yet looked at for this plan).
-3. Should the open PeakEQ question (frequency knob 1.0875 too high; 44.1 kHz design?) be a first test case for the fingerprint (W4)? Source code is available.
-4. Crash isolation for the loader/final plugin (out-of-process loading?) and what the first version promises.
-5. Which plugins form the fixed test set (13 free/own EQs in the prototype, `docs/prototype/plugin_shortlist.md`)? Air-G EaseQ still needs a manual download.
-6. How to get the free plugins onto Windows/macOS CI runners.
-7. VST2 support: the reference names an external project; suitability and licence are not checked.
-8. How the C++ measurements are compared with the Python oracle in practice (shared test signals and reference result files?).
-9. The empty last item of the feature list in the reference: what was intended?
+## 9. Open questions (remaining; answered ones moved to section 6)
+1. **Plugin-hosting core and AAT2:** which parts of AAT2 (build setup, tools, GUI helpers) and of the author's older stand-alone code are reused for the host and for the plugins (to be discussed in detail, at the start of W1/W2).
+2. **Test set selection:** which 5 EQs (own, 2 open source, 2 free closed source)? Candidates from the prototype are listed in `docs/prototype/plugin_shortlist.md`. Which of the open-source ones build from source on all three OSes in CI?
+3. **Direct downloads for the 2 free closed-source plugins:** in the prototype the KVR pages and Ko-fi answered scripted requests with a Cloudflare challenge (HTTP 403); direct vendor URLs worked (e.g. ToneLib BaxEQ via `tonelib.net/download.php`, Dusk Audio via GitHub releases). The CI download therefore needs a vendor URL, not a KVR page. Licence terms for downloading in CI to be checked.
+4. **Pluginval inside the product:** which validation strength and time budget per plugin, where to cache results, and how to ship pluginval (bundle the binary, build it from source, or require it to be installed). What exactly the first version promises about crashes during processing, which pluginval does not catch.
+5. **VST2 via the GPL project of the reference:** how it is integrated into the JUCE build (the reference gives a link whose details have not been looked at), and how it is tested on all three OSes.
+6. **Oracle files:** format and location of the reference result files (e.g. WAV/CSV/JSON in the repository, generated by the prototype repo), and who regenerates them.
