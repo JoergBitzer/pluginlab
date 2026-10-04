@@ -132,3 +132,12 @@ taken over as copies, nothing depends on it.
   the header with the version had unreadable text colour in Bitwig (now the contrasting colour of the background).
 - Suspects, not yet confirmed: the host calls `getStateInformation` / `setStateInformation` on a thread other than the message thread, and the hosted plugin
   does not tolerate that.
+
+## 0.4.3: crash right after reopening a session (Bitwig)
+- Log of the crash: restore on the message thread finished ("restore: done"), the plug-in host process died about 1.5 s later; no stack in Bitwig's logs.
+  The same sequence (load BL-StereoWidth, process 3 s, save, restore into a second loader, process) runs without problems in our test program
+  (`tests/RealWorldTests.cpp`, local only: `PLUGINLAB_REALWORLD_PLUGINS="file1;file2"`), and the state is the same 858 bytes. So the cause is specific to the DAW
+  (wrapper, threads, bus layout, timing).
+- The loader now installs a crash handler (Linux/macOS) that writes a backtrace into `PluginLabLoader.log` and passes the signal on, and logs prepareToPlay,
+  releaseResources, the first processBlock (channels, samples), latency and deletion.
+- The pluginval level box was squeezed out of the button row (too narrow): widths reduced, loader editor 900 px wide.

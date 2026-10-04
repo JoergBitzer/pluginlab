@@ -6,7 +6,7 @@
 
 namespace
 {
-constexpr int kEditorWidth = 760;
+constexpr int kEditorWidth = 900;
 constexpr int kEditorHeight = 724;
 constexpr int kMargin = 8;
 constexpr int kBrowserHeight = 260;

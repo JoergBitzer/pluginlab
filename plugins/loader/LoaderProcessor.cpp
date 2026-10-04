@@ -1,5 +1,6 @@
 #include "LoaderProcessor.h"
 
+#include "CrashLog.h"
 #include "LoaderEditor.h"
 #include "LoaderLog.h"
 #include "pluginlab/hosting/LoaderState.h"
@@ -21,10 +22,13 @@ LoaderProcessor::LoaderProcessor()
       m_blockSize(kDefaultBlockSize)
 {
     pluginlab::ui::addGuiFormats(m_formatManager);
+    loaderlog::installCrashHandler();
+    loaderlog::write("loader created");
 }
 
 LoaderProcessor::~LoaderProcessor()
 {
+    loaderlog::write("loader deleted");
     const juce::ScopedLock lock(m_hostedLock);
     m_hosted.reset();
 }
@@ -36,6 +40,9 @@ const juce::String LoaderProcessor::getName() const
 
 void LoaderProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    loaderlog::write("prepareToPlay: " + juce::String(sampleRate) + " Hz, " + juce::String(samplesPerBlock) + " samples, "
+                     + juce::String(getTotalNumInputChannels()) + " in / " + juce::String(getTotalNumOutputChannels()) + " out");
+    m_firstBlockLogged = false;
     m_sampleRate = sampleRate;
     m_blockSize = samplesPerBlock;
     const juce::ScopedLock lock(m_hostedLock);
@@ -44,6 +51,7 @@ void LoaderProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
 void LoaderProcessor::releaseResources()
 {
+    loaderlog::write("releaseResources");
     const juce::ScopedLock lock(m_hostedLock);
     if (m_hosted != nullptr)
     {
@@ -74,6 +82,12 @@ bool LoaderProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 void LoaderProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
+
+    if (! m_firstBlockLogged)
+    {
+        m_firstBlockLogged = true; // once per prepareToPlay, to see in the log that the host processes and with which buffer
+        loaderlog::write("first processBlock: " + juce::String(buffer.getNumChannels()) + " channels, " + juce::String(buffer.getNumSamples()) + " samples");
+    }
 
     const juce::ScopedTryLock lock(m_hostedLock);
     if (! lock.isLocked() || m_hosted == nullptr)
@@ -176,7 +190,9 @@ bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juc
         m_hosted = std::move(plugin);
         configureHostedPlugin();
     }
-    setLatencySamples(m_hosted->getInstance().getLatencySamples());
+    const int latency = m_hosted->getInstance().getLatencySamples();
+    loaderlog::write("load: latency " + juce::String(latency) + " samples");
+    setLatencySamples(latency);
     if (onHostedPluginChanged)
     {
         onHostedPluginChanged();

@@ -11,7 +11,8 @@ target_sources(PluginLabTests
         ScannerTests.cpp
         HostedPluginTests.cpp
         ValidatorTests.cpp
-        LoaderTests.cpp)
+        LoaderTests.cpp
+        RealWorldTests.cpp)
 
 target_compile_definitions(PluginLabTests
     PRIVATE

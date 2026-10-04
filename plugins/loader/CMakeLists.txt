@@ -7,6 +7,7 @@ file(MAKE_DIRECTORY "${PLUGINLAB_LOADER_PLUGIN_DIR}")
 # The processor and the editor are a static library: the plugin links it and the tests use LoaderProcessor directly (without the
 # plugin wrapper of a host in between).
 add_library(pluginlab_loader_core STATIC
+    CrashLog.cpp
     LoaderEditor.cpp
     LoaderLog.cpp
     LoaderProcessor.cpp)

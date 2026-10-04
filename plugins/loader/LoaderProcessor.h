@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 
@@ -56,6 +57,8 @@ private:
     void restoreState(const juce::MemoryBlock& state);
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(LoaderProcessor)
+
+    std::atomic<bool> m_firstBlockLogged{false};
 
     juce::AudioPluginFormatManager m_formatManager;
     std::unique_ptr<pluginlab::hosting::HostedPlugin> m_hosted;
