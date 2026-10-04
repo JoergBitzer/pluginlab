@@ -55,6 +55,8 @@ private:
     void configureHostedPlugin();
     void restoreState(const juce::MemoryBlock& state);
 
+    JUCE_DECLARE_WEAK_REFERENCEABLE(LoaderProcessor)
+
     juce::AudioPluginFormatManager m_formatManager;
     std::unique_ptr<pluginlab::hosting::HostedPlugin> m_hosted;
     juce::CriticalSection m_hostedLock; // the audio thread only try-locks: while the plugin is replaced the audio passes through

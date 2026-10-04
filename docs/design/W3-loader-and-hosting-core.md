@@ -123,3 +123,12 @@ taken over as copies, nothing depends on it.
 - Every build copies the loader to `~/.vst3` (macOS: `~/Library/Audio/Plug-Ins/VST3`) so the DAW always loads the newest build; off in CI and on Windows
   (system folder needs administrator rights); option `PLUGINLAB_INSTALL_LOADER`. The DAW must be restarted or rescan to load a new build.
 - The version is shown in the title of the loader editor and of the hosted plugin's window ("PluginLab Loader 0.4.1: <plugin>") and in the host's window title.
+
+## 0.4.2: saving a session with a loaded plugin (Bitwig)
+- Report: a new project with the loader works; unloading the plugin before saving works; saving with a loaded plugin makes a problem (symptom not yet described).
+  Not reproducible with the tests (state round trip through `LoaderProcessor` works), so the loader now writes a log file:
+  `~/.config/PluginLab/PluginLabLoader.log` (Linux; `userApplicationDataDirectory/PluginLab/` elsewhere) with load, save and restore steps and the thread.
+- Changes: `setStateInformation` from another thread no longer captures a raw `this` (weak reference); the hosted plugin's state is set under the lock;
+  the header with the version had unreadable text colour in Bitwig (now the contrasting colour of the background).
+- Suspects, not yet confirmed: the host calls `getStateInformation` / `setStateInformation` on a thread other than the message thread, and the hosted plugin
+  does not tolerate that.

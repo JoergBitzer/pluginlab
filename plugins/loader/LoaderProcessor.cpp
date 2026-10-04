@@ -1,6 +1,7 @@
 #include "LoaderProcessor.h"
 
 #include "LoaderEditor.h"
+#include "LoaderLog.h"
 #include "pluginlab/hosting/LoaderState.h"
 #include "pluginlab/ui/GuiFormats.h"
 
@@ -140,6 +141,7 @@ pluginlab::hosting::HostedPlugin* LoaderProcessor::getHostedPlugin()
 
 bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juce::String& errorMessage)
 {
+    loaderlog::write("load: " + description.name + " (" + description.fileOrIdentifier + ")");
     if (description.isInstrument)
     {
         errorMessage = "Instruments are not supported by the loader yet (effects only): " + description.name;
@@ -206,31 +208,37 @@ void LoaderProcessor::getStateInformation(juce::MemoryBlock& destData)
     {
         return;
     }
+    loaderlog::write("save: asking " + m_hosted->getDescription().name + " for its state");
     juce::MemoryBlock hostedState;
     m_hosted->getInstance().getStateInformation(hostedState);
+    loaderlog::write("save: " + juce::String(hostedState.getSize()) + " bytes of plugin state");
     destData = pluginlab::hosting::createLoaderState(m_hosted->getDescription(), hostedState);
 }
 
 void LoaderProcessor::restoreState(const juce::MemoryBlock& state)
 {
+    loaderlog::write("restore: start, " + juce::String(state.getSize()) + " bytes");
     juce::PluginDescription description;
     juce::MemoryBlock hostedState;
     if (! pluginlab::hosting::parseLoaderState(state.getData(), static_cast<int>(state.getSize()), description, hostedState))
     {
-        juce::Logger::writeToLog("PluginLabLoader: the saved state is not a loader state");
+        loaderlog::write("restore: the saved state is not a loader state (" + juce::String(state.getSize()) + " bytes)");
         return;
     }
     juce::String error;
     if (! loadPlugin(description, error))
     {
         // the plugin is gone or does not load: the loader stays empty
-        juce::Logger::writeToLog("PluginLabLoader: cannot load " + description.fileOrIdentifier + ": " + error);
+        loaderlog::write("restore: cannot load " + description.fileOrIdentifier + ": " + error);
         return;
     }
+    loaderlog::write("restore: loaded " + description.name + ", giving it " + juce::String(hostedState.getSize()) + " bytes of state");
     if (hostedState.getSize() > 0)
     {
+        const juce::ScopedLock lock(m_hostedLock);
         m_hosted->getInstance().setStateInformation(hostedState.getData(), static_cast<int>(hostedState.getSize()));
     }
+    loaderlog::write("restore: done");
 }
 
 void LoaderProcessor::setStateInformation(const void* data, int sizeInBytes)
@@ -242,8 +250,16 @@ void LoaderProcessor::setStateInformation(const void* data, int sizeInBytes)
         restoreState(state);
         return;
     }
-    juce::Logger::writeToLog("PluginLabLoader: the state is restored later on the message thread");
-    juce::MessageManager::callAsync([this, state] { restoreState(state); });
+    loaderlog::write("restore: called from another thread, restoring later on the message thread");
+    const juce::WeakReference<LoaderProcessor> self(this);
+    juce::MessageManager::callAsync(
+        [self, state]
+        {
+            if (self != nullptr) // the host may have deleted the loader in the meantime
+            {
+                self->restoreState(state);
+            }
+        });
 }
 
 // the entry point that the plugin wrappers call

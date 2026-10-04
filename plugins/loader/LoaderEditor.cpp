@@ -67,8 +67,9 @@ LoaderEditor::~LoaderEditor()
 
 void LoaderEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
-    g.setColour(getLookAndFeel().findColour(juce::Label::textColourId));
+    const juce::Colour background = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId);
+    g.fillAll(background);
+    g.setColour(background.contrasting()); // the text colour of the look and feel can be unreadable on this background in a host
     g.setFont(juce::FontOptions(kTitleFontHeight, juce::Font::bold));
     g.drawText(getTitle(), getLocalBounds().reduced(kMargin).removeFromTop(kTitleHeight), juce::Justification::centredLeft);
 }

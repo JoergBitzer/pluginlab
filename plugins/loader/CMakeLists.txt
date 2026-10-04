@@ -8,6 +8,7 @@ file(MAKE_DIRECTORY "${PLUGINLAB_LOADER_PLUGIN_DIR}")
 # plugin wrapper of a host in between).
 add_library(pluginlab_loader_core STATIC
     LoaderEditor.cpp
+    LoaderLog.cpp
     LoaderProcessor.cpp)
 
 target_include_directories(pluginlab_loader_core
