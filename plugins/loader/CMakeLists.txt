@@ -19,6 +19,7 @@ target_include_directories(pluginlab_loader_core
 target_link_libraries(pluginlab_loader_core
     PUBLIC
         pluginlab_core
+        pluginlab_engine
         pluginlab_hosting_ui
         juce::juce_audio_utils
     PRIVATE

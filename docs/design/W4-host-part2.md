@@ -42,3 +42,12 @@ W4.1 engine core with tests (no device): file source, adapter, latency measureme
 - Gain plugins at different settings as slots: after the compensation all slot outputs are aligned (null of two identical slots is exact zero), switching with a
   sine input shows no jump larger than the crossfade allows and no silent block.
 - File source: loop wrap without a gap (sample exact), mono to stereo, sample rate conversion keeps the pitch.
+
+## Progress
+- **W4.1 + offline renderer: done (0.8.0, 2026-10-04).** Library `pluginlab_engine` (`AudioFileSource`, `ChannelAdapter` (the loader uses it now), `LatencyMeasurer`, `RenderSlot`,
+  `MeasurementEngine`, `OfflineRenderer`); tests in `tests/EngineTests.cpp` pass: a file's passes follow each other sample exactly, mono becomes stereo, a 44.1 kHz file played at
+  48 kHz keeps its pitch (440 zero crossings in one second), the latency is measured for the plugin that reports it right (64), the one that lies (100, reports 0) and the
+  one without latency (0), all slots are aligned (the impulse of every slot comes out at sample 110 = 10 + the slowest latency), switching a sine between a dry slot and a +12 dB slot
+  every 50 blocks gives no silent block and a largest step of 0.115 between samples (the analytic limit of the signal is 0.115; a hard switch would jump by about 1.5), and the offline
+  render writes one aligned 24 bit file per slot that equals the input to 1e-5.
+- Not yet: command line `--render` and the window with the audio device (W4.3), worker threads per slot (W4.4), xrun measurement with a real device.

@@ -6,6 +6,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "pluginlab/engine/ChannelAdapter.h"
 #include "pluginlab/hosting/HostedPlugin.h"
 
 // The loader plugin: hosts one other plugin (VST3 or VST2) and passes the audio through it. W3: loading, parameters, editor, state;
@@ -54,8 +55,6 @@ public:
 
 private:
     void configureHostedPlugin();
-    bool chooseHostedLayout(juce::AudioPluginInstance& instance, int& channels) const;
-    void processAdapted(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
     void restoreState(const juce::MemoryBlock& state);
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(LoaderProcessor)
@@ -68,7 +67,7 @@ private:
 
     // the channels the loaded plugin runs with (1 for a mono plugin in a stereo loader) and the buffer to adapt the audio to them
     int m_hostedChannels = 0;
-    juce::AudioBuffer<float> m_hostedBuffer;
+    pluginlab::engine::ChannelAdapter m_adapter;
 
     double m_sampleRate;
     int m_blockSize;

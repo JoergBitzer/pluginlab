@@ -14,6 +14,7 @@ target_sources(PluginLabTests
         LoaderTests.cpp
         BrowserTests.cpp
         CatalogTests.cpp
+        EngineTests.cpp
         ProbeTests.cpp
         RealWorldTests.cpp)
 
@@ -30,6 +31,7 @@ target_compile_definitions(PluginLabTests
 target_link_libraries(PluginLabTests
     PRIVATE
         pluginlab_core
+        pluginlab_engine
         pluginlab_loader_core
         juce::juce_core
         juce::juce_events

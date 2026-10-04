@@ -68,66 +68,8 @@ void LoaderProcessor::configureHostedPlugin()
     }
     juce::AudioPluginInstance& instance = m_hosted->getInstance();
     instance.setPlayConfigDetails(m_hostedChannels, m_hostedChannels, m_sampleRate, m_blockSize);
-    m_hostedBuffer.setSize(m_hostedChannels, m_blockSize);
+    m_adapter.prepare(getTotalNumInputChannels(), m_hostedChannels, m_blockSize);
     instance.prepareToPlay(m_sampleRate, m_blockSize);
-}
-
-// The loaded plugin runs with the channel layout of the loader if it can; a mono plugin in a stereo loader (or the other way round)
-// runs with its own layout and processAdapted() converts. Returns false if the plugin supports neither mono nor stereo.
-bool LoaderProcessor::chooseHostedLayout(juce::AudioPluginInstance& instance, int& channels) const
-{
-    const int loaderChannels = getTotalNumInputChannels();
-    const std::vector<juce::AudioChannelSet> candidates = {
-        juce::AudioChannelSet::canonicalChannelSet(loaderChannels), juce::AudioChannelSet::stereo(), juce::AudioChannelSet::mono()};
-    for (const juce::AudioChannelSet& candidate : candidates)
-    {
-        juce::AudioProcessor::BusesLayout layout;
-        layout.inputBuses.add(candidate);
-        layout.outputBuses.add(candidate);
-        if (instance.checkBusesLayoutSupported(layout) && instance.setBusesLayout(layout))
-        {
-            channels = candidate.size();
-            return true;
-        }
-    }
-    return false;
-}
-
-// Audio of the loader (C channels) through a plugin with H channels: H = 1 gets the mean of all channels and its output goes to all
-// channels; H = 2 in a mono loader gets the signal on both channels and its left output is the result.
-void LoaderProcessor::processAdapted(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
-{
-    const int samples = buffer.getNumSamples();
-    const int loaderChannels = buffer.getNumChannels();
-    if (samples > m_hostedBuffer.getNumSamples())
-    {
-        return; // a block bigger than announced: pass the audio through
-    }
-    juce::AudioBuffer<float> hostedBlock(m_hostedBuffer.getArrayOfWritePointers(), m_hostedChannels, samples);
-    for (int hostedChannel = 0; hostedChannel < m_hostedChannels; ++hostedChannel)
-    {
-        hostedBlock.clear(hostedChannel, 0, samples);
-        for (int channel = 0; channel < loaderChannels; ++channel)
-        {
-            const bool contributes = m_hostedChannels == 1 || loaderChannels == 1 || channel == hostedChannel;
-            if (contributes)
-            {
-                hostedBlock.addFrom(hostedChannel, 0, buffer, channel, 0, samples);
-            }
-        }
-        if (m_hostedChannels == 1)
-        {
-            hostedBlock.applyGain(hostedChannel, 0, samples, 1.0f / static_cast<float>(loaderChannels));
-        }
-    }
-
-    m_hosted->getInstance().processBlock(hostedBlock, midiMessages);
-
-    for (int channel = 0; channel < loaderChannels; ++channel)
-    {
-        const int hostedChannel = juce::jmin(channel, m_hostedChannels - 1);
-        buffer.copyFrom(channel, 0, hostedBlock, hostedChannel, 0, samples);
-    }
 }
 
 bool LoaderProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -159,7 +101,13 @@ void LoaderProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         m_hosted->getInstance().processBlock(buffer, midiMessages);
         return;
     }
-    processAdapted(buffer, midiMessages);
+    if (buffer.getNumSamples() > m_blockSize)
+    {
+        return; // a block bigger than announced: pass the audio through
+    }
+    juce::AudioBuffer<float>& hostedBlock = m_adapter.enter(buffer);
+    m_hosted->getInstance().processBlock(hostedBlock, midiMessages);
+    m_adapter.leave(buffer);
 }
 
 juce::AudioProcessorEditor* LoaderProcessor::createEditor()
@@ -234,7 +182,8 @@ bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juc
     }
 
     int hostedChannels = 0;
-    if (! chooseHostedLayout(plugin->getInstance(), hostedChannels))
+    hostedChannels = pluginlab::engine::ChannelAdapter::chooseLayout(plugin->getInstance(), getTotalNumInputChannels());
+    if (hostedChannels == 0)
     {
         errorMessage = description.name + " runs neither with mono nor with stereo audio (the loader supports only these)";
         return false;
