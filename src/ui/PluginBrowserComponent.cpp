@@ -16,7 +16,7 @@ constexpr int kButtonHeight = 28;
 constexpr int kStatusHeight = 24;
 constexpr int kRowHeight = 24;
 constexpr int kHeaderHeight = 24;
-constexpr int kScanButtonWidth = 170;
+constexpr int kScanButtonWidth = 210;
 constexpr int kAddFolderButtonWidth = 110;
 constexpr int kLoadButtonWidth = 80;
 constexpr int kAllowUnvalidatedWidth = 190;
@@ -31,12 +31,14 @@ constexpr int kColumnFormat = 2;
 constexpr int kColumnManufacturer = 3;
 constexpr int kColumnScan = 4;
 constexpr int kColumnValidation = 5;
-constexpr int kColumnFile = 6;
+constexpr int kColumnModified = 6;
+constexpr int kColumnFile = 7;
 constexpr int kWidthName = 200;
 constexpr int kWidthFormat = 60;
 constexpr int kWidthManufacturer = 130;
 constexpr int kWidthScan = 100;
-constexpr int kWidthValidation = 130;
+constexpr int kWidthValidation = 230;
+constexpr int kWidthModified = 120;
 constexpr int kWidthFile = 500;
 }
 
@@ -106,12 +108,14 @@ private:
 class PluginValidationThread : public juce::Thread
 {
 public:
-    PluginValidationThread(PluginBrowserComponent& owner, const juce::File& pluginval, const juce::File& pluginFile, int strictnessLevel)
+    PluginValidationThread(PluginBrowserComponent& owner, const juce::File& pluginval, const juce::File& pluginFile, int strictnessLevel,
+                           const juce::File& catalogFile)
         : juce::Thread("PluginValidation"),
           m_owner(owner),
           m_pluginval(pluginval),
           m_pluginFile(pluginFile),
-          m_strictnessLevel(strictnessLevel)
+          m_strictnessLevel(strictnessLevel),
+          m_catalogFile(catalogFile)
     {
     }
 
@@ -122,7 +126,7 @@ public:
 
     void run() override
     {
-        hosting::PluginValidator validator(m_pluginval, hosting::PluginValidator::getDefaultCacheFile(), m_strictnessLevel);
+        hosting::PluginValidator validator(m_pluginval, m_catalogFile, m_strictnessLevel);
         const hosting::ValidationResult result = validator.validate(m_pluginFile);
         const juce::Component::SafePointer<PluginBrowserComponent> owner(&m_owner);
         const juce::File pluginFile = m_pluginFile;
@@ -140,10 +144,11 @@ private:
     juce::File m_pluginval;
     juce::File m_pluginFile;
     int m_strictnessLevel;
+    juce::File m_catalogFile;
 };
 
-PluginBrowserComponent::PluginBrowserComponent()
-    : m_pluginval(hosting::PluginValidator::findPluginval())
+PluginBrowserComponent::PluginBrowserComponent(const juce::File& catalogFile)
+    : m_catalogFile(catalogFile), m_pluginval(hosting::PluginValidator::findPluginval())
 {
     m_model = std::make_unique<TextTableModel>([this] { return static_cast<int>(m_rows.size()); },
                                                [this](int row, int column) { return getCellText(row, column); });
@@ -156,6 +161,7 @@ PluginBrowserComponent::PluginBrowserComponent()
     m_table.getHeader().addColumn("Manufacturer", kColumnManufacturer, kWidthManufacturer);
     m_table.getHeader().addColumn("Scan", kColumnScan, kWidthScan);
     m_table.getHeader().addColumn("Validation", kColumnValidation, kWidthValidation);
+    m_table.getHeader().addColumn("Modified", kColumnModified, kWidthModified);
     m_table.getHeader().addColumn("File", kColumnFile, kWidthFile);
 
     m_scanButton.onClick = [this] { scanStandardFolders(); };
@@ -178,13 +184,10 @@ PluginBrowserComponent::PluginBrowserComponent()
         addAndMakeVisible(component);
     }
 
+    showCatalog();
     if (m_pluginval == juce::File())
     {
         setStatus("pluginval was not found: plugins cannot be validated (set PLUGINLAB_PLUGINVAL or install pluginval).");
-    }
-    else
-    {
-        setStatus("Ready. Scan the standard plugin folders or add a folder.");
     }
 }
 
@@ -236,11 +239,16 @@ juce::String PluginBrowserComponent::getValidationText(const Row& row) const
     {
         return "not validated";
     }
-    if (found->second.status == hosting::ValidationStatus::NotAvailable)
+    const hosting::ValidationResult& result = found->second;
+    if (result.status == hosting::ValidationStatus::NotAvailable)
     {
         return "pluginval missing";
     }
-    return hosting::toString(found->second.status);
+    if (result.outdated)
+    {
+        return "not validated (plugin changed since " + result.validatedAt + ")";
+    }
+    return hosting::toString(result.status) + " " + result.validatedAt + ", level " + juce::String(getStrictnessLevel());
 }
 
 juce::String PluginBrowserComponent::getCellText(int row, int columnId) const
@@ -268,7 +276,15 @@ juce::String PluginBrowserComponent::getCellText(const Row& entry, int columnId)
     }
     if (columnId == kColumnScan)
     {
+        if (entry.changedSinceScan)
+        {
+            return hosting::toString(entry.scanStatus) + " (plugin changed, scan again)";
+        }
         return hosting::toString(entry.scanStatus);
+    }
+    if (columnId == kColumnModified)
+    {
+        return entry.modified;
     }
     if (columnId == kColumnValidation)
     {
@@ -339,6 +355,64 @@ juce::String PluginBrowserComponent::getEntryName(int index) const
     return getCellText(index, kColumnName);
 }
 
+void PluginBrowserComponent::removeRowsOf(const juce::File& file)
+{
+    m_rows.erase(std::remove_if(m_rows.begin(), m_rows.end(), [&file](const Row& row) { return row.file == file; }), m_rows.end());
+}
+
+void PluginBrowserComponent::removeRowsOfMissingFiles()
+{
+    m_rows.erase(std::remove_if(m_rows.begin(), m_rows.end(), [](const Row& row) { return ! row.file.exists(); }), m_rows.end());
+    m_table.updateContent();
+    m_table.repaint();
+}
+
+// The list of the last scans, from the catalog file: shown at once when the browser opens. Plugins that are gone are left out, plugins that
+// changed since the scan are marked.
+void PluginBrowserComponent::showCatalog()
+{
+    const hosting::PluginValidator validator(m_pluginval, m_catalogFile, getStrictnessLevel());
+    juce::String newestScan;
+    for (const hosting::CatalogEntry& entry : hosting::PluginCatalog(m_catalogFile).load())
+    {
+        if (! entry.file.exists() || entry.scannedAt.isEmpty())
+        {
+            continue;
+        }
+        Row base;
+        base.file = entry.file;
+        base.scanStatus = entry.scanStatus;
+        base.message = entry.message;
+        base.modified = hosting::getModifiedText(entry.file);
+        base.changedSinceScan = hosting::describePluginFile(entry.file) != entry.stamp;
+        if (entry.descriptions.isEmpty())
+        {
+            m_rows.push_back(base);
+        }
+        for (const juce::PluginDescription& description : entry.descriptions)
+        {
+            Row row = base;
+            row.description = description;
+            row.hasDescription = true;
+            m_rows.push_back(row);
+        }
+        hosting::ValidationResult stored;
+        if (m_pluginval != juce::File() && ! entry.descriptions.isEmpty() && validator.getStoredResult(entry.file, stored))
+        {
+            m_validation[entry.file.getFullPathName()] = stored;
+        }
+        newestScan = juce::jmax(newestScan, entry.scannedAt);
+    }
+    if (m_rows.empty())
+    {
+        setStatus("Ready. Press 'Scan / rescan plugin folders' or add a folder.");
+        return;
+    }
+    setStatus("Showing " + juce::String(static_cast<int>(m_rows.size())) + " entries of the scan of " + newestScan
+              + ". Press 'Scan / rescan plugin folders' to update the list.");
+    m_table.updateContent();
+}
+
 void PluginBrowserComponent::scanStandardFolders()
 {
     startScan(juce::FileSearchPath());
@@ -357,6 +431,8 @@ void PluginBrowserComponent::startScan(const juce::FileSearchPath& folders)
         return;
     }
     setStatus("Scanning ...");
+    m_scanResults.clear();
+    m_scanIsOfStandardFolders = folders.getNumPaths() == 0;
     m_scanThread = std::make_unique<PluginScanThread>(*this, folders);
     m_scanThread->startThread();
 }
@@ -378,8 +454,13 @@ void PluginBrowserComponent::chooseFolder()
 
 void PluginBrowserComponent::addScanResult(const hosting::PluginScanResult& result)
 {
+    m_scanResults.push_back(result);
+    removeRowsOf(result.file);
+    m_validation.erase(result.file.getFullPathName()); // read again below: the plugin may have changed
+
     Row base;
     base.file = result.file;
+    base.modified = hosting::getModifiedText(result.file);
     base.scanStatus = result.status;
     base.message = result.message;
 
@@ -399,9 +480,9 @@ void PluginBrowserComponent::addScanResult(const hosting::PluginScanResult& resu
     const juce::String path = result.file.getFullPathName();
     if (m_pluginval != juce::File() && ! result.descriptions.isEmpty() && m_validation.find(path) == m_validation.end())
     {
-        const hosting::PluginValidator validator(m_pluginval, hosting::PluginValidator::getDefaultCacheFile(), getStrictnessLevel());
+        const hosting::PluginValidator validator(m_pluginval, m_catalogFile, getStrictnessLevel());
         hosting::ValidationResult cached;
-        if (validator.getCachedResult(result.file, cached))
+        if (validator.getStoredResult(result.file, cached))
         {
             m_validation[path] = cached;
         }
@@ -413,6 +494,12 @@ void PluginBrowserComponent::addScanResult(const hosting::PluginScanResult& resu
 
 void PluginBrowserComponent::scanFinished()
 {
+    hosting::PluginCatalog(m_catalogFile).storeScanResults(m_scanResults, m_scanIsOfStandardFolders);
+    m_scanResults.clear();
+    if (m_scanIsOfStandardFolders)
+    {
+        removeRowsOfMissingFiles();
+    }
     int numberOfProblems = 0;
     for (const Row& row : m_rows)
     {
@@ -472,7 +559,8 @@ void PluginBrowserComponent::loadRow(const Row& row)
         }
         return;
     }
-    if (known != m_validation.end() && known->second.status == hosting::ValidationStatus::Passed)
+    const bool knownIsCurrent = known != m_validation.end() && ! known->second.outdated;
+    if (knownIsCurrent && known->second.status == hosting::ValidationStatus::Passed)
     {
         if (onPluginChosen)
         {
@@ -480,7 +568,7 @@ void PluginBrowserComponent::loadRow(const Row& row)
         }
         return;
     }
-    if (known != m_validation.end() && (known->second.status == hosting::ValidationStatus::Failed || known->second.status == hosting::ValidationStatus::TimedOut))
+    if (knownIsCurrent && (known->second.status == hosting::ValidationStatus::Failed || known->second.status == hosting::ValidationStatus::TimedOut))
     {
         setStatus(hosting::getDisplayName(row.description) + " failed the validation and is not loaded: " + known->second.message
                       + " (Tick 'Load without validation' to load it anyway, or choose a lower strictness level.)");
@@ -502,7 +590,7 @@ void PluginBrowserComponent::loadRow(const Row& row)
     m_pendingLoadPath = path;
     setStatus("Validating " + hosting::getDisplayName(row.description) + " with pluginval ...");
     m_table.repaint();
-    m_validationThread = std::make_unique<PluginValidationThread>(*this, m_pluginval, row.file, getStrictnessLevel());
+    m_validationThread = std::make_unique<PluginValidationThread>(*this, m_pluginval, row.file, getStrictnessLevel(), m_catalogFile);
     m_validationThread->startThread();
 }
 
@@ -556,11 +644,11 @@ void PluginBrowserComponent::strictnessChanged()
     m_validation.clear();
     if (m_pluginval != juce::File())
     {
-        const hosting::PluginValidator validator(m_pluginval, hosting::PluginValidator::getDefaultCacheFile(), getStrictnessLevel());
+        const hosting::PluginValidator validator(m_pluginval, m_catalogFile, getStrictnessLevel());
         for (const Row& row : m_rows)
         {
             hosting::ValidationResult cached;
-            if (row.hasDescription && validator.getCachedResult(row.file, cached))
+            if (row.hasDescription && validator.getStoredResult(row.file, cached))
             {
                 m_validation[row.file.getFullPathName()] = cached;
             }

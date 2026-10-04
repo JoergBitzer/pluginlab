@@ -7,6 +7,7 @@ add_library(pluginlab_core STATIC
     hosting/FormatManager.cpp
     hosting/HostedPlugin.cpp
     hosting/LoaderState.cpp
+    hosting/PluginCatalog.cpp
     hosting/PluginDisplayName.cpp
     hosting/PluginScanner.cpp
     hosting/PluginValidator.cpp

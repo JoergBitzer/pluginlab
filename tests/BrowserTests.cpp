@@ -21,7 +21,8 @@ public:
 
     void runTest() override
     {
-        pluginlab::ui::PluginBrowserComponent browser;
+        const juce::TemporaryFile catalogFile(".xml");
+        pluginlab::ui::PluginBrowserComponent browser(catalogFile.getFile());
         bool finished = false;
         browser.onScanFinished = [&finished] { finished = true; };
 
@@ -39,6 +40,19 @@ public:
         expectSorted(browser, true);
         browser.sortBy(kColumnPlugin, false);
         expectSorted(browser, false);
+
+        beginTest("the list of the scan is shown at once by a new browser (next start of the program)");
+        pluginlab::ui::PluginBrowserComponent nextStart(catalogFile.getFile());
+        expectEquals(nextStart.getNumEntries(), browser.getNumEntries());
+
+        beginTest("scanning again does not double the entries");
+        finished = false;
+        browser.scanFolder(testpaths::getTestPluginFolder());
+        for (int waited = 0; ! finished && waited < kScanTimeoutMs; waited += kWaitStepMs)
+        {
+            juce::MessageManager::getInstance()->runDispatchLoopUntil(kWaitStepMs);
+        }
+        expectEquals(browser.getNumEntries(), nextStart.getNumEntries());
     }
 
 private:

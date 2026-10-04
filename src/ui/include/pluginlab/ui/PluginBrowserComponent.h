@@ -7,6 +7,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "pluginlab/hosting/PluginCatalog.h"
 #include "pluginlab/hosting/PluginScanResult.h"
 #include "pluginlab/hosting/PluginValidator.h"
 
@@ -16,7 +17,8 @@ class TextTableModel;
 class PluginScanThread;
 class PluginValidationThread;
 
-// Lists the plugins of the standard folders (or of a folder the user chooses) and loads one on request:
+// Lists the plugins of the standard folders (the list of the last scan is kept in the plugin catalog file and shown at the next start;
+// the button scans again) (or of a folder the user chooses) and loads one on request:
 //  - every file is scanned by its own scanner process (a crashing plugin shows up as "Crashed" in the list)
 //  - before a plugin is loaded it is validated with pluginval (in a child process, result remembered); only a plugin that passed
 //    can be loaded. If pluginval is not available, the user can allow loading without validation (a checkbox).
@@ -24,7 +26,8 @@ class PluginValidationThread;
 class PluginBrowserComponent : public juce::Component
 {
 public:
-    PluginBrowserComponent();
+    // catalogFile: where the list of plugins and the validation results are kept (see PluginCatalog)
+    explicit PluginBrowserComponent(const juce::File& catalogFile = hosting::PluginCatalog::getDefaultFile());
     ~PluginBrowserComponent() override;
 
     std::function<void(const juce::PluginDescription&)> onPluginChosen;
@@ -59,11 +62,16 @@ private:
         juce::String message;
         juce::PluginDescription description;
         bool hasDescription = false;
+        juce::String modified;          // date of the plugin file (the newest file of a bundle)
+        bool changedSinceScan = false;  // the file is not the one that was scanned: scan again
     };
 
     juce::String getCellText(int row, int columnId) const;
     juce::String getCellText(const Row& row, int columnId) const;
     void applySort();
+    void showCatalog();
+    void removeRowsOf(const juce::File& file);
+    void removeRowsOfMissingFiles();
     juce::String getValidationText(const Row& row) const;
     void startScan(const juce::FileSearchPath& folders);
     void chooseFolder();
@@ -73,15 +81,18 @@ private:
     void loadRow(const Row& row);
     void showValidationOutcome(const Row& row, const hosting::ValidationResult& result);
 
+    juce::File m_catalogFile;
     juce::File m_pluginval;
     std::vector<Row> m_rows;
     std::map<juce::String, hosting::ValidationResult> m_validation; // by plugin file path
     int m_sortColumnId = 0;                                         // 0: not sorted (order of the scan)
     bool m_sortForwards = true;
+    std::vector<hosting::PluginScanResult> m_scanResults; // of the scan that is running, written to the catalog when it finishes
+    bool m_scanIsOfStandardFolders = false;
     juce::String m_validatingPath;                                  // the file that is being validated now, else empty
     juce::String m_pendingLoadPath;                                 // load this file when its validation has passed
 
-    juce::TextButton m_scanButton{"Scan standard folders"};
+    juce::TextButton m_scanButton{"Scan / rescan plugin folders"};
     juce::TextButton m_addFolderButton{"Add folder..."};
     juce::TextButton m_loadButton{"Load"};
     juce::ToggleButton m_allowUnvalidatedButton{"Load without validation"};

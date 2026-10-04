@@ -1,6 +1,6 @@
 #include "pluginlab/hosting/PluginValidator.h"
 
-#include <map>
+#include "pluginlab/hosting/PluginCatalog.h"
 
 #if JUCE_WINDOWS
 #include <windows.h>
@@ -14,52 +14,8 @@ const juce::String kEnvironmentVariable = "PLUGINLAB_PLUGINVAL";
 const juce::String kPluginvalName = "pluginval";
 const juce::String kSuccessLine = "SUCCESS";
 const juce::String kTestStartPrefix = "Starting tests in:";
-const juce::String kCacheRootTag = "ValidationCache";
-const juce::String kCacheEntryTag = "Entry";
-const juce::String kKeyAttribute = "key";
-const juce::String kStatusAttribute = "status";
-const juce::String kMessageAttribute = "message";
 constexpr int kLogTailLength = 2000;
 constexpr int kMsPerSecond = 1000;
-
-juce::String statusToText(ValidationStatus status)
-{
-    return toString(status);
-}
-
-ValidationStatus statusFromText(const juce::String& text)
-{
-    if (text == toString(ValidationStatus::Passed))
-    {
-        return ValidationStatus::Passed;
-    }
-    if (text == toString(ValidationStatus::TimedOut))
-    {
-        return ValidationStatus::TimedOut;
-    }
-    return ValidationStatus::Failed;
-}
-
-// path, size and modification time of the file, or of every file inside a bundle folder
-juce::String describeFiles(const juce::File& pluginFile)
-{
-    juce::String description = pluginFile.getFullPathName();
-    juce::Array<juce::File> files;
-    if (pluginFile.isDirectory())
-    {
-        files = pluginFile.findChildFiles(juce::File::findFiles, true);
-    }
-    else
-    {
-        files.add(pluginFile);
-    }
-    for (const juce::File& file : files)
-    {
-        description += "|" + file.getRelativePathFrom(pluginFile) + ":" + juce::String(file.getSize()) + ":"
-                     + juce::String(file.getLastModificationTime().toMilliseconds());
-    }
-    return description;
-}
 
 // the part of the pluginval log that tells what went wrong (the end)
 juce::String tailOf(const juce::String& text)
@@ -115,10 +71,13 @@ juce::String toString(ValidationStatus status)
     return "Unknown";
 }
 
-PluginValidator::PluginValidator(const juce::File& pluginvalExecutable, const juce::File& cacheFile, int strictnessLevel, int timeoutMs)
-    : m_pluginvalExecutable(pluginvalExecutable), m_cacheFile(cacheFile), m_strictnessLevel(strictnessLevel), m_timeoutMs(timeoutMs)
+PluginValidator::PluginValidator(const juce::File& pluginvalExecutable, const juce::File& catalogFile, int strictnessLevel, int timeoutMs)
+    : m_pluginvalExecutable(pluginvalExecutable),
+      m_pluginvalStamp(juce::String((pluginvalExecutable.getFullPathName() + ":" + juce::String(pluginvalExecutable.getSize())).hashCode64())),
+      m_catalog(std::make_shared<PluginCatalog>(catalogFile)),
+      m_strictnessLevel(strictnessLevel),
+      m_timeoutMs(timeoutMs)
 {
-    loadCache();
 }
 
 int PluginValidator::getNumberOfPluginvalRuns() const
@@ -177,55 +136,7 @@ juce::File PluginValidator::findPluginval()
 
 juce::File PluginValidator::getDefaultCacheFile()
 {
-    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-        .getChildFile("pluginlab")
-        .getChildFile("validation_cache.xml");
-}
-
-juce::String PluginValidator::makeCacheKey(const juce::File& pluginFile) const
-{
-    const juce::String description = describeFiles(pluginFile) + "#level" + juce::String(m_strictnessLevel) + "#"
-                                   + m_pluginvalExecutable.getFullPathName() + ":" + juce::String(m_pluginvalExecutable.getSize());
-    return juce::String(description.hashCode64());
-}
-
-void PluginValidator::loadCache()
-{
-    m_cache.clear();
-    if (m_cacheFile == juce::File() || ! m_cacheFile.existsAsFile())
-    {
-        return;
-    }
-    const std::unique_ptr<juce::XmlElement> root = juce::XmlDocument::parse(m_cacheFile);
-    if (root == nullptr || ! root->hasTagName(kCacheRootTag))
-    {
-        return;
-    }
-    for (const juce::XmlElement* entry : root->getChildWithTagNameIterator(kCacheEntryTag))
-    {
-        CacheEntry cached;
-        cached.status = statusFromText(entry->getStringAttribute(kStatusAttribute));
-        cached.message = entry->getStringAttribute(kMessageAttribute);
-        m_cache[entry->getStringAttribute(kKeyAttribute)] = cached;
-    }
-}
-
-void PluginValidator::saveCache() const
-{
-    if (m_cacheFile == juce::File())
-    {
-        return;
-    }
-    juce::XmlElement root(kCacheRootTag);
-    for (const auto& [key, cached] : m_cache)
-    {
-        juce::XmlElement* entry = root.createNewChildElement(kCacheEntryTag);
-        entry->setAttribute(kKeyAttribute, key);
-        entry->setAttribute(kStatusAttribute, statusToText(cached.status));
-        entry->setAttribute(kMessageAttribute, cached.message);
-    }
-    m_cacheFile.getParentDirectory().createDirectory();
-    root.writeTo(m_cacheFile);
+    return PluginCatalog::getDefaultFile();
 }
 
 ValidationResult PluginValidator::runPluginval(const juce::File& pluginFile) const
@@ -310,20 +221,45 @@ ValidationResult PluginValidator::runPluginval(const juce::File& pluginFile) con
     return result;
 }
 
-bool PluginValidator::getCachedResult(const juce::File& pluginFile, ValidationResult& result) const
+bool PluginValidator::getStoredResult(const juce::File& pluginFile, ValidationResult& result) const
 {
     if (! pluginFile.exists())
     {
         return false;
     }
-    const auto cached = m_cache.find(makeCacheKey(pluginFile));
-    if (cached == m_cache.end())
+    for (const CatalogEntry& entry : m_catalog->load())
+    {
+        if (entry.file != pluginFile)
+        {
+            continue;
+        }
+        for (const CatalogValidation& stored : entry.validations)
+        {
+            if (stored.level != m_strictnessLevel)
+            {
+                continue;
+            }
+            result.status = stored.status;
+            result.message = stored.message;
+            result.validatedAt = stored.validatedAt;
+            result.pluginModified = stored.pluginModified;
+            result.fromCache = true;
+            const bool sameVersion = stored.pluginStamp == describePluginFile(pluginFile) && stored.pluginvalStamp == m_pluginvalStamp;
+            result.outdated = ! sameVersion;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool PluginValidator::getCachedResult(const juce::File& pluginFile, ValidationResult& result) const
+{
+    ValidationResult stored;
+    if (! getStoredResult(pluginFile, stored) || stored.outdated)
     {
         return false;
     }
-    result.status = cached->second.status;
-    result.message = cached->second.message;
-    result.fromCache = true;
+    result = stored;
     return true;
 }
 
@@ -344,26 +280,30 @@ ValidationResult PluginValidator::validate(const juce::File& pluginFile)
         return notThere;
     }
 
-    const juce::String key = makeCacheKey(pluginFile);
-    const auto cached = m_cache.find(key);
-    if (cached != m_cache.end())
+    ValidationResult cached;
+    if (getCachedResult(pluginFile, cached))
     {
-        ValidationResult fromCache;
-        fromCache.status = cached->second.status;
-        fromCache.message = cached->second.message;
-        fromCache.fromCache = true;
-        return fromCache;
+        return cached;
     }
 
+    // the version of the plugin is noted before the run: if the file changes during the run, the result counts for the old version
+    const juce::String stamp = describePluginFile(pluginFile);
+    const juce::String modified = getModifiedText(pluginFile);
     ++m_numberOfRuns;
     ValidationResult result = runPluginval(pluginFile);
+    result.validatedAt = getNowText();
+    result.pluginModified = modified;
     if (result.status != ValidationStatus::NotAvailable)
     {
-        CacheEntry entry;
-        entry.status = result.status;
-        entry.message = result.message;
-        m_cache[key] = entry;
-        saveCache();
+        CatalogValidation validation;
+        validation.level = m_strictnessLevel;
+        validation.status = result.status;
+        validation.message = result.message;
+        validation.validatedAt = result.validatedAt;
+        validation.pluginStamp = stamp;
+        validation.pluginModified = modified;
+        validation.pluginvalStamp = m_pluginvalStamp;
+        m_catalog->storeValidation(pluginFile, validation);
     }
     return result;
 }

@@ -160,3 +160,15 @@ taken over as copies, nothing depends on it.
   are still refused, now with that explanation. Test plugin `PluginLabTestMono` (mono only) and a loader test.
 - The plugin list sorts by every column (click the header; again for the other direction; natural order of numbers, case ignored); the selected plugin
   stays selected, validation results re-sort when "Validation" is the sort column. Test `BrowserTests`.
+
+## 0.6.0: plugin catalog (list kept between starts, validation with dates)
+- One XML file, `~/.config/pluginlab/plugin_catalog.xml` (`PluginCatalog`), keeps for every plugin file the scan result (status, message, plugin descriptions, date of the scan) and
+  the validations (one per pluginval level: result, date of the run, modification date of the validated plugin version, version stamps). It replaces `validation_cache.xml`
+  (the old file is not read any more and can be deleted).
+- The browser shows the list of the last scan when it opens (loader and host); the button is "Scan / rescan plugin folders". A rescan replaces the entries of the scanned
+  files (no duplicates), keeps their validations, and after a scan of the standard folders removes plugins that are gone. "Add folder" adds to the list.
+  A plugin that changed since the scan is marked in the Scan column. New column "Modified" (date of the plugin file; the newest file of a bundle).
+- Validation: the stamp is a hash of path, size and modification time of every file of the plugin plus the pluginval used, so a plugin that is newer than the validated one
+  is *not validated* again ("not validated (plugin changed since <date of the validation>)") and is validated again when loaded; a validated plugin shows
+  "Passed <date>, level N". Several programs can write the file (lock + write to a temporary file, then replace).
+- Not done (final product): "validate all" button.

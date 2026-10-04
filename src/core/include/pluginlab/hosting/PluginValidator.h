@@ -1,9 +1,13 @@
 #pragma once
 
+#include <memory>
+
 #include <juce_core/juce_core.h>
 
 namespace pluginlab::hosting
 {
+class PluginCatalog;
+
 enum class ValidationStatus
 {
     Passed,       // pluginval ran and reported success
@@ -18,22 +22,26 @@ struct ValidationResult
     juce::String message;     // one line for the user
     juce::String log;         // the end of the output of pluginval
     bool fromCache = false;   // true: an earlier result for the same, unchanged plugin file
+    juce::String validatedAt;     // date and time of the pluginval run
+    juce::String pluginModified;  // modification date of the plugin version that was validated
+    bool outdated = false;        // only from getStoredResult: the plugin file is not the one that was validated
 };
 
 juce::String toString(ValidationStatus status);
 
 // Tests a plugin file with pluginval (https://github.com/Tracktion/pluginval) in a child process, so that a plugin that crashes
-// during the tests cannot take the host down. Results are remembered per plugin file (path, size and modification times of all
-// its files), strictness level and pluginval version: an unchanged plugin is not validated again.
+// during the tests cannot take the host down. Results are remembered in the plugin catalog per plugin file (path, size and modification times of
+// all its files), strictness level and pluginval: an unchanged plugin is not validated again, a changed one counts as not validated.
 class PluginValidator
 {
 public:
     static constexpr int kDefaultStrictnessLevel = 5; // pluginval recommends at least 5
     static constexpr int kDefaultTimeoutMs = 120000;
 
-    // pluginvalExecutable: see findPluginval(); cacheFile: where the results are kept (an empty File: no cache on disk)
+    // pluginvalExecutable: see findPluginval(); catalogFile: the plugin catalog, where the results are kept together with the scan
+    // results (PluginCatalog; an empty File: kept in memory only)
     PluginValidator(const juce::File& pluginvalExecutable,
-                    const juce::File& cacheFile,
+                    const juce::File& catalogFile,
                     int strictnessLevel = kDefaultStrictnessLevel,
                     int timeoutMs = kDefaultTimeoutMs);
 
@@ -43,6 +51,10 @@ public:
     // or the plugin file changed since).
     bool getCachedResult(const juce::File& pluginFile, ValidationResult& result) const;
 
+    // The remembered result of this level even if the plugin file changed since (outdated is then true: the date of the validated
+    // version is in pluginModified). Returns false if this level was never run for the file.
+    bool getStoredResult(const juce::File& pluginFile, ValidationResult& result) const;
+
     // How many times pluginval was started by this object (a cache hit does not start it).
     int getNumberOfPluginvalRuns() const;
 
@@ -50,26 +62,17 @@ public:
     // download folder of tools/run_pluginval.sh (~/.cache/pluginval). Returns an invalid File if there is none.
     static juce::File findPluginval();
 
-    // The default place of the cache file (the application data folder of the user).
+    // The default place of the catalog file (the application data folder of the user).
     static juce::File getDefaultCacheFile();
 
 private:
-    juce::String makeCacheKey(const juce::File& pluginFile) const;
     ValidationResult runPluginval(const juce::File& pluginFile) const;
-    void loadCache();
-    void saveCache() const;
 
     juce::File m_pluginvalExecutable;
-    juce::File m_cacheFile;
+    juce::String m_pluginvalStamp;
+    std::shared_ptr<PluginCatalog> m_catalog;
     int m_strictnessLevel;
     int m_timeoutMs;
     int m_numberOfRuns = 0;
-
-    struct CacheEntry
-    {
-        ValidationStatus status = ValidationStatus::NotAvailable;
-        juce::String message;
-    };
-    std::map<juce::String, CacheEntry> m_cache;
 };
 }

@@ -76,6 +76,29 @@ public:
         const pluginlab::hosting::ValidationResult notAPlugin = validator.validate(testpaths::getNotAPluginFile());
         expect(notAPlugin.status == pluginlab::hosting::ValidationStatus::Failed, pluginlab::hosting::toString(notAPlugin.status) + ": " + notAPlugin.message);
 
+        beginTest("a plugin that changed after its validation counts as not validated, with the date of the validation");
+        const juce::TemporaryFile copyFolder(".dir");
+        expect(copyFolder.getFile().createDirectory());
+        const juce::File copy = copyFolder.getFile().getChildFile("PluginLabTestGain.vst3");
+        expect(testpaths::getGainPlugin().copyDirectoryTo(copy));
+        const pluginlab::hosting::ValidationResult copyResult = validator.validate(copy);
+        expect(copyResult.status == pluginlab::hosting::ValidationStatus::Passed, copyResult.message);
+        expect(copyResult.validatedAt.isNotEmpty());
+        pluginlab::hosting::ValidationResult stored;
+        expect(validator.getStoredResult(copy, stored));
+        expect(! stored.outdated);
+        const juce::Array<juce::File> binaries = copy.findChildFiles(juce::File::findFiles, true, "*.so;*.dll;*.vst3;PluginLabTestGain");
+        expect(! binaries.isEmpty());
+        if (! binaries.isEmpty())
+        {
+            expect(binaries[0].appendText("changed"));
+            expect(validator.getStoredResult(copy, stored));
+            expect(stored.outdated, "the changed plugin must be marked as outdated");
+            expect(stored.validatedAt.isNotEmpty());
+            pluginlab::hosting::ValidationResult notCurrent;
+            expect(! validator.getCachedResult(copy, notCurrent));
+        }
+
         beginTest("a missing pluginval is reported as NotAvailable");
         pluginlab::hosting::PluginValidator withoutPluginval(testpaths::getTestPluginFolder().getChildFile("no_pluginval_here"), juce::File(), kStrictnessLevel, kTimeoutMs);
         const pluginlab::hosting::ValidationResult notValidated = withoutPluginval.validate(testpaths::getGainPlugin());
