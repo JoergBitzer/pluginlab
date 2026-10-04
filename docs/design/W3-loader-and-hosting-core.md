@@ -141,3 +141,13 @@ taken over as copies, nothing depends on it.
 - The loader now installs a crash handler (Linux/macOS) that writes a backtrace into `PluginLabLoader.log` and passes the signal on, and logs prepareToPlay,
   releaseResources, the first processBlock (channels, samples), latency and deletion.
 - The pluginval level box was squeezed out of the button row (too narrow): widths reduced, loader editor 900 px wide.
+
+## 0.4.4: the crash after reopening was in the hosted plugin's editor; version header
+- The crash handler's backtrace (0.4.3) showed the fault inside BL-StereoWidth's own editor drawing (`GraphControl12::Draw`, null pointer member), driven by the plugin's
+  event handler in our process, one block after the first `processBlock`. The loader had opened the hosted editor window by itself while the session was restored,
+  before the plugin had processed audio; this plugin's editor draws before its DSP side has initialised the data it reads.
+- Changes: a plugin that comes with a restored session no longer opens its editor window (only the button "Show plugin editor", or loading it by hand, opens it);
+  `loadPlugin(..., openEditor)`; the DAW's play head is passed to the hosted plugin (tempo/position, so far it got none). The plugin's editor can still crash when the
+  user opens it too early; that is the plugin's bug and the crash handler will show it.
+- The version string was missing for two releases because the helper was called `getTitle()` inside `LoaderEditor`, which resolves to `juce::Component::getTitle()`
+  (empty). Renamed; the title is a label of its own. Found by rendering the loader in the host and looking at the window.

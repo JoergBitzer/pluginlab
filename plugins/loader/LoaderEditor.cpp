@@ -15,7 +15,7 @@ constexpr int kTitleHeight = 24;
 constexpr float kTitleFontHeight = 16.0f;
 const juce::String kProductName = "PluginLab Loader";
 
-juce::String getTitle()
+juce::String makeTitleText()
 {
     return kProductName + " " + juce::String(pluginlab::getVersionString());
 }
@@ -39,17 +39,23 @@ LoaderEditor::LoaderEditor(LoaderProcessor& loaderProcessor)
     };
 
     m_processor.onBeforeHostedPluginChanged = [this] { dropHostedEditor(); };
-    m_processor.onHostedPluginChanged = [this] { showHostedEditor(); };
+    m_processor.onHostedPluginChanged = [this](bool openEditor) { showHostedPlugin(openEditor); };
 
+    // a component of its own (not painted in paint()): visible whatever the host does with the background
+    m_titleLabel.setText(makeTitleText(), juce::dontSendNotification);
+    m_titleLabel.setFont(juce::FontOptions(kTitleFontHeight, juce::Font::bold));
+    m_titleLabel.setColour(juce::Label::textColourId,
+                           getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).contrasting());
+    addAndMakeVisible(m_titleLabel);
     addAndMakeVisible(m_browser);
     addAndMakeVisible(m_parameters);
     addAndMakeVisible(m_showEditorButton);
     addAndMakeVisible(m_unloadButton);
-    m_showEditorButton.onClick = [this] { showHostedEditor(); };
+    m_showEditorButton.onClick = [this] { openHostedEditorWindow(); };
     m_unloadButton.onClick = [this] { m_processor.unloadPlugin(); };
 
     setSize(kEditorWidth, kEditorHeight);
-    showHostedEditor(); // a plugin may already be loaded (state of the session)
+    showHostedPlugin(false); // a plugin may already be loaded (state of the session): its window opens only on request
 
     const juce::String scanOnOpen = juce::SystemStats::getEnvironmentVariable(kScanOnOpenVariable, {});
     if (scanOnOpen.isNotEmpty())
@@ -67,11 +73,7 @@ LoaderEditor::~LoaderEditor()
 
 void LoaderEditor::paint(juce::Graphics& g)
 {
-    const juce::Colour background = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId);
-    g.fillAll(background);
-    g.setColour(background.contrasting()); // the text colour of the look and feel can be unreadable on this background in a host
-    g.setFont(juce::FontOptions(kTitleFontHeight, juce::Font::bold));
-    g.drawText(getTitle(), getLocalBounds().reduced(kMargin).removeFromTop(kTitleHeight), juce::Justification::centredLeft);
+    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
 }
 
 bool LoaderEditor::isShowingHostedEditor() const
@@ -82,7 +84,7 @@ bool LoaderEditor::isShowingHostedEditor() const
 void LoaderEditor::resized()
 {
     juce::Rectangle<int> area = getLocalBounds().reduced(kMargin);
-    area.removeFromTop(kTitleHeight);
+    m_titleLabel.setBounds(area.removeFromTop(kTitleHeight));
     m_browser.setBounds(area.removeFromTop(kBrowserHeight));
     area.removeFromTop(kMargin);
     juce::Rectangle<int> buttonRow = area.removeFromTop(kButtonRowHeight);
@@ -99,7 +101,12 @@ void LoaderEditor::dropHostedEditor()
     m_hostedWindow.reset(); // the window must go before the plugin instance
 }
 
-void LoaderEditor::showHostedEditor()
+void LoaderEditor::openHostedEditorWindow()
+{
+    showHostedPlugin(true);
+}
+
+void LoaderEditor::showHostedPlugin(bool openWindow)
 {
     pluginlab::hosting::HostedPlugin* hosted = m_processor.getHostedPlugin();
     if (hosted == nullptr)
@@ -107,13 +114,17 @@ void LoaderEditor::showHostedEditor()
         return;
     }
     m_parameters.setPlugin(hosted);
+    if (! openWindow)
+    {
+        return;
+    }
     if (m_hostedWindow != nullptr)
     {
         m_hostedWindow->toFront(true);
         return;
     }
     m_hostedWindow = std::make_unique<pluginlab::ui::PluginEditorWindow>(
-        hosted->getInstance(), getTitle() + ": " + pluginlab::hosting::getDisplayName(hosted->getDescription()),
+        hosted->getInstance(), makeTitleText() + ": " + pluginlab::hosting::getDisplayName(hosted->getDescription()),
         [this]
         {
             // the close handler runs inside the window: delete it afterwards

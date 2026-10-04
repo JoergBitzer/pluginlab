@@ -21,14 +21,18 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
 
+    // opens (or brings to the front) the window with the editor of the loaded plugin; the button "Show plugin editor" does this
+    void openHostedEditorWindow();
+
     // true while the window with the editor of a loaded plugin is open (for the tests)
     bool isShowingHostedEditor() const;
 
 private:
     void dropHostedEditor();
-    void showHostedEditor();
+    void showHostedPlugin(bool openWindow);
 
     LoaderProcessor& m_processor;
+    juce::Label m_titleLabel;
     pluginlab::ui::PluginBrowserComponent m_browser;
     pluginlab::ui::ParameterTableComponent m_parameters;
     juce::TextButton m_showEditorButton{"Show plugin editor"};

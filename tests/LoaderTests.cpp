@@ -155,7 +155,9 @@ private:
             expect(editor != nullptr, "the loader created no LoaderEditor");
             if (editor != nullptr)
             {
-                expect(editor->isShowingHostedEditor(), "a plugin is loaded: its editor must be shown");
+                expect(! editor->isShowingHostedEditor(), "a plugin that came with the session must not open its window by itself");
+                editor->openHostedEditorWindow();
+                expect(editor->isShowingHostedEditor(), "after asking for it the window of the plugin must be open");
                 loader.unloadPlugin();
                 expect(! editor->isShowingHostedEditor(), "after unloading no hosted editor may be left");
                 juce::String loadError;
