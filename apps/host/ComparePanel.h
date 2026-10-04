@@ -8,6 +8,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "HostSettings.h"
 #include "pluginlab/engine/MeasurementEngine.h"
 #include "pluginlab/ui/ParameterTableComponent.h"
 
@@ -27,16 +28,29 @@ class RenderThread;
 class ComparePanel : public juce::Component, private juce::AudioIODeviceCallback, private juce::Timer
 {
 public:
-    ComparePanel();
+    ComparePanel(pluginlab::engine::MeasurementEngine& engine, HostSettings& settings);
     ~ComparePanel() override;
 
-    // The panel asks for the description of the plugin that is selected on the Plugins page (to put another instance of it into a slot).
-    std::function<bool(juce::PluginDescription&)> getSelectedPluginDescription;
+    // The panel shows the slots that the page "Plugins" loads. Asks that page for the editor window of a slot.
+    std::function<void(int slotIndex)> onShowEditorOfSlot;
+    // Told after the list of the audio files changed (the session is kept)
+    std::function<void()> onFilesChanged;
+    // The user chose another engine rate: the host does it (the plugins have to be prepared again, so the slots and files are removed;
+    // the host closes the editors first and puts the dry slot back)
+    std::function<void(double sampleRate)> onChangeEngineRate;
 
-    // For manual tests and screenshots (command line): adds a file and the dry slot
+    // The list of the slots changed (a plugin was loaded or unloaded on the other page)
+    void slotsChanged();
+
+    // The list of the files changed from outside (an audio list was loaded)
+    void filesChanged();
+
     void addFile(const juce::File& file);
-    void addDrySlot();
-    bool addSlotFromFile(const juce::File& pluginFile);
+    void addFiles(const juce::Array<juce::File>& files);
+
+    // Loads an audio list file / saves the audio list (as the buttons do)
+    void loadAudioListFile(const juce::File& file);
+    void saveAudioListFile(const juce::File& file);
 
     // Starts the playback (as the Play button) and gives the text that tells what is going on (device, xruns).
     void startPlaying();
@@ -59,24 +73,22 @@ private:
 
     void timerCallback() override;
 
-    void chooseFile();
+    void chooseFiles();
     void removeSelectedFile();
+    void saveAudioList();
+    void loadAudioList();
     void applyFileSettings();
     void fileSelectionChanged();
-    void addSlotFromSelectedPlugin();
-    void removeSelectedSlot();
     void showSlotEditor();
     void slotSelectionChanged();
     void startOrStop();
     void showDeviceSettings();
     void chooseRenderFolder();
     void changeEngineRate();
-    void clearEverything();
-    void closeSlotWindows();
     void setStatus(const juce::String& text);
 
-    juce::AudioPluginFormatManager m_formatManager;
-    pluginlab::engine::MeasurementEngine m_engine;
+    pluginlab::engine::MeasurementEngine& m_engine;
+    HostSettings& m_settings;
     juce::AudioDeviceManager m_deviceManager;
     bool m_deviceCallbackAdded = false;
     std::atomic<bool> m_playing{false};
@@ -84,12 +96,13 @@ private:
     double m_deviceRate = 0.0;
     juce::AudioBuffer<float> m_monoMix;
 
-    std::map<int, std::unique_ptr<ui::PluginEditorWindow>> m_slotWindows;
     std::unique_ptr<RenderThread> m_renderThread;
     std::unique_ptr<juce::FileChooser> m_chooser;
 
-    juce::TextButton m_addFileButton{"Add audio file..."};
+    juce::TextButton m_addFileButton{"Add audio files..."};
     juce::TextButton m_removeFileButton{"Remove file"};
+    juce::TextButton m_saveListButton{"Save audio list..."};
+    juce::TextButton m_loadListButton{"Load audio list..."};
     juce::Label m_passesLabel;
     juce::ComboBox m_passesBox;
     juce::Label m_regionLabel;
@@ -98,9 +111,7 @@ private:
     std::unique_ptr<ui::TextTableModel> m_fileModel;
     juce::TableListBox m_fileTable;
 
-    juce::TextButton m_addDryButton{"Add dry slot"};
-    juce::TextButton m_addPluginButton{"Add the plugin selected on the Plugins page"};
-    juce::TextButton m_removeSlotButton{"Remove slot"};
+    juce::Label m_slotsLabel;
     juce::TextButton m_slotEditorButton{"Show editor"};
     std::unique_ptr<ui::TextTableModel> m_slotModel;
     juce::TableListBox m_slotTable;

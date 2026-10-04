@@ -50,6 +50,7 @@ bool AudioFileSource::load(const juce::File& file, double targetSampleRate, juce
         }
     }
 
+    m_file = file;
     m_name = file.getFileName();
     m_sampleRate = targetSampleRate;
     m_regionStart = 0;
@@ -97,6 +98,11 @@ juce::int64 AudioFileSource::getRegionEnd() const
 double AudioFileSource::getSampleRate() const
 {
     return m_sampleRate;
+}
+
+juce::File AudioFileSource::getFile() const
+{
+    return m_file;
 }
 
 juce::String AudioFileSource::getName() const

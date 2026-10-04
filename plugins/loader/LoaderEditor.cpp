@@ -27,6 +27,7 @@ const juce::String kScanOnOpenVariable = "PLUGINLAB_LOADER_SCAN";
 LoaderEditor::LoaderEditor(LoaderProcessor& loaderProcessor)
     : juce::AudioProcessorEditor(&loaderProcessor), m_processor(loaderProcessor)
 {
+    m_browser.setMultipleSelection(false); // the loader hosts one plugin
     m_browser.onPluginChosen = [this](const juce::PluginDescription& description)
     {
         juce::String error;

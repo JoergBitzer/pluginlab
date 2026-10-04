@@ -10,6 +10,7 @@ target_sources(PluginLabHost
         Main.cpp
         ComparePanel.cpp
         HostMainComponent.cpp
+        HostSettings.cpp
         HostShell.cpp
         HostReport.cpp)
 

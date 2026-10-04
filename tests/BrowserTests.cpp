@@ -1,6 +1,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "TestPluginPaths.h"
+#include "pluginlab/hosting/PluginDisplayName.h"
 #include "pluginlab/ui/PluginBrowserComponent.h"
 
 namespace
@@ -22,6 +23,21 @@ public:
     void runTest() override
     {
         const juce::TemporaryFile catalogFile(".xml");
+        beginTest("the type of a plugin is shown as effect or instrument with the categories the plugin reports");
+        juce::PluginDescription description;
+        description.category = "Fx|Delay|Mono";
+        expectEquals(pluginlab::hosting::getTypeText(description), juce::String("effect|Delay|Mono"));
+        description.category = "Instrument|Synth|Drum";
+        description.isInstrument = true;
+        expectEquals(pluginlab::hosting::getTypeText(description), juce::String("instrument|Synth|Drum"));
+        description.category = "Synth";
+        expectEquals(pluginlab::hosting::getTypeText(description), juce::String("instrument"));
+        description.category = "Analyser";
+        description.isInstrument = false;
+        expectEquals(pluginlab::hosting::getTypeText(description), juce::String("effect|Analyser"));
+        description.category = "";
+        expectEquals(pluginlab::hosting::getTypeText(description), juce::String("effect"));
+
         pluginlab::ui::PluginBrowserComponent browser(catalogFile.getFile());
         bool finished = false;
         browser.onScanFinished = [&finished] { finished = true; };

@@ -22,6 +22,7 @@ public:
     juce::int64 getRegionEnd() const;
     double getSampleRate() const;
     juce::String getName() const;
+    juce::File getFile() const;
 
     // Back to the first sample of the region, no pass completed.
     void rewind();
@@ -37,6 +38,7 @@ public:
     juce::int64 getSamplesLeftInPass() const;
 
 private:
+    juce::File m_file;
     juce::String m_name;
     double m_sampleRate = 0.0;
     juce::AudioBuffer<float> m_data;

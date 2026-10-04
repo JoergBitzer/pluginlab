@@ -33,12 +33,14 @@ constexpr int kColumnScan = 4;
 constexpr int kColumnValidation = 5;
 constexpr int kColumnModified = 6;
 constexpr int kColumnFile = 7;
+constexpr int kColumnType = 8; // (the id only; the column sits after Format)
 constexpr int kWidthName = 200;
 constexpr int kWidthFormat = 60;
 constexpr int kWidthManufacturer = 130;
 constexpr int kWidthScan = 100;
 constexpr int kWidthValidation = 230;
 constexpr int kWidthModified = 120;
+constexpr int kWidthType = 150;
 constexpr int kWidthFile = 500;
 }
 
@@ -172,8 +174,10 @@ PluginBrowserComponent::PluginBrowserComponent(const juce::File& catalogFile)
     m_table.setModel(m_model.get());
     m_table.setRowHeight(kRowHeight);
     m_table.setHeaderHeight(kHeaderHeight);
+    m_table.setMultipleSelectionEnabled(true);
     m_table.getHeader().addColumn("Plugin", kColumnName, kWidthName);
     m_table.getHeader().addColumn("Format", kColumnFormat, kWidthFormat);
+    m_table.getHeader().addColumn("Type", kColumnType, kWidthType);
     m_table.getHeader().addColumn("Manufacturer", kColumnManufacturer, kWidthManufacturer);
     m_table.getHeader().addColumn("Scan", kColumnScan, kWidthScan);
     m_table.getHeader().addColumn("Validation", kColumnValidation, kWidthValidation);
@@ -323,6 +327,14 @@ juce::String PluginBrowserComponent::getCellText(const Row& entry, int columnId)
     {
         return entry.description.pluginFormatName;
     }
+    if (columnId == kColumnType)
+    {
+        if (entry.hasDescription)
+        {
+            return hosting::getTypeText(entry.description);
+        }
+        return {};
+    }
     if (columnId == kColumnManufacturer)
     {
         return entry.description.manufacturerName;
@@ -396,6 +408,11 @@ void PluginBrowserComponent::applySort()
         }
     }
     m_table.repaint();
+}
+
+void PluginBrowserComponent::setMultipleSelection(bool allowed)
+{
+    m_table.setMultipleSelectionEnabled(allowed);
 }
 
 int PluginBrowserComponent::getNumEntries() const
@@ -591,21 +608,69 @@ bool PluginBrowserComponent::chooseByName(const juce::String& displayName)
 
 void PluginBrowserComponent::loadSelected()
 {
-    const int selected = m_table.getSelectedRow();
-    if (selected < 0 || selected >= static_cast<int>(m_rows.size()))
+    if (! m_loadQueue.empty())
     {
-        setStatus("Select a plugin in the list first.");
+        setStatus("Plugins are still being loaded, please wait.");
         return;
     }
-    loadRow(m_rows[static_cast<size_t>(selected)]);
+    const juce::SparseSet<int> selected = m_table.getSelectedRows();
+    for (int index = 0; index < selected.size(); ++index)
+    {
+        const int row = selected[index];
+        if (row >= 0 && row < static_cast<int>(m_rows.size()))
+        {
+            m_loadQueue.push_back(m_rows[static_cast<size_t>(row)]);
+        }
+    }
+    if (m_loadQueue.empty())
+    {
+        setStatus("Select one or more plugins in the list first.");
+        return;
+    }
+    m_queueTotal = static_cast<int>(m_loadQueue.size());
+    m_queueLoaded = 0;
+    m_queueRefused.clear();
+    processLoadQueue();
 }
 
-void PluginBrowserComponent::loadRow(const Row& row)
+// Loads the waiting plugins one after the other; stops while a check runs in the background (validationFinished goes on).
+void PluginBrowserComponent::processLoadQueue()
+{
+    while (! m_loadQueue.empty())
+    {
+        const Row row = m_loadQueue.front();
+        const LoadOutcome outcome = loadRow(row);
+        if (outcome == LoadOutcome::Validating)
+        {
+            return;
+        }
+        m_loadQueue.pop_front();
+        if (outcome == LoadOutcome::Loaded)
+        {
+            ++m_queueLoaded;
+        }
+        else
+        {
+            m_queueRefused.add(hosting::getDisplayName(row.description));
+        }
+    }
+    if (m_queueTotal > 1)
+    {
+        juce::String text = "Loaded " + juce::String(m_queueLoaded) + " of " + juce::String(m_queueTotal) + " plugins.";
+        if (! m_queueRefused.isEmpty())
+        {
+            text += " Not loaded: " + m_queueRefused.joinIntoString(", ") + ".";
+        }
+        setStatus(text);
+    }
+}
+
+PluginBrowserComponent::LoadOutcome PluginBrowserComponent::loadRow(const Row& row)
 {
     if (! row.hasDescription)
     {
         setStatus("Cannot load " + row.file.getFileName() + ": " + hosting::toString(row.scanStatus) + ". " + row.message);
-        return;
+        return LoadOutcome::Refused;
     }
 
     const juce::String key = getValidationKey(row);
@@ -616,7 +681,7 @@ void PluginBrowserComponent::loadRow(const Row& row)
         {
             onPluginChosen(row.description);
         }
-        return;
+        return LoadOutcome::Loaded;
     }
     const bool knownIsCurrent = known != m_validation.end() && ! known->second.outdated;
     if (knownIsCurrent && known->second.status == hosting::ValidationStatus::Passed)
@@ -625,26 +690,26 @@ void PluginBrowserComponent::loadRow(const Row& row)
         {
             onPluginChosen(row.description);
         }
-        return;
+        return LoadOutcome::Loaded;
     }
     if (knownIsCurrent && (known->second.status == hosting::ValidationStatus::Failed || known->second.status == hosting::ValidationStatus::TimedOut))
     {
         setStatus(hosting::getDisplayName(row.description) + " failed the validation and is not loaded: " + known->second.message
                       + " (Tick 'Load without validation' to load it anyway, or choose a lower strictness level.)");
-        return;
+        return LoadOutcome::Refused;
     }
 
     const bool quickCheck = row.numberOfPluginsInFile > 1;
     if (m_pluginval == juce::File() && ! quickCheck)
     {
         setStatus("pluginval was not found. Tick 'Load without validation' to load the plugin anyway.");
-        return;
+        return LoadOutcome::Refused;
     }
 
     if (m_validationThread != nullptr && m_validationThread->isThreadRunning())
     {
         setStatus("Another plugin is being validated, please wait.");
-        return;
+        return LoadOutcome::Refused;
     }
     m_validatingKey = key;
     m_pendingLoadKey = key;
@@ -661,6 +726,7 @@ void PluginBrowserComponent::loadRow(const Row& row)
     m_validationThread = std::make_unique<PluginValidationThread>(*this, m_pluginval, row.file, getStrictnessLevel(), m_catalogFile, key,
                                                                   row.description, quickCheck);
     m_validationThread->startThread();
+    return LoadOutcome::Validating;
 }
 
 void PluginBrowserComponent::validationFinished(const juce::String& validationKey, const hosting::ValidationResult& result)
@@ -679,9 +745,23 @@ void PluginBrowserComponent::validationFinished(const juce::String& validationKe
             continue;
         }
         showValidationOutcome(row, result);
-        if (loadWanted && result.status == hosting::ValidationStatus::Passed && onPluginChosen)
+        const bool passed = result.status == hosting::ValidationStatus::Passed;
+        if (loadWanted && passed && onPluginChosen)
         {
             onPluginChosen(row.description);
+        }
+        if (loadWanted && ! m_loadQueue.empty())
+        {
+            m_loadQueue.pop_front();
+            if (loadWanted && passed)
+            {
+                ++m_queueLoaded;
+            }
+            else
+            {
+                m_queueRefused.add(hosting::getDisplayName(row.description));
+            }
+            processLoadQueue();
         }
         return;
     }

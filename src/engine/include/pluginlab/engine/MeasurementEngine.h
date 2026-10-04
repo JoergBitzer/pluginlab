@@ -10,6 +10,7 @@ namespace pluginlab::engine
 {
 struct FileInfo
 {
+    juce::File file;
     juce::String name;
     double lengthSeconds = 0.0;
     int passes = 1;

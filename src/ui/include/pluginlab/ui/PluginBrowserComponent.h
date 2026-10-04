@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -22,7 +23,8 @@ class PluginValidationThread;
 //  - every file is scanned by its own scanner process (a crashing plugin shows up as "Crashed" in the list)
 //  - before a plugin is loaded it is validated with pluginval (in a child process, result remembered); only a plugin that passed
 //    can be loaded. If pluginval is not available, the user can allow loading without validation (a checkbox).
-// The owner gets the plugin description in onPluginChosen and loads the plugin itself.
+// The list allows several selected plugins (Ctrl, Shift): Load loads all of them, one after the other. The owner gets the plugin
+// description in onPluginChosen for each and loads the plugin itself.
 class PluginBrowserComponent : public juce::Component
 {
 public:
@@ -40,6 +42,9 @@ public:
     bool chooseByName(const juce::String& displayName);
 
     void setStatus(const juce::String& text);
+
+    // Several selected plugins at once (default) or one (the loader plugin hosts only one plugin).
+    void setMultipleSelection(bool allowed);
 
     // The list as shown (after sorting): for the tests
     int getNumEntries() const;
@@ -81,7 +86,15 @@ private:
     void loadSelected();
     int getStrictnessLevel() const;
     void strictnessChanged();
-    void loadRow(const Row& row);
+    enum class LoadOutcome
+    {
+        Loaded,
+        Refused,
+        Validating // the check runs in the background; validationFinished() goes on
+    };
+
+    LoadOutcome loadRow(const Row& row);
+    void processLoadQueue();
     void showValidationOutcome(const Row& row, const hosting::ValidationResult& result);
 
     juce::File m_catalogFile;
@@ -90,6 +103,10 @@ private:
     std::map<juce::String, hosting::ValidationResult> m_validation; // by getValidationKey
     int m_sortColumnId = 0;                                         // 0: not sorted (order of the scan)
     bool m_sortForwards = true;
+    std::deque<Row> m_loadQueue;       // the plugins that are selected and wait to be loaded (one after the other: a check may be needed)
+    int m_queueTotal = 0;
+    int m_queueLoaded = 0;
+    juce::StringArray m_queueRefused;  // names of the plugins that were not loaded
     std::vector<hosting::PluginScanResult> m_scanResults; // of the scan that is running, written to the catalog when it finishes
     bool m_scanIsOfStandardFolders = false;
     juce::String m_validatingKey;                                   // the plugin that is being validated now, else empty

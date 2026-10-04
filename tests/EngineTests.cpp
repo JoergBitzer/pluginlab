@@ -8,6 +8,7 @@
 #include "pluginlab/engine/LatencyMeasurer.h"
 #include "pluginlab/engine/MeasurementEngine.h"
 #include "pluginlab/engine/OfflineRenderer.h"
+#include "pluginlab/engine/SessionFiles.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/HostedPlugin.h"
 #include "pluginlab/hosting/PluginScanner.h"
@@ -44,6 +45,7 @@ public:
         testAlignment();
         testSwitching();
         testOfflineRendering();
+        testSessionFiles();
     }
 
 private:
@@ -327,6 +329,83 @@ private:
             // 24 bit files: aligned to the input and equal to it (the test plugins do not change the level)
             expect(largestDifference < 1.0e-5f, file.getFileName() + ": largest difference to the input " + juce::String(largestDifference));
         }
+    }
+
+    void testSessionFiles()
+    {
+        beginTest("an audio list is saved and loaded again with passes and loop regions; a missing file is reported and skipped");
+        const juce::TemporaryFile firstFile(".wav");
+        const juce::TemporaryFile secondFile(".wav");
+        const juce::File first = writeWav(firstFile, makeTone(48000, kSampleRate), kSampleRate, 1);
+        const juce::File second = writeWav(secondFile, makeTone(24000, kSampleRate), kSampleRate, 1);
+        pluginlab::engine::MeasurementEngine engine;
+        engine.prepare(kSampleRate, kBlockSize);
+        juce::String error;
+        expect(engine.addFile(first, 3, error), error);
+        expect(engine.addFile(second, 0, error), error);
+        engine.setFileRegionSeconds(0, 0.25, 0.75);
+
+        const juce::TemporaryFile listFile(pluginlab::engine::kAudioListExtension);
+        expect(pluginlab::engine::saveAudioList(engine, listFile.getFile()));
+        expectEquals(pluginlab::engine::countFilesInAudioList(listFile.getFile()), 2);
+
+        pluginlab::engine::MeasurementEngine other;
+        other.prepare(kSampleRate, kBlockSize);
+        juce::String report;
+        expect(pluginlab::engine::loadAudioList(other, listFile.getFile(), report), report);
+        expectEquals(other.getNumFiles(), 2);
+        expectEquals(other.getFileInfo(0).passes, 3);
+        expectWithinAbsoluteError(other.getFileInfo(0).regionStartSeconds, 0.25, 1.0e-6);
+        expectWithinAbsoluteError(other.getFileInfo(0).regionEndSeconds, 0.75, 1.0e-6);
+        expectEquals(other.getFileInfo(1).passes, 0);
+        expectEquals(other.getFileInfo(0).file.getFullPathName(), first.getFullPathName());
+
+        const juce::TemporaryFile damaged(pluginlab::engine::kAudioListExtension);
+        expect(damaged.getFile().replaceWithText("<PluginLabAudioList><File path=\"/no/such/file.wav\" passes=\"1\"/></PluginLabAudioList>"));
+        report.clear();
+        expect(pluginlab::engine::loadAudioList(other, damaged.getFile(), report));
+        expectEquals(other.getNumFiles(), 0);
+        expect(report.contains("file.wav"), report);
+        expect(! pluginlab::engine::loadAudioList(other, first, report), "a WAV file is not an audio list");
+        expectEquals(pluginlab::engine::countFilesInAudioList(first), -1);
+
+        beginTest("a plugin set is saved and loaded again with the parameter values; a missing plugin is reported and skipped");
+        pluginlab::engine::MeasurementEngine plugins;
+        plugins.prepare(kSampleRate, kBlockSize);
+        expect(plugins.addSlot(nullptr, "dry", error) == 0, error);
+        expect(plugins.addSlot(loadPlugin(testpaths::getGainPlugin()), "gain", error) == 1, error);
+        expect(plugins.addSlot(loadPlugin(testpaths::getLatencyPlugin()), "latency", error) == 2, error);
+        plugins.getPlugin(1)->setParameterNormalised(kGainIndex, kGainNormalisedPlus12Db);
+        plugins.setActiveSlot(2);
+
+        const juce::TemporaryFile setFile(pluginlab::engine::kPluginSetExtension);
+        expect(pluginlab::engine::savePluginSet(plugins, setFile.getFile()));
+        expectEquals(pluginlab::engine::countPluginsInPluginSet(setFile.getFile()), 2);
+
+        juce::AudioPluginFormatManager formats;
+        pluginlab::hosting::addHeadlessFormats(formats);
+        pluginlab::engine::MeasurementEngine restored;
+        restored.prepare(kSampleRate, kBlockSize);
+        expect(restored.addSlot(nullptr, "dry", error) == 0, error);
+        expect(restored.addSlot(loadPlugin(testpaths::getLatencyLiarPlugin()), "to be replaced", error) == 1, error);
+        report.clear();
+        expect(pluginlab::engine::loadPluginSet(restored, formats, setFile.getFile(), report), report);
+        expectEquals(restored.getNumSlots(), 3); // dry + the two plugins; the old plugin slot is gone
+        expectEquals(restored.getSlotInfo(0).name, juce::String("dry"));
+        expectEquals(restored.getSlotInfo(1).name, juce::String("gain"));
+        expectEquals(restored.getSlotInfo(2).name, juce::String("latency"));
+        expectEquals(restored.getActiveSlot(), 2);
+        expectWithinAbsoluteError(restored.getPlugin(1)->getParameter(kGainIndex).normalisedValue, kGainNormalisedPlus12Db, 0.01f);
+        expectEquals(restored.getSlotInfo(2).measuredLatency, kLatencyPluginDelay);
+
+        juce::String text = setFile.getFile().loadFileAsString();
+        text = text.replace("PluginLabTestLatency.vst3", "Vanished.vst3");
+        const juce::TemporaryFile brokenSet(pluginlab::engine::kPluginSetExtension);
+        expect(brokenSet.getFile().replaceWithText(text));
+        report.clear();
+        expect(pluginlab::engine::loadPluginSet(restored, formats, brokenSet.getFile(), report));
+        expectEquals(restored.getNumSlots(), 2); // dry + gain: the vanished plugin is skipped
+        expect(report.isNotEmpty());
     }
 
     juce::AudioPluginFormatManager m_formats;

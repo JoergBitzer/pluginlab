@@ -78,6 +78,7 @@ FileInfo MeasurementEngine::getFileInfo(int index) const
         return info;
     }
     const FileItem& item = m_files[static_cast<size_t>(index)];
+    info.file = item.source->getFile();
     info.name = item.source->getName();
     info.lengthSeconds = static_cast<double>(item.source->getLengthSamples()) / m_sampleRate;
     info.passes = item.passes;

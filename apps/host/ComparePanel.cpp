@@ -1,6 +1,7 @@
 #include "ComparePanel.h"
 
 #include "pluginlab/engine/OfflineRenderer.h"
+#include "pluginlab/engine/SessionFiles.h"
 #include "pluginlab/hosting/PluginDisplayName.h"
 #include "pluginlab/hosting/PluginScanner.h"
 #include "pluginlab/ui/GuiFormats.h"
@@ -11,7 +12,7 @@ namespace pluginlab::host
 {
 namespace
 {
-constexpr double kDefaultRate = 48000.0;
+constexpr double kDefaultRate = 48000.0; // (the engine starts with it; the rate box shows it)
 constexpr int kEngineBlockSize = 512;
 constexpr int kMargin = 8;
 constexpr int kButtonHeight = 28;
@@ -89,10 +90,9 @@ private:
     juce::File m_folder;
 };
 
-ComparePanel::ComparePanel()
+ComparePanel::ComparePanel(pluginlab::engine::MeasurementEngine& engine, HostSettings& settings)
+    : m_engine(engine), m_settings(settings)
 {
-    ui::addGuiFormats(m_formatManager);
-    m_engine.prepare(kDefaultRate, kEngineBlockSize);
     m_deviceManager.initialiseWithDefaultDevices(0, pluginlab::engine::MeasurementEngine::kChannels);
     setWantsKeyboardFocus(true);
 
@@ -208,11 +208,10 @@ ComparePanel::ComparePanel()
     m_regionEnd.onReturnKey = [this] { applyFileSettings(); };
     m_passesBox.onChange = [this] { applyFileSettings(); };
 
-    m_addFileButton.onClick = [this] { chooseFile(); };
+    m_addFileButton.onClick = [this] { chooseFiles(); };
+    m_saveListButton.onClick = [this] { saveAudioList(); };
+    m_loadListButton.onClick = [this] { loadAudioList(); };
     m_removeFileButton.onClick = [this] { removeSelectedFile(); };
-    m_addDryButton.onClick = [this] { addDrySlot(); };
-    m_addPluginButton.onClick = [this] { addSlotFromSelectedPlugin(); };
-    m_removeSlotButton.onClick = [this] { removeSelectedSlot(); };
     m_slotEditorButton.onClick = [this] { showSlotEditor(); };
     m_playButton.onClick = [this] { startOrStop(); };
     m_rewindButton.onClick = [this] { m_engine.restart(); };
@@ -241,14 +240,15 @@ ComparePanel::ComparePanel()
     m_crossfadeSlider.onValueChange = [this] { m_engine.setCrossfadeMs(static_cast<float>(m_crossfadeSlider.getValue())); };
 
     for (juce::Component* component : std::initializer_list<juce::Component*>{
-             &m_addFileButton, &m_removeFileButton, &m_passesLabel, &m_passesBox, &m_regionLabel, &m_regionStart, &m_regionEnd, &m_fileTable,
-             &m_addDryButton, &m_addPluginButton, &m_removeSlotButton, &m_slotEditorButton, &m_slotTable, &m_parameters, &m_playButton,
+             &m_addFileButton, &m_removeFileButton, &m_saveListButton, &m_loadListButton, &m_passesLabel, &m_passesBox, &m_regionLabel, &m_regionStart, &m_regionEnd, &m_fileTable,
+             &m_slotsLabel, &m_slotEditorButton, &m_slotTable, &m_parameters, &m_playButton,
              &m_rewindButton, &m_deviceButton, &m_renderButton, &m_rateLabel, &m_rateBox, &m_crossfadeLabel, &m_crossfadeSlider,
              &m_statusLabel})
     {
         addAndMakeVisible(component);
     }
-    setStatus("Add audio files and slots (a dry slot and plugins), then press Play. Keys 1 ... 9 switch the audible slot.");
+    m_slotsLabel.setText("Slots: the dry reference and the plugins loaded on the Plugins page. Select a row or press 1 ... 9 to hear a slot.", juce::dontSendNotification);
+    setStatus("Add audio files, load plugins on the Plugins page, then press Play.");
     startTimer(kTimerMs);
 }
 
@@ -258,10 +258,8 @@ ComparePanel::~ComparePanel()
     stopPlaying();
     m_renderThread.reset();
     m_parameters.setPlugin(nullptr);
-    closeSlotWindows(); // the editors before the plugins
     m_fileTable.setModel(nullptr);
     m_slotTable.setModel(nullptr);
-    m_engine.clearSlots();
 }
 
 void ComparePanel::resized()
@@ -272,6 +270,10 @@ void ComparePanel::resized()
     m_addFileButton.setBounds(row.removeFromLeft(150));
     row.removeFromLeft(kMargin);
     m_removeFileButton.setBounds(row.removeFromLeft(110));
+    row.removeFromLeft(kMargin);
+    m_saveListButton.setBounds(row.removeFromLeft(150));
+    row.removeFromLeft(kMargin);
+    m_loadListButton.setBounds(row.removeFromLeft(150));
     row.removeFromLeft(kMargin * 3);
     m_passesLabel.setBounds(row.removeFromLeft(kLabelWidth));
     m_passesBox.setBounds(row.removeFromLeft(kSmallEditorWidth + 20));
@@ -285,13 +287,8 @@ void ComparePanel::resized()
     area.removeFromTop(kMargin);
 
     row = area.removeFromTop(kButtonHeight);
-    m_addDryButton.setBounds(row.removeFromLeft(120));
-    row.removeFromLeft(kMargin);
-    m_addPluginButton.setBounds(row.removeFromLeft(330));
-    row.removeFromLeft(kMargin);
-    m_removeSlotButton.setBounds(row.removeFromLeft(110));
-    row.removeFromLeft(kMargin);
-    m_slotEditorButton.setBounds(row.removeFromLeft(110));
+    m_slotEditorButton.setBounds(row.removeFromRight(110));
+    m_slotsLabel.setBounds(row);
     area.removeFromTop(kMargin);
     m_slotTable.setBounds(area.removeFromTop(kSlotTableHeight));
     area.removeFromTop(kMargin);
@@ -368,27 +365,123 @@ void ComparePanel::timerCallback()
 
 void ComparePanel::addFile(const juce::File& file)
 {
-    juce::String error;
-    if (! m_engine.addFile(file, 1, error))
+    juce::Array<juce::File> files;
+    files.add(file);
+    addFiles(files);
+}
+
+void ComparePanel::addFiles(const juce::Array<juce::File>& files)
+{
+    int added = 0;
+    juce::String problems;
+    for (const juce::File& file : files)
     {
-        setStatus(error);
-        return;
+        juce::String error;
+        if (m_engine.addFile(file, 1, error))
+        {
+            ++added;
+            continue;
+        }
+        problems += " " + error;
     }
     m_fileTable.updateContent();
     m_fileTable.selectRow(m_engine.getNumFiles() - 1);
-    setStatus("Added " + file.getFileName());
+    setStatus("Added " + juce::String(added) + " of " + juce::String(files.size()) + " audio files." + problems);
+    if (onFilesChanged)
+    {
+        onFilesChanged();
+    }
 }
 
-void ComparePanel::chooseFile()
+// The dialog opens where the last one ended; Ctrl and Shift select several files, all of them are added after the confirmation.
+void ComparePanel::chooseFiles()
 {
-    m_chooser = std::make_unique<juce::FileChooser>("Audio file", juce::File(), kAudioFileWildcard);
+    m_chooser = std::make_unique<juce::FileChooser>("Audio files", m_settings.getLastAudioDirectory(), kAudioFileWildcard);
+    const int flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
+                    | juce::FileBrowserComponent::canSelectMultipleItems;
+    m_chooser->launchAsync(flags,
+                           [this](const juce::FileChooser& chooser)
+                           {
+                               const juce::Array<juce::File> results = chooser.getResults();
+                               if (results.isEmpty())
+                               {
+                                   return;
+                               }
+                               m_settings.setLastAudioDirectory(results[0].getParentDirectory());
+                               addFiles(results);
+                           });
+}
+
+void ComparePanel::saveAudioListFile(const juce::File& file)
+{
+    if (pluginlab::engine::saveAudioList(m_engine, file))
+    {
+        setStatus("Saved the audio list " + file.getFullPathName());
+        return;
+    }
+    setStatus("Cannot write " + file.getFullPathName());
+}
+
+void ComparePanel::loadAudioListFile(const juce::File& file)
+{
+    juce::String report;
+    const bool loaded = pluginlab::engine::loadAudioList(m_engine, file, report);
+    filesChanged();
+    if (! loaded)
+    {
+        setStatus(report);
+        return;
+    }
+    juce::String text = "Loaded the audio list " + file.getFileName() + " (" + juce::String(m_engine.getNumFiles()) + " files).";
+    if (report.isNotEmpty())
+    {
+        text += " Not found: " + report.replace("\n", "; ");
+    }
+    setStatus(text);
+}
+
+void ComparePanel::filesChanged()
+{
+    m_fileTable.updateContent();
+    m_fileTable.deselectAllRows();
+    m_fileTable.repaint();
+    if (onFilesChanged)
+    {
+        onFilesChanged();
+    }
+}
+
+void ComparePanel::saveAudioList()
+{
+    const juce::String wildcard = "*" + pluginlab::engine::kAudioListExtension;
+    m_chooser = std::make_unique<juce::FileChooser>("Save the audio list",
+                                                    m_settings.getListFolder().getChildFile("audio" + pluginlab::engine::kAudioListExtension), wildcard);
+    m_chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+                           [this](const juce::FileChooser& chooser)
+                           {
+                               if (chooser.getResult() == juce::File())
+                               {
+                                   return;
+                               }
+                               const juce::File file = chooser.getResult().withFileExtension(pluginlab::engine::kAudioListExtension);
+                               m_settings.setListFolder(file.getParentDirectory());
+                               saveAudioListFile(file);
+                           });
+}
+
+void ComparePanel::loadAudioList()
+{
+    const juce::String wildcard = "*" + pluginlab::engine::kAudioListExtension;
+    m_chooser = std::make_unique<juce::FileChooser>("Load an audio list", m_settings.getListFolder(), wildcard);
     m_chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                            [this](const juce::FileChooser& chooser)
                            {
-                               if (chooser.getResult() != juce::File())
+                               if (chooser.getResult() == juce::File())
                                {
-                                   addFile(chooser.getResult());
+                                   return;
                                }
+                               m_settings.setListFolder(chooser.getResult().getParentDirectory());
+                               loadAudioListFile(chooser.getResult());
                            });
 }
 
@@ -400,8 +493,7 @@ void ComparePanel::removeSelectedFile()
         return;
     }
     m_engine.removeFile(row);
-    m_fileTable.updateContent();
-    m_fileTable.deselectAllRows();
+    filesChanged();
 }
 
 void ComparePanel::fileSelectionChanged()
@@ -440,88 +532,21 @@ void ComparePanel::applyFileSettings()
     m_engine.setFileRegionSeconds(row, m_regionStart.getText().getDoubleValue(), m_regionEnd.getText().getDoubleValue());
     m_fileTable.repaint();
     fileSelectionChanged();
+    if (onFilesChanged)
+    {
+        onFilesChanged();
+    }
 }
 
 // ---- slots ----
 
-void ComparePanel::addDrySlot()
+void ComparePanel::slotsChanged()
 {
-    juce::String error;
-    if (m_engine.addSlot(nullptr, "dry (no plugin)", error) < 0)
-    {
-        setStatus(error);
-        return;
-    }
-    m_slotTable.updateContent();
-    m_slotTable.selectRow(m_engine.getNumSlots() - 1);
-}
-
-bool ComparePanel::addSlotFromFile(const juce::File& pluginFile)
-{
-    juce::AudioPluginFormatManager manager;
-    ui::addGuiFormats(manager);
-    const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(manager, pluginFile);
-    if (scan.descriptions.isEmpty())
-    {
-        setStatus("No plugin in " + pluginFile.getFullPathName() + ": " + scan.message);
-        return false;
-    }
-    juce::String error;
-    std::unique_ptr<hosting::HostedPlugin> plugin =
-        hosting::HostedPlugin::load(m_formatManager, scan.descriptions[0], m_engine.getSampleRate(), kEngineBlockSize, error);
-    if (plugin == nullptr || m_engine.addSlot(std::move(plugin), hosting::getDisplayName(scan.descriptions[0]), error) < 0)
-    {
-        setStatus(error);
-        return false;
-    }
-    m_slotTable.updateContent();
-    m_slotTable.selectRow(m_engine.getNumSlots() - 1);
-    return true;
-}
-
-void ComparePanel::addSlotFromSelectedPlugin()
-{
-    juce::PluginDescription description;
-    if (! getSelectedPluginDescription || ! getSelectedPluginDescription(description))
-    {
-        setStatus("Load a plugin on the Plugins page and select it there first.");
-        return;
-    }
-    juce::String error;
-    std::unique_ptr<hosting::HostedPlugin> plugin =
-        hosting::HostedPlugin::load(m_formatManager, description, m_engine.getSampleRate(), kEngineBlockSize, error);
-    if (plugin == nullptr)
-    {
-        setStatus("Cannot load " + hosting::getDisplayName(description) + ": " + error);
-        return;
-    }
-    if (m_engine.addSlot(std::move(plugin), hosting::getDisplayName(description), error) < 0)
-    {
-        setStatus(error);
-        return;
-    }
-    m_slotTable.updateContent();
-    m_slotTable.selectRow(m_engine.getNumSlots() - 1);
-    setStatus("Added " + hosting::getDisplayName(description) + ". " + describeEngine());
-}
-
-void ComparePanel::removeSelectedSlot()
-{
-    const int row = m_slotTable.getSelectedRow();
-    if (row < 0)
-    {
-        return;
-    }
     m_parameters.setPlugin(nullptr);
-    closeSlotWindows(); // slot numbers change: the windows of all slots go
-    m_engine.removeSlot(row);
     m_slotTable.updateContent();
     m_slotTable.deselectAllRows();
-}
-
-void ComparePanel::closeSlotWindows()
-{
-    m_slotWindows.clear();
+    m_slotTable.selectRow(m_engine.getActiveSlot());
+    m_slotTable.repaint();
 }
 
 void ComparePanel::slotSelectionChanged()
@@ -539,31 +564,15 @@ void ComparePanel::slotSelectionChanged()
 void ComparePanel::showSlotEditor()
 {
     const int row = m_slotTable.getSelectedRow();
-    hosting::HostedPlugin* plugin = m_engine.getPlugin(row);
-    if (plugin == nullptr)
+    if (m_engine.getPlugin(row) == nullptr)
     {
         setStatus("Select a slot with a plugin first.");
         return;
     }
-    const auto existing = m_slotWindows.find(row);
-    if (existing != m_slotWindows.end())
+    if (onShowEditorOfSlot)
     {
-        existing->second->toFront(true);
-        return;
+        onShowEditorOfSlot(row);
     }
-    const juce::Component::SafePointer<ComparePanel> self(this);
-    m_slotWindows[row] = std::make_unique<ui::PluginEditorWindow>(
-        plugin->getInstance(), hosting::getDisplayName(plugin->getDescription()),
-        [self, row]
-        {
-            juce::MessageManager::callAsync([self, row]
-                                            {
-                                                if (self != nullptr)
-                                                {
-                                                    self->m_slotWindows.erase(row);
-                                                }
-                                            });
-        });
 }
 
 void ComparePanel::changeEngineRate()
@@ -574,19 +583,14 @@ void ComparePanel::changeEngineRate()
         return;
     }
     stopPlaying();
-    clearEverything();
-    m_engine.prepare(kRates[index], kEngineBlockSize);
-    setStatus("Engine rate " + juce::String(kRates[index], 0) + " Hz: add the files and slots again.");
-}
-
-void ComparePanel::clearEverything()
-{
     m_parameters.setPlugin(nullptr);
-    closeSlotWindows();
-    m_engine.clearSlots();
-    m_engine.clearFiles();
-    m_slotTable.updateContent();
+    if (onChangeEngineRate)
+    {
+        onChangeEngineRate(kRates[index]);
+    }
     m_fileTable.updateContent();
+    m_slotTable.updateContent();
+    setStatus("Engine rate " + juce::String(kRates[index], 0) + " Hz: load the plugins and add the audio files again.");
 }
 
 // ---- audio ----

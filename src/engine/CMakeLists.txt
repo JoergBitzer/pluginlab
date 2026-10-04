@@ -6,7 +6,8 @@ add_library(pluginlab_engine STATIC
     LatencyMeasurer.cpp
     MeasurementEngine.cpp
     OfflineRenderer.cpp
-    RenderSlot.cpp)
+    RenderSlot.cpp
+    SessionFiles.cpp)
 
 target_include_directories(pluginlab_engine
     PUBLIC

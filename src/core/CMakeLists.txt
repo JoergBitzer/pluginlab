@@ -26,7 +26,10 @@ target_compile_definitions(pluginlab_core
     PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
-        JUCE_PLUGINHOST_VST3=1)
+        JUCE_PLUGINHOST_VST3=1
+        # Hosted third-party plugins have parameter ids that JUCE's debug checks for AAX (length, duplicates after truncation) complain
+        # about; that is a problem of the plugin's own build, not of a host.
+        JUCE_DISABLE_CAUTIOUS_PARAMETER_ID_CHECKING=1)
 
 # VST2 hosting (JUCE's VSTPluginFormat) needs the VST2 headers (cmake/Vst2Sdk.cmake)
 if(PLUGINLAB_VST2)

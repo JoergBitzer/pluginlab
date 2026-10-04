@@ -59,3 +59,19 @@ W4.1 engine core with tests (no device): file source, adapter, latency measureme
 - Still open in W4: **W4.4 worker thread per slot** (today the slots run one after the other inside the audio callback; with the test plugins the load is negligible, with several
   heavy plugins it will matter), a longer xrun test with real plugins and several slots, a command line `--render` (the button does it; the library is tested), loops of
   the whole list are always on in listening mode. Decision to confirm: in-process slots (see decision 4).
+
+## 0.10.0: the author's review of the host (2026-10-04/05)
+- **Type column** in the plugin list: "effect|Delay|Mono", "instrument|Synth|Drum" (`getTypeText`, from the category the plugin reports); sortable like the other columns.
+- **Audio files:** the dialog selects several files (Ctrl, Shift) and adds all after the confirmation; it opens in the folder of the last use (`host_settings.xml`).
+- **Plugins page and slots are one list.** The loaded plugins ARE the slots of the engine: Load on the Plugins page puts the plugin into the comparison, Unload removes it
+  (no second selection on the Compare page). The list of the browser selects several plugins and Load loads all of them one after the other (a validation or quick check of a
+  plugin in the queue runs before the next one is loaded; the status line gives "Loaded n of m, not loaded: ..."). The dry slot is always slot 0. The editor windows belong
+  to the Plugins page; the Compare page asks for them.
+- **Saving and loading:** `*.audiolist` (files with passes and loop region) and `*.pluginset` (the plugins with their states, in the order of the slots, and the audible slot), written
+  and read by `SessionFiles` (tests: round trip, a missing audio file and a missing plugin are reported and skipped, the others load). Buttons on the Compare page (audio list)
+  and the Plugins page (plugin set); the dialogs open in the folder of the last list.
+- **Last session:** the two lists are written to `~/.config/pluginlab/last_session.*` whenever they change. At the next start the host asks, separately for the audio list and
+  the plugin set, whether to load them (buttons Load / Skip); the plugin question warns that a plugin can crash the program. While the plugins are loaded a marker file exists; if
+  it is still there at the next start the question says that the last attempt did not finish (probably a crash). Nothing is written before the questions are answered,
+  and a start with a command line test option neither asks nor writes the session.
+- Release build: the host in `build-release/` has no JUCE debug assertions (the parameter id checks of JUCE complain about the parameter tables of third-party plugins).
