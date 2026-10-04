@@ -172,3 +172,5 @@ taken over as copies, nothing depends on it.
   is *not validated* again ("not validated (plugin changed since <date of the validation>)") and is validated again when loaded; a validated plugin shows
   "Passed <date>, level N". Several programs can write the file (lock + write to a temporary file, then replace).
 - Not done (final product): "validate all" button.
+- 0.6.1: MSVC did not compile the close handler of the editor window (init-capture of `this` in a nested lambda, broken since 0.4.0): capture a `SafePointer` made outside the lambda,
+  like the host does. Lesson: CI on Windows catches what GCC accepts; check CI after each push, not only at milestones.

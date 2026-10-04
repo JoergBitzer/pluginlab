@@ -123,16 +123,17 @@ void LoaderEditor::showHostedPlugin(bool openWindow)
         m_hostedWindow->toFront(true);
         return;
     }
+    const juce::Component::SafePointer<LoaderEditor> self(this);
     m_hostedWindow = std::make_unique<pluginlab::ui::PluginEditorWindow>(
         hosted->getInstance(), makeTitleText() + ": " + pluginlab::hosting::getDisplayName(hosted->getDescription()),
-        [this]
+        [self]
         {
             // the close handler runs inside the window: delete it afterwards
-            juce::MessageManager::callAsync([safe = juce::Component::SafePointer<LoaderEditor>(this)]
+            juce::MessageManager::callAsync([self]
                                             {
-                                                if (safe != nullptr)
+                                                if (self != nullptr)
                                                 {
-                                                    safe->m_hostedWindow.reset();
+                                                    self->m_hostedWindow.reset();
                                                 }
                                             });
         });
