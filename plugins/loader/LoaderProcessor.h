@@ -41,18 +41,16 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     // Loads a plugin and replaces the one that is loaded. Message thread only. On failure the old plugin stays and errorMessage is set.
-    // openEditor tells the editor whether to open the window of the new plugin (not when a session is restored: the plugin has not
-    // processed audio yet and some editors crash when they draw before that).
-    bool loadPlugin(const juce::PluginDescription& description, juce::String& errorMessage, bool openEditor = true);
+    bool loadPlugin(const juce::PluginDescription& description, juce::String& errorMessage);
     void unloadPlugin();
 
     // The loaded plugin (message thread only), nullptr if there is none.
     pluginlab::hosting::HostedPlugin* getHostedPlugin();
 
-    // The editor registers here: before the loaded plugin is replaced or unloaded it must delete the editor of that plugin, afterwards it
-    // can create the new one (both on the message thread).
+    // The editor registers here: before the loaded plugin is replaced or unloaded it must close the window of that plugin, afterwards it
+    // can show the new one's parameters (both on the message thread). A plugin's own editor is never opened by loading: only on request.
     std::function<void()> onBeforeHostedPluginChanged;
-    std::function<void(bool openEditor)> onHostedPluginChanged;
+    std::function<void()> onHostedPluginChanged;
 
 private:
     void configureHostedPlugin();

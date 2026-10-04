@@ -1,6 +1,8 @@
 #include "pluginlab/hosting/PluginValidator.h"
 
 #include "pluginlab/hosting/PluginCatalog.h"
+#include "pluginlab/hosting/PluginProbe.h"
+#include "pluginlab/hosting/PluginScanner.h"
 
 #if JUCE_WINDOWS
 #include <windows.h>
@@ -71,8 +73,13 @@ juce::String toString(ValidationStatus status)
     return "Unknown";
 }
 
-PluginValidator::PluginValidator(const juce::File& pluginvalExecutable, const juce::File& catalogFile, int strictnessLevel, int timeoutMs)
+PluginValidator::PluginValidator(const juce::File& pluginvalExecutable,
+                                 const juce::File& catalogFile,
+                                 int strictnessLevel,
+                                 int timeoutMs,
+                                 const juce::File& scannerExecutable)
     : m_pluginvalExecutable(pluginvalExecutable),
+      m_scannerExecutable(scannerExecutable),
       m_pluginvalStamp(juce::String((pluginvalExecutable.getFullPathName() + ":" + juce::String(pluginvalExecutable.getSize())).hashCode64())),
       m_catalog(std::make_shared<PluginCatalog>(catalogFile)),
       m_strictnessLevel(strictnessLevel),
@@ -223,6 +230,16 @@ ValidationResult PluginValidator::runPluginval(const juce::File& pluginFile) con
 
 bool PluginValidator::getStoredResult(const juce::File& pluginFile, ValidationResult& result) const
 {
+    return findStored(pluginFile, false, juce::String(), result);
+}
+
+bool PluginValidator::getStoredQuickResult(const juce::File& pluginFile, const juce::PluginDescription& description, ValidationResult& result) const
+{
+    return findStored(pluginFile, true, description.createIdentifierString(), result);
+}
+
+bool PluginValidator::findStored(const juce::File& pluginFile, bool quick, const juce::String& pluginId, ValidationResult& result) const
+{
     if (! pluginFile.exists())
     {
         return false;
@@ -235,7 +252,12 @@ bool PluginValidator::getStoredResult(const juce::File& pluginFile, ValidationRe
         }
         for (const CatalogValidation& stored : entry.validations)
         {
-            if (stored.level != m_strictnessLevel)
+            int level = m_strictnessLevel;
+            if (quick)
+            {
+                level = 0;
+            }
+            if (stored.level != level || stored.isQuickCheck != quick || stored.pluginId != pluginId)
             {
                 continue;
             }
@@ -244,7 +266,13 @@ bool PluginValidator::getStoredResult(const juce::File& pluginFile, ValidationRe
             result.validatedAt = stored.validatedAt;
             result.pluginModified = stored.pluginModified;
             result.fromCache = true;
-            const bool sameVersion = stored.pluginStamp == describePluginFile(pluginFile) && stored.pluginvalStamp == m_pluginvalStamp;
+            result.isQuickCheck = quick;
+            juce::String expectedPluginvalStamp = m_pluginvalStamp;
+            if (quick)
+            {
+                expectedPluginvalStamp.clear();
+            }
+            const bool sameVersion = stored.pluginStamp == describePluginFile(pluginFile) && stored.pluginvalStamp == expectedPluginvalStamp;
             result.outdated = ! sameVersion;
             return true;
         }
@@ -303,6 +331,48 @@ ValidationResult PluginValidator::validate(const juce::File& pluginFile)
         validation.pluginStamp = stamp;
         validation.pluginModified = modified;
         validation.pluginvalStamp = m_pluginvalStamp;
+        m_catalog->storeValidation(pluginFile, validation);
+    }
+    return result;
+}
+
+ValidationResult PluginValidator::validateQuick(const juce::File& pluginFile, const juce::PluginDescription& description)
+{
+    if (! pluginFile.exists())
+    {
+        ValidationResult notThere;
+        notThere.status = ValidationStatus::Failed;
+        notThere.message = "The plugin file does not exist";
+        return notThere;
+    }
+    ValidationResult cached;
+    if (getStoredQuickResult(pluginFile, description, cached) && ! cached.outdated)
+    {
+        return cached;
+    }
+
+    juce::File scanner = m_scannerExecutable;
+    if (scanner == juce::File())
+    {
+        scanner = PluginScanner::getDefaultScannerExecutable();
+    }
+    const juce::String stamp = describePluginFile(pluginFile);
+    const juce::String modified = getModifiedText(pluginFile);
+    ValidationResult result = probePlugin(scanner, pluginFile, description.createIdentifierString(), m_timeoutMs);
+    result.isQuickCheck = true;
+    result.validatedAt = getNowText();
+    result.pluginModified = modified;
+    if (result.status != ValidationStatus::NotAvailable)
+    {
+        CatalogValidation validation;
+        validation.isQuickCheck = true;
+        validation.pluginId = description.createIdentifierString();
+        validation.level = 0;
+        validation.status = result.status;
+        validation.message = result.message;
+        validation.validatedAt = result.validatedAt;
+        validation.pluginStamp = stamp;
+        validation.pluginModified = modified;
         m_catalog->storeValidation(pluginFile, validation);
     }
     return result;

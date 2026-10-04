@@ -16,6 +16,8 @@ const juce::String kScannedAtAttribute = "scannedAt";
 const juce::String kScanStatusAttribute = "scanStatus";
 const juce::String kMessageAttribute = "message";
 const juce::String kLevelAttribute = "level";
+const juce::String kQuickAttribute = "quick";
+const juce::String kPluginIdAttribute = "pluginId";
 const juce::String kStatusAttribute = "status";
 const juce::String kValidatedAtAttribute = "validatedAt";
 const juce::String kPluginStampAttribute = "pluginStamp";
@@ -170,6 +172,8 @@ std::vector<CatalogEntry> PluginCatalog::read() const
             {
                 CatalogValidation validation;
                 validation.level = child->getIntAttribute(kLevelAttribute);
+                validation.isQuickCheck = child->getBoolAttribute(kQuickAttribute);
+                validation.pluginId = child->getStringAttribute(kPluginIdAttribute);
                 validation.status = validationStatusFromText(child->getStringAttribute(kStatusAttribute));
                 validation.message = child->getStringAttribute(kMessageAttribute);
                 validation.validatedAt = child->getStringAttribute(kValidatedAtAttribute);
@@ -215,6 +219,8 @@ void PluginCatalog::write(const std::vector<CatalogEntry>& entries) const
         {
             juce::XmlElement* element = fileElement->createNewChildElement(kValidationTag);
             element->setAttribute(kLevelAttribute, validation.level);
+            element->setAttribute(kQuickAttribute, validation.isQuickCheck);
+            element->setAttribute(kPluginIdAttribute, validation.pluginId);
             element->setAttribute(kStatusAttribute, toString(validation.status));
             element->setAttribute(kMessageAttribute, validation.message);
             element->setAttribute(kValidatedAtAttribute, validation.validatedAt);
@@ -278,7 +284,11 @@ void PluginCatalog::storeValidation(const juce::File& pluginFile, const CatalogV
     }
     std::vector<CatalogValidation>& validations = entry->validations;
     validations.erase(std::remove_if(validations.begin(), validations.end(),
-                                     [&validation](const CatalogValidation& known) { return known.level == validation.level; }),
+                                     [&validation](const CatalogValidation& known)
+                                     {
+                                         return known.level == validation.level && known.isQuickCheck == validation.isQuickCheck
+                                             && known.pluginId == validation.pluginId;
+                                     }),
                       validations.end());
     validations.push_back(validation);
     write(entries);

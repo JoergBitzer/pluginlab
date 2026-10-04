@@ -51,6 +51,7 @@ private:
     juce::AudioPluginFormatManager m_formatManager;
     std::vector<std::unique_ptr<LoadedPlugin>> m_loadedPlugins;
     juce::String m_pluginNameToLoad;
+    bool m_showEditorAfterLoad; // true if the plugin was named on the command line (--load): then its editor opens, for manual tests
 
     ui::PluginBrowserComponent m_browser;
     juce::TextButton m_unloadButton{"Unload"};

@@ -108,14 +108,19 @@ private:
 class PluginValidationThread : public juce::Thread
 {
 public:
+    // quickCheck: check only this plugin of the file (the file has many plugins) instead of validating the whole file with pluginval
     PluginValidationThread(PluginBrowserComponent& owner, const juce::File& pluginval, const juce::File& pluginFile, int strictnessLevel,
-                           const juce::File& catalogFile)
+                           const juce::File& catalogFile, const juce::String& validationKey, const juce::PluginDescription& description,
+                           bool quickCheck)
         : juce::Thread("PluginValidation"),
           m_owner(owner),
           m_pluginval(pluginval),
           m_pluginFile(pluginFile),
           m_strictnessLevel(strictnessLevel),
-          m_catalogFile(catalogFile)
+          m_catalogFile(catalogFile),
+          m_validationKey(validationKey),
+          m_description(description),
+          m_quickCheck(quickCheck)
     {
     }
 
@@ -127,14 +132,22 @@ public:
     void run() override
     {
         hosting::PluginValidator validator(m_pluginval, m_catalogFile, m_strictnessLevel);
-        const hosting::ValidationResult result = validator.validate(m_pluginFile);
+        hosting::ValidationResult result;
+        if (m_quickCheck)
+        {
+            result = validator.validateQuick(m_pluginFile, m_description);
+        }
+        else
+        {
+            result = validator.validate(m_pluginFile);
+        }
         const juce::Component::SafePointer<PluginBrowserComponent> owner(&m_owner);
-        const juce::File pluginFile = m_pluginFile;
-        juce::MessageManager::callAsync([owner, pluginFile, result]
+        const juce::String key = m_validationKey;
+        juce::MessageManager::callAsync([owner, key, result]
                                         {
                                             if (owner != nullptr)
                                             {
-                                                owner->validationFinished(pluginFile, result);
+                                                owner->validationFinished(key, result);
                                             }
                                         });
     }
@@ -145,6 +158,9 @@ private:
     juce::File m_pluginFile;
     int m_strictnessLevel;
     juce::File m_catalogFile;
+    juce::String m_validationKey;
+    juce::PluginDescription m_description;
+    bool m_quickCheck;
 };
 
 PluginBrowserComponent::PluginBrowserComponent(const juce::File& catalogFile)
@@ -229,12 +245,12 @@ juce::String PluginBrowserComponent::getValidationText(const Row& row) const
     {
         return {};
     }
-    const juce::String path = row.file.getFullPathName();
-    if (path == m_validatingPath)
+    const juce::String key = getValidationKey(row);
+    if (key == m_validatingKey)
     {
         return "validating ...";
     }
-    const auto found = m_validation.find(path);
+    const auto found = m_validation.find(key);
     if (found == m_validation.end())
     {
         return "not validated";
@@ -248,7 +264,44 @@ juce::String PluginBrowserComponent::getValidationText(const Row& row) const
     {
         return "not validated (plugin changed since " + result.validatedAt + ")";
     }
+    if (result.isQuickCheck)
+    {
+        return "Quick check " + hosting::toString(result.status) + " " + result.validatedAt;
+    }
     return hosting::toString(result.status) + " " + result.validatedAt + ", level " + juce::String(getStrictnessLevel());
+}
+
+// A file with one plugin is validated as a whole by pluginval; a file with many plugins gets a quick check of each plugin on its own,
+// so the result belongs to the plugin.
+juce::String PluginBrowserComponent::getValidationKey(const Row& row)
+{
+    if (row.numberOfPluginsInFile > 1)
+    {
+        return row.file.getFullPathName() + "|" + row.description.createIdentifierString();
+    }
+    return row.file.getFullPathName();
+}
+
+void PluginBrowserComponent::rememberStoredValidation(const Row& row, const hosting::PluginValidator& validator)
+{
+    if (! row.hasDescription)
+    {
+        return;
+    }
+    hosting::ValidationResult stored;
+    bool found = false;
+    if (row.numberOfPluginsInFile > 1)
+    {
+        found = validator.getStoredQuickResult(row.file, row.description, stored);
+    }
+    else if (m_pluginval != juce::File())
+    {
+        found = validator.getStoredResult(row.file, stored);
+    }
+    if (found)
+    {
+        m_validation[getValidationKey(row)] = stored;
+    }
 }
 
 juce::String PluginBrowserComponent::getCellText(int row, int columnId) const
@@ -385,6 +438,7 @@ void PluginBrowserComponent::showCatalog()
         base.message = entry.message;
         base.modified = hosting::getModifiedText(entry.file);
         base.changedSinceScan = hosting::describePluginFile(entry.file) != entry.stamp;
+        base.numberOfPluginsInFile = entry.descriptions.size();
         if (entry.descriptions.isEmpty())
         {
             m_rows.push_back(base);
@@ -395,11 +449,7 @@ void PluginBrowserComponent::showCatalog()
             row.description = description;
             row.hasDescription = true;
             m_rows.push_back(row);
-        }
-        hosting::ValidationResult stored;
-        if (m_pluginval != juce::File() && ! entry.descriptions.isEmpty() && validator.getStoredResult(entry.file, stored))
-        {
-            m_validation[entry.file.getFullPathName()] = stored;
+            rememberStoredValidation(row, validator);
         }
         newestScan = juce::jmax(newestScan, entry.scannedAt);
     }
@@ -456,13 +506,24 @@ void PluginBrowserComponent::addScanResult(const hosting::PluginScanResult& resu
 {
     m_scanResults.push_back(result);
     removeRowsOf(result.file);
-    m_validation.erase(result.file.getFullPathName()); // read again below: the plugin may have changed
+    const juce::String filePath = result.file.getFullPathName();
+    for (auto known = m_validation.begin(); known != m_validation.end();)
+    {
+        // read again below: the plugin may have changed
+        if (known->first == filePath || known->first.startsWith(filePath + "|"))
+        {
+            known = m_validation.erase(known);
+            continue;
+        }
+        ++known;
+    }
 
     Row base;
     base.file = result.file;
     base.modified = hosting::getModifiedText(result.file);
     base.scanStatus = result.status;
     base.message = result.message;
+    base.numberOfPluginsInFile = result.descriptions.size();
 
     if (result.descriptions.isEmpty())
     {
@@ -477,14 +538,12 @@ void PluginBrowserComponent::addScanResult(const hosting::PluginScanResult& resu
     }
 
     // a result that is already remembered is shown at once
-    const juce::String path = result.file.getFullPathName();
-    if (m_pluginval != juce::File() && ! result.descriptions.isEmpty() && m_validation.find(path) == m_validation.end())
+    const hosting::PluginValidator validator(m_pluginval, m_catalogFile, getStrictnessLevel());
+    for (const Row& row : m_rows)
     {
-        const hosting::PluginValidator validator(m_pluginval, m_catalogFile, getStrictnessLevel());
-        hosting::ValidationResult cached;
-        if (validator.getStoredResult(result.file, cached))
+        if (row.file == result.file)
         {
-            m_validation[path] = cached;
+            rememberStoredValidation(row, validator);
         }
     }
     m_table.updateContent();
@@ -549,8 +608,8 @@ void PluginBrowserComponent::loadRow(const Row& row)
         return;
     }
 
-    const juce::String path = row.file.getFullPathName();
-    const auto known = m_validation.find(path);
+    const juce::String key = getValidationKey(row);
+    const auto known = m_validation.find(key);
     if (m_allowUnvalidatedButton.getToggleState())
     {
         if (onPluginChosen)
@@ -575,7 +634,8 @@ void PluginBrowserComponent::loadRow(const Row& row)
         return;
     }
 
-    if (m_pluginval == juce::File())
+    const bool quickCheck = row.numberOfPluginsInFile > 1;
+    if (m_pluginval == juce::File() && ! quickCheck)
     {
         setStatus("pluginval was not found. Tick 'Load without validation' to load the plugin anyway.");
         return;
@@ -586,27 +646,35 @@ void PluginBrowserComponent::loadRow(const Row& row)
         setStatus("Another plugin is being validated, please wait.");
         return;
     }
-    m_validatingPath = path;
-    m_pendingLoadPath = path;
-    setStatus("Validating " + hosting::getDisplayName(row.description) + " with pluginval ...");
+    m_validatingKey = key;
+    m_pendingLoadKey = key;
+    if (quickCheck)
+    {
+        setStatus("Quick check of " + hosting::getDisplayName(row.description) + " (the file has " + juce::String(row.numberOfPluginsInFile)
+                  + " plugins, pluginval would test all of them) ...");
+    }
+    else
+    {
+        setStatus("Validating " + hosting::getDisplayName(row.description) + " with pluginval ...");
+    }
     m_table.repaint();
-    m_validationThread = std::make_unique<PluginValidationThread>(*this, m_pluginval, row.file, getStrictnessLevel(), m_catalogFile);
+    m_validationThread = std::make_unique<PluginValidationThread>(*this, m_pluginval, row.file, getStrictnessLevel(), m_catalogFile, key,
+                                                                  row.description, quickCheck);
     m_validationThread->startThread();
 }
 
-void PluginBrowserComponent::validationFinished(const juce::File& pluginFile, const hosting::ValidationResult& result)
+void PluginBrowserComponent::validationFinished(const juce::String& validationKey, const hosting::ValidationResult& result)
 {
-    const juce::String path = pluginFile.getFullPathName();
-    m_validatingPath.clear();
-    m_validation[path] = result;
+    m_validatingKey.clear();
+    m_validation[validationKey] = result;
     m_table.repaint();
     applySort(); // the validation column may be the sort column
 
-    const bool loadWanted = (path == m_pendingLoadPath);
-    m_pendingLoadPath.clear();
+    const bool loadWanted = (validationKey == m_pendingLoadKey);
+    m_pendingLoadKey.clear();
     for (const Row& row : m_rows)
     {
-        if (row.file != pluginFile || ! row.hasDescription)
+        if (! row.hasDescription || getValidationKey(row) != validationKey)
         {
             continue;
         }
@@ -642,17 +710,10 @@ int PluginBrowserComponent::getStrictnessLevel() const
 void PluginBrowserComponent::strictnessChanged()
 {
     m_validation.clear();
-    if (m_pluginval != juce::File())
+    const hosting::PluginValidator validator(m_pluginval, m_catalogFile, getStrictnessLevel());
+    for (const Row& row : m_rows)
     {
-        const hosting::PluginValidator validator(m_pluginval, m_catalogFile, getStrictnessLevel());
-        for (const Row& row : m_rows)
-        {
-            hosting::ValidationResult cached;
-            if (row.hasDescription && validator.getStoredResult(row.file, cached))
-            {
-                m_validation[row.file.getFullPathName()] = cached;
-            }
-        }
+        rememberStoredValidation(row, validator);
     }
     m_table.repaint();
 }

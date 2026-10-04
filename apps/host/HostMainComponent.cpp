@@ -29,7 +29,7 @@ constexpr int kLoadedListWidth = 380;
 }
 
 HostMainComponent::HostMainComponent(const StartupOptions& options)
-    : m_pluginNameToLoad(options.pluginNameToLoad)
+    : m_pluginNameToLoad(options.pluginNameToLoad), m_showEditorAfterLoad(options.pluginNameToLoad.isNotEmpty())
 {
     ui::addGuiFormats(m_formatManager);
 
@@ -154,7 +154,11 @@ void HostMainComponent::loadPlugin(const juce::PluginDescription& description)
     m_loadedPlugins.push_back(std::move(loaded));
     m_loadedTable.updateContent();
     m_loadedTable.selectRow(static_cast<int>(m_loadedPlugins.size()) - 1);
-    showEditor(loadedReference);
+    if (m_showEditorAfterLoad)
+    {
+        m_showEditorAfterLoad = false; // only for --load (manual tests, screenshots)
+        showEditor(loadedReference);
+    }
     m_browser.setStatus("Loaded " + hosting::getDisplayName(description) + ".");
 }
 

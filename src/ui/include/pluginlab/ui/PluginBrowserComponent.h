@@ -52,7 +52,7 @@ public:
     // called by the background threads (on the message thread)
     void addScanResult(const hosting::PluginScanResult& result);
     void scanFinished();
-    void validationFinished(const juce::File& pluginFile, const hosting::ValidationResult& result);
+    void validationFinished(const juce::String& validationKey, const hosting::ValidationResult& result);
 
 private:
     struct Row
@@ -64,11 +64,14 @@ private:
         bool hasDescription = false;
         juce::String modified;          // date of the plugin file (the newest file of a bundle)
         bool changedSinceScan = false;  // the file is not the one that was scanned: scan again
+        int numberOfPluginsInFile = 0;  // pluginval tests all of them: with more than one the quick check of the one plugin is used
     };
 
     juce::String getCellText(int row, int columnId) const;
     juce::String getCellText(const Row& row, int columnId) const;
     void applySort();
+    static juce::String getValidationKey(const Row& row);
+    void rememberStoredValidation(const Row& row, const hosting::PluginValidator& validator);
     void showCatalog();
     void removeRowsOf(const juce::File& file);
     void removeRowsOfMissingFiles();
@@ -84,13 +87,13 @@ private:
     juce::File m_catalogFile;
     juce::File m_pluginval;
     std::vector<Row> m_rows;
-    std::map<juce::String, hosting::ValidationResult> m_validation; // by plugin file path
+    std::map<juce::String, hosting::ValidationResult> m_validation; // by getValidationKey
     int m_sortColumnId = 0;                                         // 0: not sorted (order of the scan)
     bool m_sortForwards = true;
     std::vector<hosting::PluginScanResult> m_scanResults; // of the scan that is running, written to the catalog when it finishes
     bool m_scanIsOfStandardFolders = false;
-    juce::String m_validatingPath;                                  // the file that is being validated now, else empty
-    juce::String m_pendingLoadPath;                                 // load this file when its validation has passed
+    juce::String m_validatingKey;                                   // the plugin that is being validated now, else empty
+    juce::String m_pendingLoadKey;                                  // load this plugin when its validation has passed
 
     juce::TextButton m_scanButton{"Scan / rescan plugin folders"};
     juce::TextButton m_addFolderButton{"Add folder..."};

@@ -10,6 +10,9 @@ namespace pluginlab::hosting
 // The result of one pluginval run, as kept in the catalog.
 struct CatalogValidation
 {
+    // pluginval validates a whole file (level = strictness level, no plugin id); the quick check is of one plugin of a file (level 0)
+    bool isQuickCheck = false;
+    juce::String pluginId;                           // identifier string of the plugin (quick check only)
     int level = 0;                                   // pluginval strictness level
     ValidationStatus status = ValidationStatus::NotAvailable;
     juce::String message;
@@ -59,7 +62,8 @@ public:
     // exist any more are removed (after a scan of the standard folders).
     void storeScanResults(const std::vector<PluginScanResult>& results, bool removeMissing);
 
-    // Adds or replaces the validation of this level for the plugin file (the entry is created if the file was never scanned).
+    // Adds or replaces the validation of the same kind, level and plugin for the plugin file (the entry is created if the file was never
+    // scanned).
     void storeValidation(const juce::File& pluginFile, const CatalogValidation& validation);
 
 private:

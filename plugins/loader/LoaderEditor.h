@@ -29,7 +29,7 @@ public:
 
 private:
     void dropHostedEditor();
-    void showHostedPlugin(bool openWindow);
+    void showHostedParameters();
 
     LoaderProcessor& m_processor;
     juce::Label m_titleLabel;

@@ -14,6 +14,7 @@ target_sources(PluginLabTests
         LoaderTests.cpp
         BrowserTests.cpp
         CatalogTests.cpp
+        ProbeTests.cpp
         RealWorldTests.cpp)
 
 target_compile_definitions(PluginLabTests

@@ -177,9 +177,11 @@ private:
                 expect(! editor->isShowingHostedEditor(), "after unloading no hosted editor may be left");
                 juce::String loadError;
                 expect(loader.loadPlugin(gainDescription, loadError), "loading again failed: " + loadError);
-                expect(editor->isShowingHostedEditor(), "after loading again the editor must be shown");
+                expect(! editor->isShowingHostedEditor(), "loading a plugin must not open its window");
+                editor->openHostedEditorWindow();
+                expect(editor->isShowingHostedEditor(), "after asking for it the window must be open");
                 expect(loader.loadPlugin(gainDescription, loadError), "replacing the plugin failed: " + loadError);
-                expect(editor->isShowingHostedEditor());
+                expect(! editor->isShowingHostedEditor(), "the window of the replaced plugin must be closed, the new one is not opened");
             }
             editorBase.reset(); // the editor goes first: it must take its hosted editor with it
             expect(loader.getHostedPlugin() != nullptr);

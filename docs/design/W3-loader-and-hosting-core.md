@@ -174,3 +174,16 @@ taken over as copies, nothing depends on it.
 - Not done (final product): "validate all" button.
 - 0.6.1: MSVC did not compile the close handler of the editor window (init-capture of `this` in a nested lambda, broken since 0.4.0): capture a `SafePointer` made outside the lambda,
   like the host does. Lesson: CI on Windows catches what GCC accepts; check CI after each push, not only at milestones.
+
+## 0.7.0: quick check for files with many plugins; editors only on request
+- pluginval always tests every plugin of the file it is given (no way to name one): `lsp-plugins.vst3` holds about 190 plugins, so loading one of them started a
+  validation of all. Now a file with more than one plugin gets a **quick check of the chosen plugin only** (`PluginProbe`, `PluginLabScanner --probe <file> <plugin id>
+  <result>`): in a child process load, prepare, process 200 blocks of noise, set the first 50 parameters to 0 and 1 (one block each), save and restore the state, release.
+  A crash gives "crashed or hung during '<step>'". The result is kept per plugin in the catalog (`quick="1"`, plugin id, date, stamp of the file) and shown as "Quick check
+  Passed <date>"; a changed file makes it outdated like a pluginval result. Single-plugin files are still validated by pluginval. Without pluginval the quick check still works.
+  Measured on the LSP bundle: about 8 s per plugin, nearly all of it the scanning of the 190 plugins in the child process (a later improvement: hand the description over).
+  Found while testing: a plugin that was never prepared does not process in a JUCE-hosted VST3 (no crash), so the check prepares it first (test with the crash plugin).
+- The plugin's own editor is **never opened by loading** (loader and host): only the button "Show plugin editor" (host: `--load` on the command line still opens it, for
+  screenshots). Reason: ZamVerb as VST2 first shows a 128x128 window with random content and takes a few seconds to get its real size (313x163, drawn correctly, observed
+  in the host); an iPlug2 plugin crashed while drawing before it had processed audio. The `openEditor` parameter of `loadPlugin` is gone.
+- The slow parameter changes seen while pluginval runs are pluginval's own tests (it sets parameters on purpose).

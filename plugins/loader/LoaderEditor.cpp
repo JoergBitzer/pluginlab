@@ -39,7 +39,7 @@ LoaderEditor::LoaderEditor(LoaderProcessor& loaderProcessor)
     };
 
     m_processor.onBeforeHostedPluginChanged = [this] { dropHostedEditor(); };
-    m_processor.onHostedPluginChanged = [this](bool openEditor) { showHostedPlugin(openEditor); };
+    m_processor.onHostedPluginChanged = [this] { showHostedParameters(); };
 
     // a component of its own (not painted in paint()): visible whatever the host does with the background
     m_titleLabel.setText(makeTitleText(), juce::dontSendNotification);
@@ -55,7 +55,7 @@ LoaderEditor::LoaderEditor(LoaderProcessor& loaderProcessor)
     m_unloadButton.onClick = [this] { m_processor.unloadPlugin(); };
 
     setSize(kEditorWidth, kEditorHeight);
-    showHostedPlugin(false); // a plugin may already be loaded (state of the session): its window opens only on request
+    showHostedParameters(); // a plugin may already be loaded (state of the session)
 
     const juce::String scanOnOpen = juce::SystemStats::getEnvironmentVariable(kScanOnOpenVariable, {});
     if (scanOnOpen.isNotEmpty())
@@ -101,20 +101,18 @@ void LoaderEditor::dropHostedEditor()
     m_hostedWindow.reset(); // the window must go before the plugin instance
 }
 
-void LoaderEditor::openHostedEditorWindow()
+void LoaderEditor::showHostedParameters()
 {
-    showHostedPlugin(true);
+    m_parameters.setPlugin(m_processor.getHostedPlugin());
 }
 
-void LoaderEditor::showHostedPlugin(bool openWindow)
+// The window of the plugin's own editor opens only when the user asks for it (button): never by itself after loading, also not when a
+// session is restored. Some editors draw garbage or crash when they open before the plugin has run (seen with a VST2 and with an iPlug2
+// plugin); the user decides when it is time.
+void LoaderEditor::openHostedEditorWindow()
 {
     pluginlab::hosting::HostedPlugin* hosted = m_processor.getHostedPlugin();
     if (hosted == nullptr)
-    {
-        return;
-    }
-    m_parameters.setPlugin(hosted);
-    if (! openWindow)
     {
         return;
     }

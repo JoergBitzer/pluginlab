@@ -4,12 +4,18 @@
 
 #include "LoaderProcessor.h"
 #include "pluginlab/hosting/FormatManager.h"
+#include "pluginlab/hosting/PluginProbe.h"
 #include "pluginlab/hosting/PluginScanner.h"
+#include "pluginlab/hosting/PluginValidator.h"
+#include "TestPluginPaths.h"
 
 namespace
 {
 // Plugin files to try, separated by ';'. Not set in CI: the plugins belong to the developer, nothing of them is committed.
 const juce::String kPluginsVariable = "PLUGINLAB_REALWORLD_PLUGINS";
+// Optional: the quick check (as for files with many plugins) is run for the plugins of the files whose name contains this text.
+const juce::String kProbeNameVariable = "PLUGINLAB_REALWORLD_PROBE";
+constexpr int kProbeTimeoutMs = 60000;
 constexpr double kSampleRate = 44100.0;
 constexpr int kBlockSize = 512;
 constexpr int kChannels = 2;
@@ -74,10 +80,28 @@ private:
     void testPlugin(juce::AudioPluginFormatManager& formatManager, const juce::File& file)
     {
         beginTest(file.getFileName());
-        const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, file);
+        const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner(testpaths::getScannerExecutable()).scanFile(file); // in a scanner process: a plugin file may crash while it is scanned
         expect(! scan.descriptions.isEmpty(), "cannot scan " + file.getFullPathName() + ": " + scan.message);
         if (scan.descriptions.isEmpty())
         {
+            return;
+        }
+
+        const juce::String probeName = juce::SystemStats::getEnvironmentVariable(kProbeNameVariable, {});
+        if (probeName.isNotEmpty())
+        {
+            for (const juce::PluginDescription& description : scan.descriptions)
+            {
+                if (! description.name.containsIgnoreCase(probeName))
+                {
+                    continue;
+                }
+                const juce::int64 started = juce::Time::getMillisecondCounter();
+                const pluginlab::hosting::ValidationResult result = pluginlab::hosting::probePlugin(
+                    testpaths::getScannerExecutable(), file, description.createIdentifierString(), kProbeTimeoutMs);
+                logMessage("quick check of " + description.name + ": " + pluginlab::hosting::toString(result.status) + " in "
+                           + juce::String(static_cast<int>(juce::Time::getMillisecondCounter() - started)) + " ms: " + result.message);
+            }
             return;
         }
 

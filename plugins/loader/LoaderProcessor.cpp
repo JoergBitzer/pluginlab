@@ -218,7 +218,7 @@ pluginlab::hosting::HostedPlugin* LoaderProcessor::getHostedPlugin()
     return m_hosted.get();
 }
 
-bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juce::String& errorMessage, bool openEditor)
+bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juce::String& errorMessage)
 {
     loaderlog::write("load: " + description.name + " (" + description.fileOrIdentifier + ")");
     if (description.isInstrument)
@@ -259,7 +259,7 @@ bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juc
     setLatencySamples(latency);
     if (onHostedPluginChanged)
     {
-        onHostedPluginChanged(openEditor);
+        onHostedPluginChanged();
     }
     return true;
 }
@@ -277,7 +277,7 @@ void LoaderProcessor::unloadPlugin()
     setLatencySamples(0);
     if (onHostedPluginChanged)
     {
-        onHostedPluginChanged(false);
+        onHostedPluginChanged();
     }
 }
 
@@ -306,8 +306,7 @@ void LoaderProcessor::restoreState(const juce::MemoryBlock& state)
         return;
     }
     juce::String error;
-    constexpr bool openEditorOfRestoredPlugin = false;
-    if (! loadPlugin(description, error, openEditorOfRestoredPlugin))
+    if (! loadPlugin(description, error))
     {
         // the plugin is gone or does not load: the loader stays empty
         loaderlog::write("restore: cannot load " + description.fileOrIdentifier + ": " + error);
