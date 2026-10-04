@@ -65,10 +65,21 @@ private:
 ParameterTableComponent::ParameterTableComponent()
 {
     m_model = std::make_unique<SliderModel>(
-        [this] { return static_cast<int>(m_rows.size()); },
+        [this]
+        {
+            if (m_plugin == nullptr)
+            {
+                return 0;
+            }
+            return m_plugin->getNumParameters();
+        },
         [this](int row, int column)
         {
-            const hosting::ParameterInfo& parameter = m_rows[static_cast<size_t>(row)];
+            if (m_plugin == nullptr)
+            {
+                return juce::String();
+            }
+            const hosting::ParameterInfo parameter = m_plugin->getParameter(row);
             if (column == kColumnIndex)
             {
                 return juce::String(parameter.index);
@@ -83,12 +94,19 @@ ParameterTableComponent::ParameterTableComponent()
             }
             return juce::String();
         },
-        [this](int row) { return m_rows[static_cast<size_t>(row)].normalisedValue; },
+        [this](int row)
+        {
+            if (m_plugin == nullptr)
+            {
+                return 0.0f;
+            }
+            return m_plugin->getParameter(row).normalisedValue;
+        },
         [this](int row, float value)
         {
-            if (m_plugin != nullptr && row < static_cast<int>(m_rows.size()))
+            if (m_plugin != nullptr)
             {
-                m_plugin->setParameterNormalised(m_rows[static_cast<size_t>(row)].index, value);
+                m_plugin->setParameterNormalised(row, value);
             }
         });
 
@@ -112,7 +130,8 @@ ParameterTableComponent::~ParameterTableComponent()
 void ParameterTableComponent::setPlugin(hosting::HostedPlugin* plugin)
 {
     m_plugin = plugin;
-    refresh();
+    m_table.updateContent();
+    m_table.repaint();
 }
 
 void ParameterTableComponent::resized()
@@ -122,16 +141,7 @@ void ParameterTableComponent::resized()
 
 void ParameterTableComponent::timerCallback()
 {
-    refresh();
-}
-
-void ParameterTableComponent::refresh()
-{
-    m_rows.clear();
-    if (m_plugin != nullptr)
-    {
-        m_rows = m_plugin->getParameters();
-    }
+    // updateContent() refreshes the slider components of the visible rows only; repaint() asks the visible cells for their text
     m_table.updateContent();
     m_table.repaint();
 }

@@ -12,12 +12,11 @@
 namespace pluginlab::ui
 {
 class TextTableModel;
+class PluginEditorWindow;
 }
 
 namespace pluginlab::host
 {
-class PluginWindow;
-
 // Optional actions at startup (command line --scan <folder> and --load <plugin name>), for manual tests and screenshots.
 struct StartupOptions
 {
@@ -39,7 +38,7 @@ private:
     struct LoadedPlugin
     {
         std::unique_ptr<hosting::HostedPlugin> plugin;
-        std::unique_ptr<PluginWindow> window;
+        std::unique_ptr<ui::PluginEditorWindow> window;
     };
 
     void loadPlugin(const juce::PluginDescription& description);

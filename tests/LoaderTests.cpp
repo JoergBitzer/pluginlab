@@ -72,6 +72,14 @@ public:
         expect(loader.getHostedPlugin() == nullptr);
         expectEquals(processConstantBlock(loader), kInputLevel);
 
+        beginTest("an instrument is refused with a message and the loader stays empty");
+        juce::PluginDescription instrument = vst3.descriptions[0];
+        instrument.isInstrument = true;
+        juce::String refusal;
+        expect(! loader.loadPlugin(instrument, refusal));
+        expect(refusal.containsIgnoreCase("instrument"), "the message must say why: " + refusal);
+        expect(loader.getHostedPlugin() == nullptr);
+
         beginTest("a state that is not a loader state is ignored");
         const juce::MemoryBlock garbage("not a loader state", 18);
         loader.setStateInformation(garbage.getData(), static_cast<int>(garbage.getSize()));

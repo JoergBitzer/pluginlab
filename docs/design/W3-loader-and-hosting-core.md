@@ -104,3 +104,17 @@ taken over as copies, nothing depends on it.
 - Checked end to end on Linux: the loader running inside the pluginlab host scans with its own bundled scanner (developer variable
   `PLUGINLAB_LOADER_SCAN=<folder>` makes the loader's editor scan a folder when it opens). Why the tests did not catch it: they run `LoaderProcessor` inside the
   test program, where the scanner sits next to the program; only a real host runs the code from inside the bundle.
+
+## Second Bitwig test (2026-10-04): crash, refused plugin, editor in a corner (changes in 0.4.0)
+- **TOMiC "Tonic" (drum synth) crashed Bitwig's engine** (exit code 139). The plugin loads and renders in the pluginlab host, so the cause is the combination
+  with the loader: an instrument (no audio input) was forced into a 2-in/2-out layout, the parameter table asked all parameters of a 2.7 MB-state plugin five
+  times per second, and `getStateInformation` ran without the lock. Changes: instruments and plugins that do not accept the loader's channel layout are refused
+  with a message (effects only for now); `getStateInformation` takes the lock; the parameter table asks only the visible rows (`HostedPlugin::getNumParameters`,
+  `getParameter(index)`). The crash itself is not proven fixed: TOMiC stays on the list of plugins for the robustness harness (see below).
+- **u-he Repro-1 (VST3) "not loaded"**: the validation gate refused it without a reason. pluginval passes level 1 and dies (segmentation fault) from level 2
+  on. The validator now reports where pluginval died ("crashed or hung during '<test>'"), the browser has a strictness level (1-10, default 5), and
+  "Load without validation" now also overrides a failed validation (the plugin is trusted by the user, the risk is theirs).
+- **Editor in the lower-right corner**: most editors do not fit into a part of the loader window. The editor of the hosted plugin now opens in a window of its own
+  (`ui::PluginEditorWindow`, shared with the host; resizable if the plugin's editor is); buttons "Show plugin editor" and "Unload plugin" in the loader.
+- Lesson: only a real DAW shows these problems; the user's own plugin collection is the best robustness test set. A local harness driven by the environment
+  variable `PLUGINLAB_REALWORLD_PLUGINS` is still to be written (not committed with third-party plugins).

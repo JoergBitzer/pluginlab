@@ -35,7 +35,10 @@ public:
     const juce::PluginDescription& getDescription() const;
     juce::AudioPluginInstance& getInstance();
 
+    // All parameters at once (can be slow for plugins with thousands of parameters: a UI should ask for the rows it shows).
     std::vector<ParameterInfo> getParameters() const;
+    int getNumParameters() const;
+    // One parameter by position; an empty ParameterInfo (index -1) if there is no such parameter.
     ParameterInfo getParameter(int index) const;
 
     // value between 0 and 1; out-of-range indices are ignored

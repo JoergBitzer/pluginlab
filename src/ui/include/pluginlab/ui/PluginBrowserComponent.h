@@ -60,6 +60,8 @@ private:
     void startScan(const juce::FileSearchPath& folders);
     void chooseFolder();
     void loadSelected();
+    int getStrictnessLevel() const;
+    void strictnessChanged();
     void loadRow(const Row& row);
     void showValidationOutcome(const Row& row, const hosting::ValidationResult& result);
 
@@ -73,6 +75,8 @@ private:
     juce::TextButton m_addFolderButton{"Add folder..."};
     juce::TextButton m_loadButton{"Load"};
     juce::ToggleButton m_allowUnvalidatedButton{"Load without validation"};
+    juce::Label m_strictnessLabel;
+    juce::ComboBox m_strictnessBox;
     juce::Label m_statusLabel;
 
     std::unique_ptr<TextTableModel> m_model;

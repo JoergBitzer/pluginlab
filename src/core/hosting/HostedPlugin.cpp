@@ -71,9 +71,21 @@ std::vector<ParameterInfo> HostedPlugin::getParameters() const
     return infos;
 }
 
+int HostedPlugin::getNumParameters() const
+{
+    return m_instance->getParameters().size();
+}
+
 ParameterInfo HostedPlugin::getParameter(int index) const
 {
-    return describe(*m_instance->getParameters()[index]);
+    const juce::Array<juce::AudioProcessorParameter*>& parameters = m_instance->getParameters();
+    if (index < 0 || index >= parameters.size())
+    {
+        ParameterInfo none;
+        none.index = -1;
+        return none;
+    }
+    return describe(*parameters[index]);
 }
 
 void HostedPlugin::setParameterNormalised(int index, float normalisedValue)

@@ -140,10 +140,24 @@ pluginlab::hosting::HostedPlugin* LoaderProcessor::getHostedPlugin()
 
 bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juce::String& errorMessage)
 {
+    if (description.isInstrument)
+    {
+        errorMessage = "Instruments are not supported by the loader yet (effects only): " + description.name;
+        return false;
+    }
     std::unique_ptr<pluginlab::hosting::HostedPlugin> plugin =
         pluginlab::hosting::HostedPlugin::load(m_formatManager, description, m_sampleRate, m_blockSize, errorMessage);
     if (plugin == nullptr)
     {
+        return false;
+    }
+
+    juce::AudioProcessor::BusesLayout layout;
+    layout.inputBuses.add(getChannelLayoutOfBus(true, 0));
+    layout.outputBuses.add(getChannelLayoutOfBus(false, 0));
+    if (! plugin->getInstance().checkBusesLayoutSupported(layout))
+    {
+        errorMessage = description.name + " does not support the channel layout of the loader";
         return false;
     }
 
@@ -187,6 +201,7 @@ void LoaderProcessor::unloadPlugin()
 
 void LoaderProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
+    const juce::ScopedLock lock(m_hostedLock);
     if (m_hosted == nullptr)
     {
         return;

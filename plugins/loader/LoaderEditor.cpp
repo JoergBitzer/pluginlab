@@ -1,15 +1,16 @@
 #include "LoaderEditor.h"
 
 #include "LoaderProcessor.h"
-#include "pluginlab/ui/PluginEditorFactory.h"
+#include "pluginlab/hosting/PluginDisplayName.h"
 
 namespace
 {
-constexpr int kEditorWidth = 1000;
-constexpr int kEditorHeight = 760;
+constexpr int kEditorWidth = 760;
+constexpr int kEditorHeight = 700;
 constexpr int kMargin = 8;
 constexpr int kBrowserHeight = 260;
-constexpr int kParametersWidth = 380;
+constexpr int kButtonRowHeight = 28;
+constexpr int kButtonWidth = 150;
 // development: a folder that the browser scans as soon as the editor opens (for screenshots and for checking that the plugin finds its scanner)
 const juce::String kScanOnOpenVariable = "PLUGINLAB_LOADER_SCAN";
 }
@@ -33,7 +34,10 @@ LoaderEditor::LoaderEditor(LoaderProcessor& loaderProcessor)
 
     addAndMakeVisible(m_browser);
     addAndMakeVisible(m_parameters);
-    addAndMakeVisible(m_editorViewport);
+    addAndMakeVisible(m_showEditorButton);
+    addAndMakeVisible(m_unloadButton);
+    m_showEditorButton.onClick = [this] { showHostedEditor(); };
+    m_unloadButton.onClick = [this] { m_processor.unloadPlugin(); };
 
     setSize(kEditorWidth, kEditorHeight);
     showHostedEditor(); // a plugin may already be loaded (state of the session)
@@ -59,7 +63,7 @@ void LoaderEditor::paint(juce::Graphics& g)
 
 bool LoaderEditor::isShowingHostedEditor() const
 {
-    return m_hostedEditor != nullptr;
+    return m_hostedWindow != nullptr;
 }
 
 void LoaderEditor::resized()
@@ -67,16 +71,18 @@ void LoaderEditor::resized()
     juce::Rectangle<int> area = getLocalBounds().reduced(kMargin);
     m_browser.setBounds(area.removeFromTop(kBrowserHeight));
     area.removeFromTop(kMargin);
-    m_parameters.setBounds(area.removeFromLeft(kParametersWidth));
-    area.removeFromLeft(kMargin);
-    m_editorViewport.setBounds(area);
+    juce::Rectangle<int> buttonRow = area.removeFromTop(kButtonRowHeight);
+    m_showEditorButton.setBounds(buttonRow.removeFromLeft(kButtonWidth));
+    buttonRow.removeFromLeft(kMargin);
+    m_unloadButton.setBounds(buttonRow.removeFromLeft(kButtonWidth));
+    area.removeFromTop(kMargin);
+    m_parameters.setBounds(area);
 }
 
 void LoaderEditor::dropHostedEditor()
 {
     m_parameters.setPlugin(nullptr);
-    m_editorViewport.setViewedComponent(nullptr, false);
-    m_hostedEditor.reset();
+    m_hostedWindow.reset(); // the window must go before the plugin instance
 }
 
 void LoaderEditor::showHostedEditor()
@@ -87,6 +93,22 @@ void LoaderEditor::showHostedEditor()
         return;
     }
     m_parameters.setPlugin(hosted);
-    m_hostedEditor.reset(pluginlab::ui::createEditorFor(hosted->getInstance()));
-    m_editorViewport.setViewedComponent(m_hostedEditor.get(), false);
+    if (m_hostedWindow != nullptr)
+    {
+        m_hostedWindow->toFront(true);
+        return;
+    }
+    m_hostedWindow = std::make_unique<pluginlab::ui::PluginEditorWindow>(
+        hosted->getInstance(), pluginlab::hosting::getDisplayName(hosted->getDescription()),
+        [this]
+        {
+            // the close handler runs inside the window: delete it afterwards
+            juce::MessageManager::callAsync([safe = juce::Component::SafePointer<LoaderEditor>(this)]
+                                            {
+                                                if (safe != nullptr)
+                                                {
+                                                    safe->m_hostedWindow.reset();
+                                                }
+                                            });
+        });
 }

@@ -4,6 +4,7 @@ add_library(pluginlab_hosting_ui STATIC
     GuiFormats.cpp
     PluginEditorFactory.cpp
     ParameterTableComponent.cpp
+    PluginEditorWindow.cpp
     PluginBrowserComponent.cpp)
 
 target_include_directories(pluginlab_hosting_ui

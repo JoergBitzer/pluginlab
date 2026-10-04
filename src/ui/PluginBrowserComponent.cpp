@@ -18,6 +18,10 @@ constexpr int kScanButtonWidth = 180;
 constexpr int kAddFolderButtonWidth = 120;
 constexpr int kLoadButtonWidth = 100;
 constexpr int kAllowUnvalidatedWidth = 200;
+constexpr int kStrictnessLabelWidth = 110;
+constexpr int kStrictnessBoxWidth = 60;
+constexpr int kLowestStrictness = 1;
+constexpr int kHighestStrictness = 10;
 constexpr int kThreadStopMs = hosting::PluginScanner::kDefaultTimeoutMs + 5000;
 
 constexpr int kColumnName = 1;
@@ -100,8 +104,12 @@ private:
 class PluginValidationThread : public juce::Thread
 {
 public:
-    PluginValidationThread(PluginBrowserComponent& owner, const juce::File& pluginval, const juce::File& pluginFile)
-        : juce::Thread("PluginValidation"), m_owner(owner), m_pluginval(pluginval), m_pluginFile(pluginFile)
+    PluginValidationThread(PluginBrowserComponent& owner, const juce::File& pluginval, const juce::File& pluginFile, int strictnessLevel)
+        : juce::Thread("PluginValidation"),
+          m_owner(owner),
+          m_pluginval(pluginval),
+          m_pluginFile(pluginFile),
+          m_strictnessLevel(strictnessLevel)
     {
     }
 
@@ -112,7 +120,7 @@ public:
 
     void run() override
     {
-        hosting::PluginValidator validator(m_pluginval, hosting::PluginValidator::getDefaultCacheFile());
+        hosting::PluginValidator validator(m_pluginval, hosting::PluginValidator::getDefaultCacheFile(), m_strictnessLevel);
         const hosting::ValidationResult result = validator.validate(m_pluginFile);
         const juce::Component::SafePointer<PluginBrowserComponent> owner(&m_owner);
         const juce::File pluginFile = m_pluginFile;
@@ -129,6 +137,7 @@ private:
     PluginBrowserComponent& m_owner;
     juce::File m_pluginval;
     juce::File m_pluginFile;
+    int m_strictnessLevel;
 };
 
 PluginBrowserComponent::PluginBrowserComponent()
@@ -149,10 +158,19 @@ PluginBrowserComponent::PluginBrowserComponent()
     m_scanButton.onClick = [this] { scanStandardFolders(); };
     m_addFolderButton.onClick = [this] { chooseFolder(); };
     m_loadButton.onClick = [this] { loadSelected(); };
-    m_allowUnvalidatedButton.setTooltip("Load a plugin that has not been validated with pluginval. A plugin that failed the validation is never loaded.");
+    m_allowUnvalidatedButton.setTooltip("Load the selected plugin without asking pluginval, also if it has failed the validation. Use this for plugins that you trust.");
+
+    m_strictnessLabel.setText("pluginval level", juce::dontSendNotification);
+    for (int level = kLowestStrictness; level <= kHighestStrictness; ++level)
+    {
+        m_strictnessBox.addItem(juce::String(level), level);
+    }
+    m_strictnessBox.setSelectedId(hosting::PluginValidator::kDefaultStrictnessLevel, juce::dontSendNotification);
+    m_strictnessBox.setTooltip("How strict pluginval is. Level 5 is recommended; a lower level lets more plugins pass.");
+    m_strictnessBox.onChange = [this] { strictnessChanged(); };
 
     for (juce::Component* component : std::initializer_list<juce::Component*>{
-             &m_scanButton, &m_addFolderButton, &m_loadButton, &m_allowUnvalidatedButton, &m_statusLabel, &m_table})
+             &m_scanButton, &m_addFolderButton, &m_loadButton, &m_allowUnvalidatedButton, &m_strictnessLabel, &m_strictnessBox, &m_statusLabel, &m_table})
     {
         addAndMakeVisible(component);
     }
@@ -185,6 +203,9 @@ void PluginBrowserComponent::resized()
     m_loadButton.setBounds(buttons.removeFromLeft(kLoadButtonWidth));
     buttons.removeFromLeft(kMargin);
     m_allowUnvalidatedButton.setBounds(buttons.removeFromLeft(kAllowUnvalidatedWidth));
+    buttons.removeFromLeft(kMargin);
+    m_strictnessLabel.setBounds(buttons.removeFromLeft(kStrictnessLabelWidth));
+    m_strictnessBox.setBounds(buttons.removeFromLeft(kStrictnessBoxWidth));
     area.removeFromTop(kMargin);
 
     m_statusLabel.setBounds(area.removeFromBottom(kStatusHeight));
@@ -313,7 +334,7 @@ void PluginBrowserComponent::addScanResult(const hosting::PluginScanResult& resu
     const juce::String path = result.file.getFullPathName();
     if (m_pluginval != juce::File() && ! result.descriptions.isEmpty() && m_validation.find(path) == m_validation.end())
     {
-        const hosting::PluginValidator validator(m_pluginval, hosting::PluginValidator::getDefaultCacheFile());
+        const hosting::PluginValidator validator(m_pluginval, hosting::PluginValidator::getDefaultCacheFile(), getStrictnessLevel());
         hosting::ValidationResult cached;
         if (validator.getCachedResult(result.file, cached))
         {
@@ -377,6 +398,14 @@ void PluginBrowserComponent::loadRow(const Row& row)
 
     const juce::String path = row.file.getFullPathName();
     const auto known = m_validation.find(path);
+    if (m_allowUnvalidatedButton.getToggleState())
+    {
+        if (onPluginChosen)
+        {
+            onPluginChosen(row.description);
+        }
+        return;
+    }
     if (known != m_validation.end() && known->second.status == hosting::ValidationStatus::Passed)
     {
         if (onPluginChosen)
@@ -387,21 +416,14 @@ void PluginBrowserComponent::loadRow(const Row& row)
     }
     if (known != m_validation.end() && (known->second.status == hosting::ValidationStatus::Failed || known->second.status == hosting::ValidationStatus::TimedOut))
     {
-        setStatus(hosting::getDisplayName(row.description) + " failed the validation and is not loaded: " + known->second.message);
+        setStatus(hosting::getDisplayName(row.description) + " failed the validation and is not loaded: " + known->second.message
+                      + " (Tick 'Load without validation' to load it anyway, or choose a lower strictness level.)");
         return;
     }
 
-    if (m_allowUnvalidatedButton.getToggleState() || m_pluginval == juce::File())
+    if (m_pluginval == juce::File())
     {
-        if (! m_allowUnvalidatedButton.getToggleState())
-        {
-            setStatus("pluginval was not found. Tick 'Load without validation' to load the plugin anyway.");
-            return;
-        }
-        if (onPluginChosen)
-        {
-            onPluginChosen(row.description);
-        }
+        setStatus("pluginval was not found. Tick 'Load without validation' to load the plugin anyway.");
         return;
     }
 
@@ -414,7 +436,7 @@ void PluginBrowserComponent::loadRow(const Row& row)
     m_pendingLoadPath = path;
     setStatus("Validating " + hosting::getDisplayName(row.description) + " with pluginval ...");
     m_table.repaint();
-    m_validationThread = std::make_unique<PluginValidationThread>(*this, m_pluginval, row.file);
+    m_validationThread = std::make_unique<PluginValidationThread>(*this, m_pluginval, row.file, getStrictnessLevel());
     m_validationThread->startThread();
 }
 
@@ -451,5 +473,32 @@ void PluginBrowserComponent::showValidationOutcome(const Row& row, const hosting
         return;
     }
     setStatus(name + " is not loaded: " + result.message);
+}
+}
+
+namespace pluginlab::ui
+{
+int PluginBrowserComponent::getStrictnessLevel() const
+{
+    return m_strictnessBox.getSelectedId();
+}
+
+// results are valid for one level only: forget them and take the ones that are cached for the new level
+void PluginBrowserComponent::strictnessChanged()
+{
+    m_validation.clear();
+    if (m_pluginval != juce::File())
+    {
+        const hosting::PluginValidator validator(m_pluginval, hosting::PluginValidator::getDefaultCacheFile(), getStrictnessLevel());
+        for (const Row& row : m_rows)
+        {
+            hosting::ValidationResult cached;
+            if (row.hasDescription && validator.getCachedResult(row.file, cached))
+            {
+                m_validation[row.file.getFullPathName()] = cached;
+            }
+        }
+    }
+    m_table.repaint();
 }
 }

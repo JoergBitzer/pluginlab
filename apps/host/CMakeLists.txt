@@ -9,8 +9,7 @@ target_sources(PluginLabHost
     PRIVATE
         Main.cpp
         HostMainComponent.cpp
-        HostReport.cpp
-        PluginWindow.cpp)
+        HostReport.cpp)
 
 target_compile_definitions(PluginLabHost
     PRIVATE

@@ -13,6 +13,7 @@ namespace
 const juce::String kEnvironmentVariable = "PLUGINLAB_PLUGINVAL";
 const juce::String kPluginvalName = "pluginval";
 const juce::String kSuccessLine = "SUCCESS";
+const juce::String kTestStartPrefix = "Starting tests in:";
 const juce::String kCacheRootTag = "ValidationCache";
 const juce::String kCacheEntryTag = "Entry";
 const juce::String kKeyAttribute = "key";
@@ -78,6 +79,20 @@ juce::String firstFailureLine(const juce::String& output)
         if (line.containsIgnoreCase("FAILED") || line.containsIgnoreCase("Assertion") || line.contains("***"))
         {
             return line.trim();
+        }
+    }
+    return {};
+}
+
+// pluginval prints "Starting tests in: <name>..." before every test; the last one is where it was when it died
+juce::String lastStartedTest(const juce::String& output)
+{
+    const juce::StringArray lines = juce::StringArray::fromLines(output);
+    for (int index = lines.size() - 1; index >= 0; --index)
+    {
+        if (lines[index].startsWith(kTestStartPrefix))
+        {
+            return lines[index].fromFirstOccurrenceOf(kTestStartPrefix, false, false).trim();
         }
     }
     return {};
@@ -285,6 +300,12 @@ ValidationResult PluginValidator::runPluginval(const juce::File& pluginFile) con
     if (failureLine.isNotEmpty())
     {
         result.message += ": " + failureLine;
+        return result;
+    }
+    const juce::String lastTest = lastStartedTest(output);
+    if (lastTest.isNotEmpty())
+    {
+        result.message += ": the plugin crashed or hung during '" + lastTest + "' (strictness level " + juce::String(m_strictnessLevel) + ")";
     }
     return result;
 }

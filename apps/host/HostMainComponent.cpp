@@ -1,6 +1,6 @@
 #include "HostMainComponent.h"
 
-#include "PluginWindow.h"
+#include "pluginlab/ui/PluginEditorWindow.h"
 #include "pluginlab/hosting/PluginDisplayName.h"
 #include "pluginlab/ui/GuiFormats.h"
 #include "pluginlab/ui/TextTableModel.h"
@@ -195,7 +195,7 @@ void HostMainComponent::showEditor(LoadedPlugin& loaded)
 
     LoadedPlugin* loadedPointer = &loaded;
     const juce::Component::SafePointer<HostMainComponent> self(this);
-    loaded.window = std::make_unique<PluginWindow>(
+    loaded.window = std::make_unique<ui::PluginEditorWindow>(
         loaded.plugin->getInstance(), hosting::getDisplayName(loaded.plugin->getDescription()),
         [self, loadedPointer]
         {
