@@ -13,6 +13,7 @@ public:
     using CountFunction = std::function<int()>;
     using TextFunction = std::function<juce::String(int row, int columnId)>;
     using SelectionFunction = std::function<void()>;
+    using SortFunction = std::function<void(int columnId, bool forwards)>;
 
     TextTableModel(CountFunction count, TextFunction text, SelectionFunction onSelectionChanged = {})
         : m_count(std::move(count)), m_text(std::move(text)), m_onSelectionChanged(std::move(onSelectionChanged))
@@ -43,6 +44,20 @@ public:
         g.drawText(m_text(rowNumber, columnId), kCellMargin, 0, width - 2 * kCellMargin, height, juce::Justification::centredLeft, true);
     }
 
+    // called when the user clicks a column header
+    void setSortFunction(SortFunction onSortChanged)
+    {
+        m_onSortChanged = std::move(onSortChanged);
+    }
+
+    void sortOrderChanged(int newSortColumnId, bool isForwards) override
+    {
+        if (m_onSortChanged)
+        {
+            m_onSortChanged(newSortColumnId, isForwards);
+        }
+    }
+
     void selectedRowsChanged(int lastRowSelected) override
     {
         juce::ignoreUnused(lastRowSelected);
@@ -58,5 +73,6 @@ private:
     CountFunction m_count;
     TextFunction m_text;
     SelectionFunction m_onSelectionChanged;
+    SortFunction m_onSortChanged;
 };
 }

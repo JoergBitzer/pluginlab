@@ -72,6 +72,21 @@ public:
         expect(loader.getHostedPlugin() == nullptr);
         expectEquals(processConstantBlock(loader), kInputLevel);
 
+        beginTest("a mono plugin runs in the stereo loader: both channels get the (unchanged, gain 0 dB) result");
+        const pluginlab::hosting::PluginScanResult mono =
+            pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, testpaths::getMonoPlugin());
+        expect(! mono.descriptions.isEmpty(), "the mono plugin must be scannable: " + mono.message);
+        if (! mono.descriptions.isEmpty())
+        {
+            LoaderProcessor monoLoader;
+            prepare(monoLoader);
+            juce::String monoError;
+            expect(monoLoader.loadPlugin(mono.descriptions[0], monoError), "a mono plugin must load into the stereo loader: " + monoError);
+            expectEquals(processConstantBlock(monoLoader), kInputLevel);
+            monoLoader.getHostedPlugin()->setParameterNormalised(kGainIndex, kGainNormalisedPlus12Db);
+            expectWithinAbsoluteError(processConstantBlock(monoLoader), kInputLevel * kGainPlus12Db, kTolerance);
+        }
+
         beginTest("an instrument is refused with a message and the loader stays empty");
         juce::PluginDescription instrument = vst3.descriptions[0];
         instrument.isInstrument = true;

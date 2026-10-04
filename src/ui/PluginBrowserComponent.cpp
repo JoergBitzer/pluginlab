@@ -1,5 +1,7 @@
 #include "pluginlab/ui/PluginBrowserComponent.h"
 
+#include <algorithm>
+
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginDisplayName.h"
 #include "pluginlab/hosting/PluginScanner.h"
@@ -145,6 +147,7 @@ PluginBrowserComponent::PluginBrowserComponent()
 {
     m_model = std::make_unique<TextTableModel>([this] { return static_cast<int>(m_rows.size()); },
                                                [this](int row, int column) { return getCellText(row, column); });
+    m_model->setSortFunction([this](int columnId, bool forwards) { sortBy(columnId, forwards); });
     m_table.setModel(m_model.get());
     m_table.setRowHeight(kRowHeight);
     m_table.setHeaderHeight(kHeaderHeight);
@@ -242,7 +245,11 @@ juce::String PluginBrowserComponent::getValidationText(const Row& row) const
 
 juce::String PluginBrowserComponent::getCellText(int row, int columnId) const
 {
-    const Row& entry = m_rows[static_cast<size_t>(row)];
+    return getCellText(m_rows[static_cast<size_t>(row)], columnId);
+}
+
+juce::String PluginBrowserComponent::getCellText(const Row& entry, int columnId) const
+{
     if (columnId == kColumnName)
     {
         if (entry.hasDescription)
@@ -272,6 +279,64 @@ juce::String PluginBrowserComponent::getCellText(int row, int columnId) const
         return entry.file.getFullPathName();
     }
     return {};
+}
+
+// Sorts the rows by the text of a column (case does not matter, numbers inside the text count as numbers); equal entries keep
+// their order, so a second sort by another column keeps the first as the secondary order. The selected plugin stays selected.
+void PluginBrowserComponent::sortBy(int columnId, bool forwards)
+{
+    m_sortColumnId = columnId;
+    m_sortForwards = forwards;
+    applySort();
+}
+
+void PluginBrowserComponent::applySort()
+{
+    if (m_sortColumnId == 0)
+    {
+        return;
+    }
+    juce::String selectedFile;
+    juce::String selectedName;
+    const int selected = m_table.getSelectedRow();
+    if (selected >= 0 && selected < static_cast<int>(m_rows.size()))
+    {
+        selectedFile = m_rows[static_cast<size_t>(selected)].file.getFullPathName();
+        selectedName = getCellText(m_rows[static_cast<size_t>(selected)], kColumnName);
+    }
+
+    std::stable_sort(m_rows.begin(), m_rows.end(),
+                     [this](const Row& first, const Row& second)
+                     {
+                         const int order = getCellText(first, m_sortColumnId).compareNatural(getCellText(second, m_sortColumnId));
+                         if (m_sortForwards)
+                         {
+                             return order < 0;
+                         }
+                         return order > 0;
+                     });
+
+    m_table.updateContent();
+    m_table.deselectAllRows();
+    for (size_t row = 0; row < m_rows.size(); ++row)
+    {
+        const bool isSelected = m_rows[row].file.getFullPathName() == selectedFile && getCellText(m_rows[row], kColumnName) == selectedName;
+        if (isSelected && selectedFile.isNotEmpty())
+        {
+            m_table.selectRow(static_cast<int>(row));
+        }
+    }
+    m_table.repaint();
+}
+
+int PluginBrowserComponent::getNumEntries() const
+{
+    return static_cast<int>(m_rows.size());
+}
+
+juce::String PluginBrowserComponent::getEntryName(int index) const
+{
+    return getCellText(index, kColumnName);
 }
 
 void PluginBrowserComponent::scanStandardFolders()
@@ -343,6 +408,7 @@ void PluginBrowserComponent::addScanResult(const hosting::PluginScanResult& resu
     }
     m_table.updateContent();
     m_table.repaint();
+    applySort();
 }
 
 void PluginBrowserComponent::scanFinished()
@@ -446,6 +512,7 @@ void PluginBrowserComponent::validationFinished(const juce::File& pluginFile, co
     m_validatingPath.clear();
     m_validation[path] = result;
     m_table.repaint();
+    applySort(); // the validation column may be the sort column
 
     const bool loadWanted = (path == m_pendingLoadPath);
     m_pendingLoadPath.clear();

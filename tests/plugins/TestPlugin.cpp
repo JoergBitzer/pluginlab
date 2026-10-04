@@ -22,10 +22,17 @@ juce::String gainToText(float valueDb, int)
 }
 }
 
+#if PLUGINLAB_TEST_PLUGIN_MONO_ONLY
+// like ZamGrains: a plugin with one input and one output channel
+static const juce::AudioChannelSet kDefaultChannelSet = juce::AudioChannelSet::mono();
+#else
+static const juce::AudioChannelSet kDefaultChannelSet = juce::AudioChannelSet::stereo();
+#endif
+
 TestPluginProcessor::TestPluginProcessor()
     : juce::AudioProcessor(BusesProperties()
-                               .withInput("Input", juce::AudioChannelSet::stereo(), true)
-                               .withOutput("Output", juce::AudioChannelSet::stereo(), true))
+                               .withInput("Input", kDefaultChannelSet, true)
+                               .withOutput("Output", kDefaultChannelSet, true))
 {
 #if PLUGINLAB_TEST_PLUGIN_CRASHES
     // a plugin that crashes when it is created: scanning it must not take the host down
@@ -66,7 +73,11 @@ bool TestPluginProcessor::isBusesLayoutSupported(const BusesLayout& layouts) con
 {
     const juce::AudioChannelSet& outputSet = layouts.getMainOutputChannelSet();
     const bool outputIsMonoOrStereo = outputSet == juce::AudioChannelSet::mono() || outputSet == juce::AudioChannelSet::stereo();
+#if PLUGINLAB_TEST_PLUGIN_MONO_ONLY
+    return outputSet == juce::AudioChannelSet::mono() && layouts.getMainInputChannelSet() == outputSet;
+#else
     return outputIsMonoOrStereo && layouts.getMainInputChannelSet() == outputSet;
+#endif
 }
 
 void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)

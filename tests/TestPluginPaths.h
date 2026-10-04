@@ -32,6 +32,11 @@ inline juce::File getGainPluginVst2()
     return {};
 }
 
+inline juce::File getMonoPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestMono.vst3");
+}
+
 inline juce::File getCrashPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestCrash.vst3");

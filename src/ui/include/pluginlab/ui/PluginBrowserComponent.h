@@ -38,6 +38,12 @@ public:
 
     void setStatus(const juce::String& text);
 
+    // The list as shown (after sorting): for the tests
+    int getNumEntries() const;
+    juce::String getEntryName(int index) const;
+    // The same as a click on the header of this column (column ids are those of the list: 1 = Plugin, 2 = Format, ...)
+    void sortBy(int columnId, bool forwards);
+
     void resized() override;
 
     // called by the background threads (on the message thread)
@@ -56,6 +62,8 @@ private:
     };
 
     juce::String getCellText(int row, int columnId) const;
+    juce::String getCellText(const Row& row, int columnId) const;
+    void applySort();
     juce::String getValidationText(const Row& row) const;
     void startScan(const juce::FileSearchPath& folders);
     void chooseFolder();
@@ -68,6 +76,8 @@ private:
     juce::File m_pluginval;
     std::vector<Row> m_rows;
     std::map<juce::String, hosting::ValidationResult> m_validation; // by plugin file path
+    int m_sortColumnId = 0;                                         // 0: not sorted (order of the scan)
+    bool m_sortForwards = true;
     juce::String m_validatingPath;                                  // the file that is being validated now, else empty
     juce::String m_pendingLoadPath;                                 // load this file when its validation has passed
 

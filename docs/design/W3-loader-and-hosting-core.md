@@ -151,3 +151,12 @@ taken over as copies, nothing depends on it.
   user opens it too early; that is the plugin's bug and the crash handler will show it.
 - The version string was missing for two releases because the helper was called `getTitle()` inside `LoaderEditor`, which resolves to `juce::Component::getTitle()`
   (empty). Renamed; the title is a label of its own. Found by rendering the loader in the host and looking at the window.
+
+## 0.5.0: mono plugins, sortable list
+- "Does not support the channel layout of the loader": the loader's audio is stereo and a plugin that only has one input and one output channel (ZamGrains,
+  category "Mono") has no stereo layout, so it was refused. Now the loader tries the loader's layout, then stereo, then mono for the hosted plugin
+  (`chooseHostedLayout`), and converts: a mono plugin gets the mean of the loader's channels and its output goes to both channels; a stereo plugin in a mono
+  loader gets the signal on both channels and its left output is the result. Plugins that support neither mono nor stereo (surround only, side-chain only)
+  are still refused, now with that explanation. Test plugin `PluginLabTestMono` (mono only) and a loader test.
+- The plugin list sorts by every column (click the header; again for the other direction; natural order of numbers, case ignored); the selected plugin
+  stays selected, validation results re-sort when "Validation" is the sort column. Test `BrowserTests`.

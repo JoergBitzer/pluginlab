@@ -67,8 +67,67 @@ void LoaderProcessor::configureHostedPlugin()
         return;
     }
     juce::AudioPluginInstance& instance = m_hosted->getInstance();
-    instance.setPlayConfigDetails(getTotalNumInputChannels(), getTotalNumOutputChannels(), m_sampleRate, m_blockSize);
+    instance.setPlayConfigDetails(m_hostedChannels, m_hostedChannels, m_sampleRate, m_blockSize);
+    m_hostedBuffer.setSize(m_hostedChannels, m_blockSize);
     instance.prepareToPlay(m_sampleRate, m_blockSize);
+}
+
+// The loaded plugin runs with the channel layout of the loader if it can; a mono plugin in a stereo loader (or the other way round)
+// runs with its own layout and processAdapted() converts. Returns false if the plugin supports neither mono nor stereo.
+bool LoaderProcessor::chooseHostedLayout(juce::AudioPluginInstance& instance, int& channels) const
+{
+    const int loaderChannels = getTotalNumInputChannels();
+    const std::vector<juce::AudioChannelSet> candidates = {
+        juce::AudioChannelSet::canonicalChannelSet(loaderChannels), juce::AudioChannelSet::stereo(), juce::AudioChannelSet::mono()};
+    for (const juce::AudioChannelSet& candidate : candidates)
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add(candidate);
+        layout.outputBuses.add(candidate);
+        if (instance.checkBusesLayoutSupported(layout) && instance.setBusesLayout(layout))
+        {
+            channels = candidate.size();
+            return true;
+        }
+    }
+    return false;
+}
+
+// Audio of the loader (C channels) through a plugin with H channels: H = 1 gets the mean of all channels and its output goes to all
+// channels; H = 2 in a mono loader gets the signal on both channels and its left output is the result.
+void LoaderProcessor::processAdapted(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+    const int samples = buffer.getNumSamples();
+    const int loaderChannels = buffer.getNumChannels();
+    if (samples > m_hostedBuffer.getNumSamples())
+    {
+        return; // a block bigger than announced: pass the audio through
+    }
+    juce::AudioBuffer<float> hostedBlock(m_hostedBuffer.getArrayOfWritePointers(), m_hostedChannels, samples);
+    for (int hostedChannel = 0; hostedChannel < m_hostedChannels; ++hostedChannel)
+    {
+        hostedBlock.clear(hostedChannel, 0, samples);
+        for (int channel = 0; channel < loaderChannels; ++channel)
+        {
+            const bool contributes = m_hostedChannels == 1 || loaderChannels == 1 || channel == hostedChannel;
+            if (contributes)
+            {
+                hostedBlock.addFrom(hostedChannel, 0, buffer, channel, 0, samples);
+            }
+        }
+        if (m_hostedChannels == 1)
+        {
+            hostedBlock.applyGain(hostedChannel, 0, samples, 1.0f / static_cast<float>(loaderChannels));
+        }
+    }
+
+    m_hosted->getInstance().processBlock(hostedBlock, midiMessages);
+
+    for (int channel = 0; channel < loaderChannels; ++channel)
+    {
+        const int hostedChannel = juce::jmin(channel, m_hostedChannels - 1);
+        buffer.copyFrom(channel, 0, hostedBlock, hostedChannel, 0, samples);
+    }
 }
 
 bool LoaderProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -95,7 +154,12 @@ void LoaderProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         return; // pass-through: the audio stays in the buffer unchanged
     }
     m_hosted->getInstance().setPlayHead(getPlayHead()); // tempo and position of the DAW for plugins that use them
-    m_hosted->getInstance().processBlock(buffer, midiMessages);
+    if (m_hostedChannels == buffer.getNumChannels())
+    {
+        m_hosted->getInstance().processBlock(buffer, midiMessages);
+        return;
+    }
+    processAdapted(buffer, midiMessages);
 }
 
 juce::AudioProcessorEditor* LoaderProcessor::createEditor()
@@ -169,12 +233,10 @@ bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juc
         return false;
     }
 
-    juce::AudioProcessor::BusesLayout layout;
-    layout.inputBuses.add(getChannelLayoutOfBus(true, 0));
-    layout.outputBuses.add(getChannelLayoutOfBus(false, 0));
-    if (! plugin->getInstance().checkBusesLayoutSupported(layout))
+    int hostedChannels = 0;
+    if (! chooseHostedLayout(plugin->getInstance(), hostedChannels))
     {
-        errorMessage = description.name + " does not support the channel layout of the loader";
+        errorMessage = description.name + " runs neither with mono nor with stereo audio (the loader supports only these)";
         return false;
     }
 
@@ -189,10 +251,11 @@ bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juc
             m_hosted->getInstance().releaseResources();
         }
         m_hosted = std::move(plugin);
+        m_hostedChannels = hostedChannels;
         configureHostedPlugin();
     }
     const int latency = m_hosted->getInstance().getLatencySamples();
-    loaderlog::write("load: latency " + juce::String(latency) + " samples");
+    loaderlog::write("load: " + juce::String(hostedChannels) + " channel(s), latency " + juce::String(latency) + " samples");
     setLatencySamples(latency);
     if (onHostedPluginChanged)
     {

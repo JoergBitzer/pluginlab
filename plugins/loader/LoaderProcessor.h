@@ -56,6 +56,8 @@ public:
 
 private:
     void configureHostedPlugin();
+    bool chooseHostedLayout(juce::AudioPluginInstance& instance, int& channels) const;
+    void processAdapted(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
     void restoreState(const juce::MemoryBlock& state);
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(LoaderProcessor)
@@ -65,6 +67,10 @@ private:
     juce::AudioPluginFormatManager m_formatManager;
     std::unique_ptr<pluginlab::hosting::HostedPlugin> m_hosted;
     juce::CriticalSection m_hostedLock; // the audio thread only try-locks: while the plugin is replaced the audio passes through
+
+    // the channels the loaded plugin runs with (1 for a mono plugin in a stereo loader) and the buffer to adapt the audio to them
+    int m_hostedChannels = 0;
+    juce::AudioBuffer<float> m_hostedBuffer;
 
     double m_sampleRate;
     int m_blockSize;
