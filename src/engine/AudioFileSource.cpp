@@ -62,16 +62,12 @@ bool AudioFileSource::load(const juce::File& file, double targetSampleRate, juce
 void AudioFileSource::setRegion(juce::int64 startSample, juce::int64 endSample)
 {
     const juce::int64 length = m_data.getNumSamples();
-    if (startSample == 0 && endSample == 0)
+    m_regionStart = juce::jlimit<juce::int64>(0, length - 1, startSample);
+    if (endSample <= m_regionStart)
     {
-        m_regionStart = 0;
-        m_regionEnd = length;
+        endSample = length; // no end (or one before the start): up to the end of the file
     }
-    else
-    {
-        m_regionStart = juce::jlimit<juce::int64>(0, length - 1, startSample);
-        m_regionEnd = juce::jlimit<juce::int64>(m_regionStart + 1, length, endSample);
-    }
+    m_regionEnd = juce::jlimit<juce::int64>(m_regionStart + 1, length, endSample);
     rewind();
 }
 

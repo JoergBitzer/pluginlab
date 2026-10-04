@@ -204,8 +204,14 @@ ComparePanel::ComparePanel(pluginlab::engine::MeasurementEngine& engine, HostSet
     m_regionEnd.setText("0", false);
     m_regionStart.setTooltip("Start of the loop region in seconds (0 and 0: the whole file)");
     m_regionEnd.setTooltip("End of the loop region in seconds");
-    m_regionStart.onReturnKey = [this] { applyFileSettings(); };
-    m_regionEnd.onReturnKey = [this] { applyFileSettings(); };
+    // the loop region is applied while it is typed (and on Return and when the field is left), so that a value that was typed but not
+    // confirmed is not lost when the list is saved
+    for (juce::TextEditor* editor : {&m_regionStart, &m_regionEnd})
+    {
+        editor->onTextChange = [this] { applyFileSettings(); };
+        editor->onReturnKey = [this] { applyFileSettings(); };
+        editor->onFocusLost = [this] { applyFileSettings(); };
+    }
     m_passesBox.onChange = [this] { applyFileSettings(); };
 
     m_addFileButton.onClick = [this] { chooseFiles(); };
@@ -248,6 +254,7 @@ ComparePanel::ComparePanel(pluginlab::engine::MeasurementEngine& engine, HostSet
         addAndMakeVisible(component);
     }
     m_slotsLabel.setText("Slots: the dry reference and the plugins loaded on the Plugins page. Select a row or press 1 ... 9 to hear a slot.", juce::dontSendNotification);
+    updateFileControls();
     setStatus("Add audio files, load plugins on the Plugins page, then press Play.");
     startTimer(kTimerMs);
 }
@@ -444,6 +451,11 @@ void ComparePanel::filesChanged()
 {
     m_fileTable.updateContent();
     m_fileTable.deselectAllRows();
+    if (m_engine.getNumFiles() > 0)
+    {
+        m_fileTable.selectRow(0); // the settings below the table work on the selected file
+    }
+    updateFileControls();
     m_fileTable.repaint();
     if (onFilesChanged)
     {
@@ -496,8 +508,19 @@ void ComparePanel::removeSelectedFile()
     filesChanged();
 }
 
+// The settings of the file below the table belong to the selected file: without one they are disabled
+void ComparePanel::updateFileControls()
+{
+    const bool hasSelection = m_fileTable.getSelectedRow() >= 0;
+    m_passesBox.setEnabled(hasSelection);
+    m_regionStart.setEnabled(hasSelection);
+    m_regionEnd.setEnabled(hasSelection);
+    m_removeFileButton.setEnabled(hasSelection);
+}
+
 void ComparePanel::fileSelectionChanged()
 {
+    updateFileControls();
     const int row = m_fileTable.getSelectedRow();
     if (row < 0)
     {
@@ -530,8 +553,7 @@ void ComparePanel::applyFileSettings()
         m_engine.setFilePasses(row, kPassesChoices[index]);
     }
     m_engine.setFileRegionSeconds(row, m_regionStart.getText().getDoubleValue(), m_regionEnd.getText().getDoubleValue());
-    m_fileTable.repaint();
-    fileSelectionChanged();
+    m_fileTable.repaint(); // (the text fields are not rewritten: the user may be typing in them)
     if (onFilesChanged)
     {
         onFilesChanged();

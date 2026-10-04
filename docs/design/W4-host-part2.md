@@ -75,3 +75,7 @@ W4.1 engine core with tests (no device): file source, adapter, latency measureme
   it is still there at the next start the question says that the last attempt did not finish (probably a crash). Nothing is written before the questions are answered,
   and a start with a command line test option neither asks nor writes the session.
 - Release build: the host in `build-release/` has no JUCE debug assertions (the parameter id checks of JUCE complain about the parameter tables of third-party plugins).
+- **0.10.1:** a shorter loop region was not kept in the saved audio list (the file said "up to the full length"). The region fields were applied only on Return and only if a file
+  row was selected (after loading a list none was), so a typed value was silently dropped. Now the fields are applied while typing, on Return and when left, the first file is
+  selected after a load, the fields are disabled without a selected file, and a region with a start and no end runs to the end of the file. The load and save code itself was
+  correct (round trip test) and the saved file showed the full length because the engine never got the typed value.

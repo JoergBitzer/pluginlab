@@ -12,7 +12,8 @@ public:
     // Reads the whole file and converts it to targetSampleRate. Returns false and sets error if the file cannot be read.
     bool load(const juce::File& file, double targetSampleRate, juce::String& error);
 
-    // The loop region in samples of the loaded (converted) file; end is exclusive. 0, 0 selects the whole file.
+    // The loop region in samples of the loaded (converted) file; end is exclusive. An end that is 0 or not after the start means: up to the
+    // end of the file, so 0, 0 selects the whole file.
     void setRegion(juce::int64 startSample, juce::int64 endSample);
     // The same in seconds of the file
     void setRegionSeconds(double startSeconds, double endSeconds);

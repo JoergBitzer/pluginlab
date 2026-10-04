@@ -79,6 +79,7 @@ private:
     void loadAudioList();
     void applyFileSettings();
     void fileSelectionChanged();
+    void updateFileControls();
     void showSlotEditor();
     void slotSelectionChanged();
     void startOrStop();

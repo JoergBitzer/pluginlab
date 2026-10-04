@@ -119,6 +119,9 @@ private:
             expectWithinAbsoluteError(out.getSample(1, index), expected, 1.0e-6f);
         }
         expectEquals(source.getCompletedPasses(), 2);
+        source.setRegion(40, 0); // only a start: up to the end of the file
+        expectEquals(static_cast<int>(source.getRegionStart()), 40);
+        expectEquals(static_cast<int>(source.getRegionEnd()), 100);
 
         beginTest("a file is converted to the sample rate of the engine without changing the pitch");
         const juce::TemporaryFile toneFile(".wav");
