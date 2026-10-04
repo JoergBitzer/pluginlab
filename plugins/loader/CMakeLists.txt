@@ -61,3 +61,23 @@ add_custom_target(PluginLabLoaderBundle ALL
     COMMENT "Putting PluginLabScanner into the loader bundle"
     VERBATIM)
 add_dependencies(PluginLabLoaderBundle PluginLabLoader_VST3 PluginLabScanner)
+
+# Every build installs the loader where a DAW on this machine finds it (user folder, no administrator rights needed). Off in CI (no DAW
+# there) and on Windows (the VST3 folder needs administrator rights): set PLUGINLAB_INSTALL_LOADER to ON/OFF to override.
+set(PLUGINLAB_INSTALL_LOADER_DEFAULT ON)
+if(DEFINED ENV{CI} OR WIN32)
+    set(PLUGINLAB_INSTALL_LOADER_DEFAULT OFF)
+endif()
+option(PLUGINLAB_INSTALL_LOADER "Copy the built loader into the user's VST3 folder after every build" ${PLUGINLAB_INSTALL_LOADER_DEFAULT})
+if(PLUGINLAB_INSTALL_LOADER)
+    set(PLUGINLAB_USER_VST3_DIR "$ENV{HOME}/.vst3")
+    if(APPLE)
+        set(PLUGINLAB_USER_VST3_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/VST3")
+    endif()
+    add_custom_command(TARGET PluginLabLoaderBundle POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PLUGINLAB_USER_VST3_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${PLUGINLAB_USER_VST3_DIR}/PluginLabLoader.vst3"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLUGINLAB_LOADER_PLUGIN_DIR}/PluginLabLoader.vst3" "${PLUGINLAB_USER_VST3_DIR}/PluginLabLoader.vst3"
+        COMMENT "Installing the loader into ${PLUGINLAB_USER_VST3_DIR}"
+        VERBATIM)
+endif()

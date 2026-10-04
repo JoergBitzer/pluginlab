@@ -104,7 +104,7 @@ public:
             options.pluginNameToLoad = arguments[loadIndex + 1].unquoted();
         }
 
-        m_mainWindow = std::make_unique<MainWindow>(getApplicationName(), options);
+        m_mainWindow = std::make_unique<MainWindow>(getApplicationName() + " " + getApplicationVersion(), options);
     }
 
     void shutdown() override

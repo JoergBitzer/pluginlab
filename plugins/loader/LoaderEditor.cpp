@@ -1,15 +1,24 @@
 #include "LoaderEditor.h"
 
 #include "LoaderProcessor.h"
+#include "pluginlab/PluginLabVersion.h"
 #include "pluginlab/hosting/PluginDisplayName.h"
 
 namespace
 {
 constexpr int kEditorWidth = 760;
-constexpr int kEditorHeight = 700;
+constexpr int kEditorHeight = 724;
 constexpr int kMargin = 8;
 constexpr int kBrowserHeight = 260;
 constexpr int kButtonRowHeight = 28;
+constexpr int kTitleHeight = 24;
+constexpr float kTitleFontHeight = 16.0f;
+const juce::String kProductName = "PluginLab Loader";
+
+juce::String getTitle()
+{
+    return kProductName + " " + juce::String(pluginlab::getVersionString());
+}
 constexpr int kButtonWidth = 150;
 // development: a folder that the browser scans as soon as the editor opens (for screenshots and for checking that the plugin finds its scanner)
 const juce::String kScanOnOpenVariable = "PLUGINLAB_LOADER_SCAN";
@@ -59,6 +68,9 @@ LoaderEditor::~LoaderEditor()
 void LoaderEditor::paint(juce::Graphics& g)
 {
     g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
+    g.setColour(getLookAndFeel().findColour(juce::Label::textColourId));
+    g.setFont(juce::FontOptions(kTitleFontHeight, juce::Font::bold));
+    g.drawText(getTitle(), getLocalBounds().reduced(kMargin).removeFromTop(kTitleHeight), juce::Justification::centredLeft);
 }
 
 bool LoaderEditor::isShowingHostedEditor() const
@@ -69,6 +81,7 @@ bool LoaderEditor::isShowingHostedEditor() const
 void LoaderEditor::resized()
 {
     juce::Rectangle<int> area = getLocalBounds().reduced(kMargin);
+    area.removeFromTop(kTitleHeight);
     m_browser.setBounds(area.removeFromTop(kBrowserHeight));
     area.removeFromTop(kMargin);
     juce::Rectangle<int> buttonRow = area.removeFromTop(kButtonRowHeight);
@@ -99,7 +112,7 @@ void LoaderEditor::showHostedEditor()
         return;
     }
     m_hostedWindow = std::make_unique<pluginlab::ui::PluginEditorWindow>(
-        hosted->getInstance(), pluginlab::hosting::getDisplayName(hosted->getDescription()),
+        hosted->getInstance(), getTitle() + ": " + pluginlab::hosting::getDisplayName(hosted->getDescription()),
         [this]
         {
             // the close handler runs inside the window: delete it afterwards

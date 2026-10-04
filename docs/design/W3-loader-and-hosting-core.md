@@ -118,3 +118,8 @@ taken over as copies, nothing depends on it.
   (`ui::PluginEditorWindow`, shared with the host; resizable if the plugin's editor is); buttons "Show plugin editor" and "Unload plugin" in the loader.
 - Lesson: only a real DAW shows these problems; the user's own plugin collection is the best robustness test set. A local harness driven by the environment
   variable `PLUGINLAB_REALWORLD_PLUGINS` is still to be written (not committed with third-party plugins).
+
+## 0.4.1: installed on every build, version visible
+- Every build copies the loader to `~/.vst3` (macOS: `~/Library/Audio/Plug-Ins/VST3`) so the DAW always loads the newest build; off in CI and on Windows
+  (system folder needs administrator rights); option `PLUGINLAB_INSTALL_LOADER`. The DAW must be restarted or rescan to load a new build.
+- The version is shown in the title of the loader editor and of the hosted plugin's window ("PluginLab Loader 0.4.1: <plugin>") and in the host's window title.
