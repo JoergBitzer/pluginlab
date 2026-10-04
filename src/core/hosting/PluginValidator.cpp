@@ -120,7 +120,12 @@ juce::File PluginValidator::findPluginval()
     }
 
     const juce::File executableFolder = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
-    const juce::String fileName = kPluginvalName + juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFileExtension();
+    // (not the extension of the running module: inside a plugin that is .so or .vst3)
+#if JUCE_WINDOWS
+    const juce::String fileName = kPluginvalName + ".exe";
+#else
+    const juce::String fileName = kPluginvalName;
+#endif
     const juce::File nextToExecutable = executableFolder.getChildFile(fileName);
     if (nextToExecutable.existsAsFile())
     {

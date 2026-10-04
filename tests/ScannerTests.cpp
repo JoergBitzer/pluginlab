@@ -23,6 +23,15 @@ public:
     {
         const pluginlab::hosting::PluginScanner scanner(testpaths::getScannerExecutable(), kShortTimeoutMs);
 
+        beginTest("the default scanner has the file name of an executable, not the extension of the running module");
+        const juce::String scannerName = pluginlab::hosting::PluginScanner::getScannerFileName();
+#if JUCE_WINDOWS
+        expectEquals(scannerName, juce::String("PluginLabScanner.exe"));
+#else
+        expectEquals(scannerName, juce::String("PluginLabScanner"));
+#endif
+        expectEquals(pluginlab::hosting::PluginScanner::getDefaultScannerExecutable().getFileName(), scannerName);
+
         beginTest("a good plugin is found with its name");
         const pluginlab::hosting::PluginScanResult good = scanner.scanFile(testpaths::getGainPlugin());
         expect(good.status == pluginlab::hosting::ScanStatus::Ok, "status " + pluginlab::hosting::toString(good.status) + ": " + good.message);

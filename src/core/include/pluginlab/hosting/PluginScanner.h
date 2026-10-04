@@ -26,8 +26,12 @@ public:
     // The format that can read the file is taken from the manager.
     static PluginScanResult scanFileInProcess(juce::AudioPluginFormatManager& formatManager, const juce::File& pluginFile);
 
-    // The scanner executable next to the executable of the running program (PluginLabScanner, .exe on Windows).
+    // The scanner executable: the file named by the environment variable PLUGINLAB_SCANNER if it is set, else PluginLabScanner next to
+    // the module that contains this code (the host program, or inside the plugin bundle of the loader).
     static juce::File getDefaultScannerExecutable();
+
+    // "PluginLabScanner", with ".exe" on Windows
+    static juce::String getScannerFileName();
 
 private:
     juce::File m_scannerExecutable;

@@ -91,3 +91,16 @@ taken over as copies, nothing depends on it.
   loads the stored plugin without a new validation; the loader and the host were tried with the test plugins and on Linux with a screenshot, not in a
   real DAW (Bitwig Studio 5.2.7 is installed on the development machine, not used yet); Cubase and Windows/macOS DAWs not tried; VST2 on Windows and
   macOS only with the test plugins (CI), on Linux also with the author's third-party VST2 plugins (scan and load).
+
+## Bug found by the author in Bitwig (2026-10-04): "scanner failed, something is missing" (fixed in 0.3.1)
+- Symptom: the loader (VST3 copied to `~/.vst3`) loaded in Bitwig (its log shows "Engine loaded plug-in"), but every entry in the loader's own plugin list
+  was "ScannerFailed".
+- Cause 1: the scanner is looked for next to the module that contains the code; inside a plugin that is the plugin binary in the bundle, and the build never
+  put `PluginLabScanner` there. Cause 2: the file name was built with the extension of the running module (`.so`, `.vst3`) instead of the extension of an
+  executable (none, or `.exe`); the same mistake was in the pluginval lookup.
+- Fix: the build copies the scanner into the loader bundle (`PluginLabLoaderBundle`, JUCE's own copy step is off) and then copies the finished bundle to
+  `<build>/loader_plugin/PluginLabLoader.vst3` (the place to install it from); `PluginScanner::getScannerFileName()` gives the right name; the environment
+  variable `PLUGINLAB_SCANNER` overrides the path (development). Tests: file name of the scanner, CTest `PluginLabLoaderBundleHasScanner`.
+- Checked end to end on Linux: the loader running inside the pluginlab host scans with its own bundled scanner (developer variable
+  `PLUGINLAB_LOADER_SCAN=<folder>` makes the loader's editor scan a folder when it opens). Why the tests did not catch it: they run `LoaderProcessor` inside the
+  test program, where the scanner sits next to the program; only a real host runs the code from inside the bundle.

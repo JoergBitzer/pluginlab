@@ -29,8 +29,7 @@ juce_add_plugin(PluginLabLoader
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     VST3_CATEGORIES "Fx" "Tools"
-    COPY_PLUGIN_AFTER_BUILD TRUE
-    VST3_COPY_DIR "${PLUGINLAB_LOADER_PLUGIN_DIR}"
+    COPY_PLUGIN_AFTER_BUILD FALSE
     PLUGIN_MANUFACTURER_CODE IHAJ
     PLUGIN_CODE Plbl
     FORMATS VST3
@@ -50,3 +49,15 @@ target_link_libraries(PluginLabLoader
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# The loader scans plugins with PluginLabScanner, which is looked for next to the plugin binary: the scanner goes into the bundle
+# (Contents/<platform>/), then the finished bundle is copied to ${PLUGINLAB_LOADER_PLUGIN_DIR} (for the tests and for a quick install by
+# hand). JUCE's own copy step is off because it would run before the scanner is in the bundle.
+get_target_property(PLUGINLAB_LOADER_BUNDLE PluginLabLoader_VST3 JUCE_PLUGIN_ARTEFACT_FILE)
+add_custom_target(PluginLabLoaderBundle ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:PluginLabScanner> $<TARGET_FILE_DIR:PluginLabLoader_VST3>
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${PLUGINLAB_LOADER_PLUGIN_DIR}/PluginLabLoader.vst3"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLUGINLAB_LOADER_BUNDLE}" "${PLUGINLAB_LOADER_PLUGIN_DIR}/PluginLabLoader.vst3"
+    COMMENT "Putting PluginLabScanner into the loader bundle"
+    VERBATIM)
+add_dependencies(PluginLabLoaderBundle PluginLabLoader_VST3 PluginLabScanner)

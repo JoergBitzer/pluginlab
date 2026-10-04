@@ -33,7 +33,7 @@ target_link_libraries(PluginLabTests
         juce::juce_recommended_warning_flags)
 
 # the tests need the scanner and the test plugins built first
-add_dependencies(PluginLabTests PluginLabScanner PluginLabTestGain_VST3 PluginLabTestCrash_VST3 PluginLabTestCrashProcess_VST3 PluginLabHost)
+add_dependencies(PluginLabTests PluginLabScanner PluginLabTestGain_VST3 PluginLabTestCrash_VST3 PluginLabTestCrashProcess_VST3 PluginLabHost PluginLabLoaderBundle)
 if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
@@ -58,3 +58,10 @@ add_test(NAME PluginLabHostReport
         -DREPORT_FILE=${CMAKE_CURRENT_BINARY_DIR}/host_report.txt
         -DWITH_VST2=${PLUGINLAB_VST2}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostReport.cmake)
+
+# The loader plugin is self-contained: its bundle holds the scanner (found next to the plugin binary when the plugin runs in a DAW).
+add_test(NAME PluginLabLoaderBundleHasScanner
+    COMMAND ${CMAKE_COMMAND}
+        -DBUNDLE_FOLDER=${PLUGINLAB_LOADER_PLUGIN_DIR}/PluginLabLoader.vst3
+        -DSCANNER_NAME=$<TARGET_FILE_NAME:PluginLabScanner>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckLoaderBundle.cmake)

@@ -7,6 +7,7 @@ namespace pluginlab::hosting
 namespace
 {
 const juce::String kScannerName = "PluginLabScanner";
+const juce::String kScannerEnvironmentVariable = "PLUGINLAB_SCANNER";
 constexpr bool kSearchRecursively = true;
 constexpr bool kOnlySynchronousPlugins = false;
 }
@@ -63,8 +64,27 @@ juce::StringArray PluginScanner::findPluginFilesInStandardFolders(juce::AudioPlu
 
 juce::File PluginScanner::getDefaultScannerExecutable()
 {
-    const juce::File executableFolder = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
-    return executableFolder.getChildFile(kScannerName).withFileExtension(juce::File::getSpecialLocation(juce::File::currentExecutableFile).getFileExtension());
+    // development and tests: the environment names the scanner
+    const juce::String fromEnvironment = juce::SystemStats::getEnvironmentVariable(kScannerEnvironmentVariable, {});
+    if (fromEnvironment.isNotEmpty())
+    {
+        return juce::File(fromEnvironment);
+    }
+
+    // next to the module that contains this code: the folder of the host program, or inside the plugin bundle (the loader plugin
+    // carries its scanner). currentExecutableFile is the plugin binary when this code runs in a plugin; its extension (.so, .vst3)
+    // is not the extension of the scanner.
+    const juce::File moduleFolder = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
+    return moduleFolder.getChildFile(getScannerFileName());
+}
+
+juce::String PluginScanner::getScannerFileName()
+{
+#if JUCE_WINDOWS
+    return kScannerName + ".exe";
+#else
+    return kScannerName;
+#endif
 }
 
 PluginScanResult PluginScanner::scanFile(const juce::File& pluginFile) const

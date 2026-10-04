@@ -10,6 +10,8 @@ constexpr int kEditorHeight = 760;
 constexpr int kMargin = 8;
 constexpr int kBrowserHeight = 260;
 constexpr int kParametersWidth = 380;
+// development: a folder that the browser scans as soon as the editor opens (for screenshots and for checking that the plugin finds its scanner)
+const juce::String kScanOnOpenVariable = "PLUGINLAB_LOADER_SCAN";
 }
 
 LoaderEditor::LoaderEditor(LoaderProcessor& loaderProcessor)
@@ -35,6 +37,12 @@ LoaderEditor::LoaderEditor(LoaderProcessor& loaderProcessor)
 
     setSize(kEditorWidth, kEditorHeight);
     showHostedEditor(); // a plugin may already be loaded (state of the session)
+
+    const juce::String scanOnOpen = juce::SystemStats::getEnvironmentVariable(kScanOnOpenVariable, {});
+    if (scanOnOpen.isNotEmpty())
+    {
+        m_browser.scanFolder(juce::File(scanOnOpen));
+    }
 }
 
 LoaderEditor::~LoaderEditor()
