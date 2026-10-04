@@ -8,7 +8,9 @@ juce_add_gui_app(PluginLabHost
 target_sources(PluginLabHost
     PRIVATE
         Main.cpp
+        ComparePanel.cpp
         HostMainComponent.cpp
+        HostShell.cpp
         HostReport.cpp)
 
 target_compile_definitions(PluginLabHost
@@ -28,9 +30,11 @@ add_custom_command(TARGET PluginLabHost POST_BUILD
 target_link_libraries(PluginLabHost
     PRIVATE
         pluginlab_core
+        pluginlab_engine
         pluginlab_hosting_ui
         juce::juce_gui_basics
         juce::juce_audio_processors
+        juce::juce_audio_utils
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

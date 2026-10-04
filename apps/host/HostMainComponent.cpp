@@ -116,6 +116,17 @@ void HostMainComponent::resized()
     m_parameters.setBounds(area);
 }
 
+bool HostMainComponent::getSelectedDescription(juce::PluginDescription& description)
+{
+    const LoadedPlugin* loaded = getSelectedLoadedPlugin();
+    if (loaded == nullptr)
+    {
+        return false;
+    }
+    description = loaded->plugin->getDescription();
+    return true;
+}
+
 HostMainComponent::LoadedPlugin* HostMainComponent::getSelectedLoadedPlugin()
 {
     const int row = m_loadedTable.getSelectedRow();

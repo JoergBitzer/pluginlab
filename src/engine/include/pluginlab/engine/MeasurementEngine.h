@@ -8,6 +8,15 @@
 
 namespace pluginlab::engine
 {
+struct FileInfo
+{
+    juce::String name;
+    double lengthSeconds = 0.0;
+    int passes = 1;
+    double regionStartSeconds = 0.0;
+    double regionEndSeconds = 0.0;
+};
+
 struct SlotInfo
 {
     juce::String name;
@@ -40,7 +49,12 @@ public:
     bool addFile(const juce::File& file, int passes, juce::String& error);
     bool addFile(std::unique_ptr<AudioFileSource> source, int passes);
     void clearFiles();
+    void removeFile(int index);
     int getNumFiles() const;
+    FileInfo getFileInfo(int index) const;
+    void setFilePasses(int index, int passes);
+    // The loop region of the file in seconds (0, 0: the whole file)
+    void setFileRegionSeconds(int index, double startSeconds, double endSeconds);
     // After the last file the list starts again (default, for listening) or the engine plays silence and isFinished() becomes true.
     void setWrapList(bool wrap);
     bool isFinished() const;
@@ -49,6 +63,7 @@ public:
     // Adds a slot (nullptr plugin: the dry reference): prepares it, measures its latency and aligns all slots. Returns its index, -1 on error.
     int addSlot(std::unique_ptr<hosting::HostedPlugin> plugin, const juce::String& name, juce::String& error);
     void clearSlots();
+    void removeSlot(int index);
     int getNumSlots() const;
     SlotInfo getSlotInfo(int index) const;
     // The plugin of the slot (message thread only), nullptr for the dry slot.

@@ -2,25 +2,34 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-#include "HostMainComponent.h"
+#include "HostShell.h"
 #include "HostReport.h"
 #include "pluginlab/PluginLabVersion.h"
 
 namespace
 {
+// a file named on the command line, relative to the working directory if it is not absolute
+juce::File resolveFile(const juce::String& text)
+{
+    return juce::File::getCurrentWorkingDirectory().getChildFile(text.unquoted());
+}
+
 
 // Command line modes without a window (files, because a GUI program on Windows has no console; CI checks the files):
 //   --write-version <file>              writes the version into the file and quits
 //   --report <plugin folder> <file>     scans the folder, loads the plugins, writes a report (see HostReport.h) and quits
 // Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
-// after the scan
+// after the scan, --compare <audio file> [<plugin file>] opens the Compare page with the file, a dry slot and the plugin
 const juce::String kWriteVersionOption = "--write-version";
 const juce::String kReportOption = "--report";
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
+const juce::String kPlayOption = "--play"; // --play <seconds> <report file> (with --compare): plays, writes the report, quits
+const juce::String kCompareOption = "--compare"; // --compare <audio file> [<plugin file>]: opens the Compare page
 constexpr int kArgumentsOfOneValue = 1;
 constexpr int kArgumentsOfWriteVersion = 1;
 constexpr int kArgumentsOfReport = 2;
+constexpr int kArgumentsOfPlay = 2;
 constexpr int kExitOk = 0;
 constexpr int kExitReportFailed = 1;
 }
@@ -34,7 +43,7 @@ public:
                                juce::DocumentWindow::allButtons)
     {
         setUsingNativeTitleBar(true);
-        setContentOwned(new pluginlab::host::HostMainComponent(options), true);
+        setContentOwned(new pluginlab::host::HostShell(options), true);
         setResizable(true, true);
         centreWithSize(getWidth(), getHeight());
         setVisible(true);
@@ -70,7 +79,7 @@ public:
         const int versionIndex = arguments.indexOf(kWriteVersionOption);
         if (versionIndex >= 0 && versionIndex + kArgumentsOfWriteVersion < arguments.size())
         {
-            const juce::File versionFile(arguments[versionIndex + 1].unquoted());
+            const juce::File versionFile = resolveFile(arguments[versionIndex + 1]);
             versionFile.replaceWithText(juce::String(pluginlab::getVersionString()));
             quit();
             return;
@@ -79,8 +88,8 @@ public:
         const int reportIndex = arguments.indexOf(kReportOption);
         if (reportIndex >= 0 && reportIndex + kArgumentsOfReport < arguments.size())
         {
-            const juce::File pluginFolder(arguments[reportIndex + 1].unquoted());
-            const juce::File reportFile(arguments[reportIndex + 2].unquoted());
+            const juce::File pluginFolder = resolveFile(arguments[reportIndex + 1]);
+            const juce::File reportFile = resolveFile(arguments[reportIndex + 2]);
             const bool written = pluginlab::host::writeReport(pluginFolder, reportFile);
             int returnValue = kExitOk;
             if (! written)
@@ -96,12 +105,29 @@ public:
         const int scanIndex = arguments.indexOf(kScanOption);
         if (scanIndex >= 0 && scanIndex + kArgumentsOfOneValue < arguments.size())
         {
-            options.scanFolder = juce::File(arguments[scanIndex + 1].unquoted());
+            options.scanFolder = resolveFile(arguments[scanIndex + 1]);
         }
         const int loadIndex = arguments.indexOf(kLoadOption);
         if (loadIndex >= 0 && loadIndex + kArgumentsOfOneValue < arguments.size())
         {
             options.pluginNameToLoad = arguments[loadIndex + 1].unquoted();
+        }
+
+        const int compareIndex = arguments.indexOf(kCompareOption);
+        if (compareIndex >= 0 && compareIndex + kArgumentsOfOneValue < arguments.size())
+        {
+            options.compareAudioFile = resolveFile(arguments[compareIndex + 1]);
+            if (compareIndex + kArgumentsOfOneValue + 1 < arguments.size())
+            {
+                options.compareSlotPlugin = resolveFile(arguments[compareIndex + 2]);
+            }
+        }
+
+        const int playIndex = arguments.indexOf(kPlayOption);
+        if (playIndex >= 0 && playIndex + kArgumentsOfPlay < arguments.size())
+        {
+            options.playSeconds = arguments[playIndex + 1].getDoubleValue();
+            options.playReportFile = resolveFile(arguments[playIndex + 2]);
         }
 
         m_mainWindow = std::make_unique<MainWindow>(getApplicationName() + " " + getApplicationVersion(), options);

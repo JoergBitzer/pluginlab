@@ -54,6 +54,56 @@ void MeasurementEngine::clearFiles()
     m_finished = false;
 }
 
+void MeasurementEngine::removeFile(int index)
+{
+    const juce::ScopedLock lock(m_lock);
+    if (index < 0 || index >= static_cast<int>(m_files.size()))
+    {
+        return;
+    }
+    m_files.erase(m_files.begin() + index);
+    m_currentFile = 0;
+    for (FileItem& item : m_files)
+    {
+        item.source->rewind();
+    }
+}
+
+FileInfo MeasurementEngine::getFileInfo(int index) const
+{
+    const juce::ScopedLock lock(m_lock);
+    FileInfo info;
+    if (index < 0 || index >= static_cast<int>(m_files.size()))
+    {
+        return info;
+    }
+    const FileItem& item = m_files[static_cast<size_t>(index)];
+    info.name = item.source->getName();
+    info.lengthSeconds = static_cast<double>(item.source->getLengthSamples()) / m_sampleRate;
+    info.passes = item.passes;
+    info.regionStartSeconds = static_cast<double>(item.source->getRegionStart()) / m_sampleRate;
+    info.regionEndSeconds = static_cast<double>(item.source->getRegionEnd()) / m_sampleRate;
+    return info;
+}
+
+void MeasurementEngine::setFilePasses(int index, int passes)
+{
+    const juce::ScopedLock lock(m_lock);
+    if (index >= 0 && index < static_cast<int>(m_files.size()))
+    {
+        m_files[static_cast<size_t>(index)].passes = passes;
+    }
+}
+
+void MeasurementEngine::setFileRegionSeconds(int index, double startSeconds, double endSeconds)
+{
+    const juce::ScopedLock lock(m_lock);
+    if (index >= 0 && index < static_cast<int>(m_files.size()))
+    {
+        m_files[static_cast<size_t>(index)].source->setRegionSeconds(startSeconds, endSeconds);
+    }
+}
+
 int MeasurementEngine::getNumFiles() const
 {
     const juce::ScopedLock lock(m_lock);
@@ -108,6 +158,21 @@ void MeasurementEngine::clearSlots()
     m_activeSlot = 0;
     m_previousSlot = 0;
     m_fadeLeft = 0;
+}
+
+void MeasurementEngine::removeSlot(int index)
+{
+    const juce::ScopedLock lock(m_lock);
+    if (index < 0 || index >= static_cast<int>(m_slots.size()))
+    {
+        return;
+    }
+    m_slots.erase(m_slots.begin() + index);
+    m_slotBuffers.erase(m_slotBuffers.begin() + index);
+    m_activeSlot = 0;
+    m_previousSlot = 0;
+    m_fadeLeft = 0;
+    alignSlots();
 }
 
 int MeasurementEngine::getNumSlots() const

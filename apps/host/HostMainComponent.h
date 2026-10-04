@@ -22,6 +22,10 @@ struct StartupOptions
 {
     juce::File scanFolder;
     juce::String pluginNameToLoad; // loaded after the scan has finished
+    juce::File compareAudioFile;   // --compare: opens the Compare page with this file, a dry slot and (compareSlotPlugin) a plugin slot
+    juce::File compareSlotPlugin;
+    double playSeconds = 0.0;      // --play <seconds> <report file>: plays on the Compare page, writes the report and quits
+    juce::File playReportFile;
 };
 
 // The main window of the host: the plugin browser (scan, validation, load), the loaded plugins and the parameters of the
@@ -33,6 +37,9 @@ public:
     ~HostMainComponent() override;
 
     void resized() override;
+
+    // The description of the plugin that is selected in the list of the loaded plugins (false if none is).
+    bool getSelectedDescription(juce::PluginDescription& description);
 
 private:
     struct LoadedPlugin

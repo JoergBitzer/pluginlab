@@ -51,3 +51,11 @@ W4.1 engine core with tests (no device): file source, adapter, latency measureme
   every 50 blocks gives no silent block and a largest step of 0.115 between samples (the analytic limit of the signal is 0.115; a hard switch would jump by about 1.5), and the offline
   render writes one aligned 24 bit file per slot that equals the input to 1e-5.
 - Not yet: command line `--render` and the window with the audio device (W4.3), worker threads per slot (W4.4), xrun measurement with a real device.
+- **W4.3 window and real-time playback: done on Linux (0.9.0, 2026-10-04).** The host has two pages (`HostShell`): "Plugins" (as before) and "Compare" (`ComparePanel`): audio files with
+  passes and loop region, slots (dry slot, a plugin selected on the Plugins page), the audible slot by row or key 1 ... 9, measured and reported latency and the delay for
+  the alignment per slot, play through the audio device (the engine asks the device for its rate and refuses a mismatch), crossfade time, engine rate, "Render to files...".
+  Command line for manual tests: `--compare <audio file> [<plugin file>]` and `--play <seconds> <report file>`. Checked on this machine (PipeWire through ALSA): 6 s of playback with a
+  dry slot and the latency test plugin: 0 xruns, latency 64 samples measured. The window was checked in a screenshot.
+- Still open in W4: **W4.4 worker thread per slot** (today the slots run one after the other inside the audio callback; with the test plugins the load is negligible, with several
+  heavy plugins it will matter), a longer xrun test with real plugins and several slots, a command line `--render` (the button does it; the library is tested), loops of
+  the whole list are always on in listening mode. Decision to confirm: in-process slots (see decision 4).
