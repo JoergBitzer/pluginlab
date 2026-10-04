@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include <juce_audio_processors/juce_audio_processors.h>
 
 // A plugin with known behavior for the tests of the host:
@@ -8,6 +10,8 @@
 //   processing: multiplies the audio with the gain, unless bypassed
 // Built with PLUGINLAB_TEST_PLUGIN_CRASHES=1 it crashes as soon as the plugin object is created (a plugin that cannot be scanned);
 // with PLUGINLAB_TEST_PLUGIN_CRASHES_IN_PROCESS=1 it crashes in processBlock (scanning and loading work).
+// PLUGINLAB_TEST_PLUGIN_DELAY_SAMPLES=N delays the audio by N samples; PLUGINLAB_TEST_PLUGIN_REPORTED_LATENCY=M is the latency it tells the
+// host (a plugin whose reported latency is wrong: the engine must measure it).
 class TestPluginProcessor : public juce::AudioProcessor
 {
 public:
@@ -41,6 +45,10 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
 private:
+    // the delay line of the audio (only used if the plugin delays the audio)
+    std::vector<std::vector<float>> m_delayLines;
+    int m_delayPosition = 0;
+
     juce::AudioParameterFloat* m_gain = nullptr;
     juce::AudioParameterFloat* m_frequency = nullptr;
     juce::AudioParameterChoice* m_mode = nullptr;

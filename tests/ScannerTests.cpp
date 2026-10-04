@@ -89,10 +89,10 @@ public:
                 ++numberOfCrashes;
             }
         }
-        int expectedGoodPlugins = 3; // the VST3 gain plugin, the mono plugin and the plugin that only crashes while processing (they scan fine)
+        int expectedGoodPlugins = 5; // the VST3 gain plugin, the mono plugin, the two latency plugins and the plugin that only crashes while processing (they scan fine)
         if (pluginlab::hosting::isVst2Supported())
         {
-            expectedGoodPlugins = 4; // plus the VST2 version of the gain plugin
+            expectedGoodPlugins = 6; // plus the VST2 version of the gain plugin
         }
         expectEquals(numberOfGoodPlugins, expectedGoodPlugins);
         expectEquals(numberOfCrashes, 1); // the VST2 formats must not report parts of the VST3 bundles as plugins

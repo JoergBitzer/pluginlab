@@ -63,6 +63,9 @@ const juce::String TestPluginProcessor::getName() const
 void TestPluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     juce::ignoreUnused(sampleRate, samplesPerBlock);
+    setLatencySamples(PLUGINLAB_TEST_PLUGIN_REPORTED_LATENCY);
+    m_delayLines.assign(static_cast<size_t>(getTotalNumOutputChannels()), std::vector<float>(PLUGINLAB_TEST_PLUGIN_DELAY_SAMPLES, 0.0f));
+    m_delayPosition = 0;
 }
 
 void TestPluginProcessor::releaseResources()
@@ -91,11 +94,30 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     *nothing = 1;
 #endif
 
-    if (m_bypass->get())
+    if (! m_bypass->get())
     {
-        return;
+        buffer.applyGain(juce::Decibels::decibelsToGain(m_gain->get()));
     }
-    buffer.applyGain(juce::Decibels::decibelsToGain(m_gain->get()));
+
+    constexpr int kDelaySamples = PLUGINLAB_TEST_PLUGIN_DELAY_SAMPLES;
+    if (kDelaySamples > 0)
+    {
+        const int channels = juce::jmin(buffer.getNumChannels(), static_cast<int>(m_delayLines.size()));
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            std::vector<float>& line = m_delayLines[static_cast<size_t>(channel)];
+            float* data = buffer.getWritePointer(channel);
+            int position = m_delayPosition;
+            for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+            {
+                const float delayed = line[static_cast<size_t>(position)];
+                line[static_cast<size_t>(position)] = data[sample];
+                data[sample] = delayed;
+                position = (position + 1) % kDelaySamples;
+            }
+        }
+        m_delayPosition = (m_delayPosition + buffer.getNumSamples()) % kDelaySamples;
+    }
 }
 
 juce::AudioProcessorEditor* TestPluginProcessor::createEditor()

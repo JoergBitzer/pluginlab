@@ -37,6 +37,18 @@ inline juce::File getMonoPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestMono.vst3");
 }
 
+// delays the audio by 64 samples and reports 64
+inline juce::File getLatencyPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestLatency.vst3");
+}
+
+// delays the audio by 100 samples and reports 0
+inline juce::File getLatencyLiarPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestLatencyLie.vst3");
+}
+
 inline juce::File getCrashPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestCrash.vst3");

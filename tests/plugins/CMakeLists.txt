@@ -9,7 +9,7 @@ file(WRITE "${PLUGINLAB_TEST_PLUGIN_DIR}/NotAPlugin.vst3" "This file is not a pl
 
 # AUTO_MANIFEST FALSE: no moduleinfo.json, so JUCE has to load the binary to scan the plugin (with a manifest it reads the
 # description from the file and never runs the plugin code)
-function(pluginlab_add_test_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE CRASHES CRASHES_IN_PROCESS AUTO_MANIFEST WITH_VST2 MONO_ONLY)
+function(pluginlab_add_test_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE CRASHES CRASHES_IN_PROCESS AUTO_MANIFEST WITH_VST2 MONO_ONLY DELAY_SAMPLES REPORTED_LATENCY)
     set(TEST_PLUGIN_FORMATS VST3)
     if(WITH_VST2 AND PLUGINLAB_VST2)
         list(APPEND TEST_PLUGIN_FORMATS VST)
@@ -40,7 +40,9 @@ function(pluginlab_add_test_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE CRASHES 
             JUCE_VST3_CAN_REPLACE_VST2=0
             PLUGINLAB_TEST_PLUGIN_CRASHES=${CRASHES}
             PLUGINLAB_TEST_PLUGIN_CRASHES_IN_PROCESS=${CRASHES_IN_PROCESS}
-            PLUGINLAB_TEST_PLUGIN_MONO_ONLY=${MONO_ONLY})
+            PLUGINLAB_TEST_PLUGIN_MONO_ONLY=${MONO_ONLY}
+            PLUGINLAB_TEST_PLUGIN_DELAY_SAMPLES=${DELAY_SAMPLES}
+            PLUGINLAB_TEST_PLUGIN_REPORTED_LATENCY=${REPORTED_LATENCY})
 
     target_link_libraries(${TARGET_NAME}
         PRIVATE
@@ -50,7 +52,10 @@ function(pluginlab_add_test_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE CRASHES 
             juce::juce_recommended_warning_flags)
 endfunction()
 
-pluginlab_add_test_plugin(PluginLabTestGain "PluginLab Test Gain" Tgn1 0 0 TRUE TRUE 0)
-pluginlab_add_test_plugin(PluginLabTestCrash "PluginLab Test Crash" Tcr1 1 0 FALSE FALSE 0)
-pluginlab_add_test_plugin(PluginLabTestCrashProcess "PluginLab Test Crash Process" Tcp1 0 1 TRUE FALSE 0)
-pluginlab_add_test_plugin(PluginLabTestMono "PluginLab Test Mono" Tmn1 0 0 TRUE FALSE 1)
+pluginlab_add_test_plugin(PluginLabTestGain "PluginLab Test Gain" Tgn1 0 0 TRUE TRUE 0 0 0)
+pluginlab_add_test_plugin(PluginLabTestCrash "PluginLab Test Crash" Tcr1 1 0 FALSE FALSE 0 0 0)
+pluginlab_add_test_plugin(PluginLabTestCrashProcess "PluginLab Test Crash Process" Tcp1 0 1 TRUE FALSE 0 0 0)
+pluginlab_add_test_plugin(PluginLabTestMono "PluginLab Test Mono" Tmn1 0 0 TRUE FALSE 1 0 0)
+# a plugin that delays the audio by 64 samples and says so, and one that delays by 100 samples and reports 0 (the latency must be measured)
+pluginlab_add_test_plugin(PluginLabTestLatency "PluginLab Test Latency" Tlt1 0 0 TRUE FALSE 0 64 64)
+pluginlab_add_test_plugin(PluginLabTestLatencyLie "PluginLab Test Latency Lie" Tll1 0 0 TRUE FALSE 0 100 0)
