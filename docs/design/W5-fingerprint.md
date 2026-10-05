@@ -91,3 +91,5 @@ W8. The finding about the PeakEQ stands because the correct test EQ and PeakEqua
   generic detector of the largest deviation from 0 dB, nothing that needs to know that the plugin is an EQ.
 - Manual test options: `--developer <plugin file> [--view]` (loads the plugin, opens the page, makes the report, shows it). Tests: `alignMarkdownTables`, CTest `PluginLabHostFingerprint` (the command line
   mode end to end, also the error for an identifier that is not in the file).
+
+The exact description of every measurement, the thresholds, and the known weaknesses of the test: [../reference/fingerprint-report-explained.md](../reference/fingerprint-report-explained.md).
