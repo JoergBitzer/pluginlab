@@ -2,15 +2,16 @@
 
 #include "TestPluginPaths.h"
 #include "pluginlab/engine/Fingerprint.h"
+#include "pluginlab/engine/FingerprintSettings.h"
 #include "pluginlab/engine/ReportText.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
 
 namespace
 {
-constexpr double kRateRatio = 96000.0 / 44100.0;
 constexpr int kLatencyPluginDelay = 64;
 constexpr int kLiarPluginDelay = 100;
+constexpr int kLinearPhaseDelay = 127;
 }
 
 // The fingerprint against plugins with known behavior: it must find the faults that were built in and none in the correct plugins.
@@ -25,15 +26,25 @@ public:
     void runTest() override
     {
         pluginlab::hosting::addHeadlessFormats(m_formats);
+        testSettings();
 
-        beginTest("the gain plugin: a clean fingerprint, no feature in the response, one parameter changes the audio");
+        beginTest("the gain plugin: a clean fingerprint, the gain changes the audio, steps and contexts are named");
         const pluginlab::engine::PluginFingerprint gain = measure(testpaths::getGainPlugin());
         expect(gain.loaded, gain.message);
         expect(gain.supportsStereo && gain.supportsMono);
         expectEquals(static_cast<int>(gain.parameters.size()), 4);
+        expectEquals(gain.numberOfParameters, 4);
         expect(! gain.reactingParameters.empty() && gain.reactingParameters[0] == 0, "the gain must change the audio");
+        expectEquals(gain.parameters[0].measuredWith, juce::String("defaults"));
+        expect(gain.parameters[3].measuredWith.startsWith("the others at"), "the bypass reacts only with the gain moved: " + gain.parameters[3].measuredWith);
         expectEquals(static_cast<int>(gain.rates.size()), 3);
-        expect(! gain.responseFollowsSampleRate);
+        for (const pluginlab::engine::RateFingerprint& rate : gain.rates)
+        {
+            expect(rate.outputFound);
+            expectEquals(rate.measuredLatency, 0);
+            expect(rate.outputBeforePeakDb <= -199.0, "no output before the peak of a gain");
+            expect(rate.outputBeforeImpulseDbfs <= -199.0);
+        }
         expect(gain.blockSizeIndependent);
         expect(gain.deterministic);
         expect(gain.outputStaysFinite && gain.recoversFromJumps && gain.silenceStaysSilent);
@@ -42,51 +53,53 @@ public:
             expect(delivery.passed, delivery.name + ": " + delivery.comment);
         }
         expect(gain.findings.empty(), "findings: " + juce::StringArray(gain.findings.data(), static_cast<int>(gain.findings.size())).joinIntoString("; "));
-        logMessage(pluginlab::engine::createReport(gain));
+        const juce::String report = pluginlab::engine::createReport(gain);
+        expect(report.contains("continuous") && report.contains("switch"), "the steps are named");
+        expect(! report.contains("2147483647"));
+        expect(report.contains("## Settings used"));
+        expect(! report.contains("feature"), "the response analysis is gone (it belongs to the analyzer)");
+        logMessage(report);
 
         beginTest("the plugin that reports 0 samples latency but delays by 100: the report differs from the measurement at all rates");
         const pluginlab::engine::PluginFingerprint liar = measure(testpaths::getLatencyLiarPlugin());
-        expectEquals(static_cast<int>(liar.rates.size()), 3);
         for (const pluginlab::engine::RateFingerprint& rate : liar.rates)
         {
-            expectEquals(rate.reportedLatency, 0);
+            expectEquals(rate.reportedAfterPrepare, 0);
+            expectEquals(rate.reportedAfterAudio, 0);
             expectEquals(rate.measuredLatency, kLiarPluginDelay);
         }
-        expect(! liar.findings.empty() && liar.findings[0].contains("reports 0 samples"), "the lie must be a finding");
+        expect(! liar.findings.empty() && liar.findings[0].contains("reports 0 samples, measured 100"), "the lie must be a finding");
         const pluginlab::engine::PluginFingerprint honest = measure(testpaths::getLatencyPlugin());
         expectEquals(honest.rates[0].measuredLatency, kLatencyPluginDelay);
         expect(honest.findings.empty());
 
-        beginTest("the correct EQ: a bell at every rate, at the same frequency, no fault");
-        const pluginlab::engine::PluginFingerprint eq = measure(testpaths::getEqPlugin());
-        expect(eq.loaded, eq.message);
-        expect(eq.reactingParameters.size() >= 3, "gain, frequency and Q must change the audio (the VST3 wrapper adds a bypass)");
-        for (const pluginlab::engine::RateFingerprint& rate : eq.rates)
+        beginTest("the linear-phase plugin: latency 127 measured with the delayed impulse, output before the peak (pre-ringing)");
+        const pluginlab::engine::PluginFingerprint linear = measure(testpaths::getLinearPhasePlugin());
+        for (const pluginlab::engine::RateFingerprint& rate : linear.rates)
         {
-            expect(rate.hasFeature, "a bell was expected at " + juce::String(rate.sampleRate));
+            expectEquals(rate.measuredLatency, kLinearPhaseDelay);
+            expectEquals(rate.reportedAfterAudio, kLinearPhaseDelay);
+            expect(rate.outputBeforePeakDb > -60.0, "pre-ringing expected: " + juce::String(rate.outputBeforePeakDb));
         }
-        expect(! eq.responseFollowsSampleRate, "the correct EQ must not follow the sample rate (ratio " + juce::String(eq.featureRatio) + ")");
-        expectWithinAbsoluteError(eq.featureRatio, 1.0, 0.15);
-        expect(eq.blockSizeIndependent);
-        expect(eq.deterministic);
-        for (const pluginlab::engine::DeliveryResult& delivery : eq.delivery)
-        {
-            expect(delivery.passed, delivery.name + ": " + delivery.comment);
-        }
-        expect(eq.recommendedDelivery.isNotEmpty());
-        logMessage(pluginlab::engine::createReport(eq));
+        expect(linear.findings.empty());
 
-        beginTest("the EQ designed for 44.1 kHz (the fault of the own PeakEQ): the bell moves with the sample rate");
-        const pluginlab::engine::PluginFingerprint fsFault = measure(testpaths::getEqFsFaultPlugin());
-        expect(fsFault.responseFollowsSampleRate, "the fault must be found");
-        expectWithinAbsoluteError(fsFault.featureRatio, kRateRatio, 0.15);
-        bool mentioned = false;
-        for (const juce::String& finding : fsFault.findings)
+        beginTest("block sizes: smoothing per block differs only in the transient, a low-pass reset per block also in the steady state");
+        const pluginlab::engine::PluginFingerprint smoothing = measure(testpaths::getBlockSmoothingPlugin());
+        expect(smoothing.blockSizeIndependent, "the steady state must not depend on the block size");
+        bool transientDiffers = false;
+        for (const pluginlab::engine::BlockSizeResult& block : smoothing.blockSizes)
         {
-            mentioned = mentioned || finding.contains("designed for one sample rate");
+            transientDiffers = transientDiffers || block.whole.relativeDb > -100.0;
         }
-        expect(mentioned, "the finding must say it");
-        logMessage(pluginlab::engine::createReport(fsFault));
+        expect(transientDiffers, "the transient of the smoothing differs between block sizes");
+        const pluginlab::engine::PluginFingerprint fault = measure(testpaths::getBlockFaultPlugin());
+        expect(! fault.blockSizeIndependent, "the fault must be found");
+        bool mentioned = false;
+        for (const juce::String& finding : fault.findings)
+        {
+            mentioned = mentioned || finding.contains("depends on the block size");
+        }
+        expect(mentioned);
 
         beginTest("the EQ that resets in prepareToPlay: the first delivery is lost, only a poked delivery works");
         const pluginlab::engine::PluginFingerprint prepareFault = measure(testpaths::getEqPrepareFaultPlugin());
@@ -96,13 +109,12 @@ public:
             expect(! prepareFault.delivery[0].passed, "stream: the first A is the hard-coded one, the last A the real one");
             expect(! prepareFault.delivery[0].repeatable);
             expect(! prepareFault.delivery[1].passed, "set before prepare must fail");
-            expect(! prepareFault.delivery[1].correct, "A was delivered as no change: the hard-coded values stay");
+            expect(! prepareFault.delivery[1].correct);
             expect(! prepareFault.delivery[2].passed, "set after prepare, but not changed: lost");
             expect(! prepareFault.delivery[2].correct);
             expect(prepareFault.delivery[3].passed, "poked: " + prepareFault.delivery[3].comment);
         }
         expect(prepareFault.recommendedDelivery.contains("another value"), prepareFault.recommendedDelivery);
-        logMessage(pluginlab::engine::createReport(prepareFault));
 
         beginTest("the tables of a report are aligned for a window with a monospaced font, the other lines stay");
         const juce::String markdown = "# Title\n\ntext line\n| a | long header |\n|---|---|\n| wide cell | b |\n\n- list\n";
@@ -112,11 +124,46 @@ public:
         expect(aligned.contains("---------  -----------\n"), aligned);
         expect(aligned.contains("wide cell  b\n"), aligned);
         expect(aligned.contains("- list\n"));
-        const juce::String real = pluginlab::engine::alignMarkdownTables(pluginlab::engine::createReport(gain));
-        expect(! real.contains("|---"), "no Markdown separator line may be left");
+        expect(! pluginlab::engine::alignMarkdownTables(report).contains("|---"), "no Markdown separator line may be left");
     }
 
 private:
+    void testSettings()
+    {
+        beginTest("the settings: a missing file is written with the defaults, a changed value is read back, a broken file gives the defaults");
+        const juce::TemporaryFile file(".json");
+        juce::String warning;
+        const pluginlab::engine::FingerprintSettings defaults = pluginlab::engine::FingerprintSettings::loadOrCreate(file.getFile(), warning);
+        expect(warning.isEmpty(), warning);
+        expect(file.getFile().existsAsFile(), "the defaults must be written");
+        expectEquals(defaults.reactsAboveDb, -80.0);
+        expectEquals(static_cast<int>(defaults.blockSizes.size()), 7);
+
+        pluginlab::engine::FingerprintSettings changed = defaults;
+        changed.reactsAboveDb = -70.0;
+        changed.blockSizes = {64, 128};
+        expect(changed.save(file.getFile()));
+        const pluginlab::engine::FingerprintSettings readBack = pluginlab::engine::FingerprintSettings::loadOrCreate(file.getFile(), warning);
+        expectEquals(readBack.reactsAboveDb, -70.0);
+        expectEquals(static_cast<int>(readBack.blockSizes.size()), 2);
+        expectEquals(readBack.sameBelowDb, defaults.sameBelowDb);
+
+        expect(file.getFile().replaceWithText("{ \"reactsAboveDb\": -50.0 }"));
+        const pluginlab::engine::FingerprintSettings partial = pluginlab::engine::FingerprintSettings::loadOrCreate(file.getFile(), warning);
+        expectEquals(partial.reactsAboveDb, -50.0);
+        expectEquals(partial.settleSeconds, defaults.settleSeconds); // a missing key keeps its default
+
+        expect(file.getFile().replaceWithText("this is not json"));
+        warning.clear();
+        const pluginlab::engine::FingerprintSettings broken = pluginlab::engine::FingerprintSettings::loadOrCreate(file.getFile(), warning);
+        expect(warning.isNotEmpty());
+        expectEquals(broken.reactsAboveDb, defaults.reactsAboveDb);
+
+        expectEquals(pluginlab::engine::describeSteps(0x7fffffff), juce::String("continuous"));
+        expectEquals(pluginlab::engine::describeSteps(2), juce::String("switch"));
+        expectEquals(pluginlab::engine::describeSteps(14), juce::String("14"));
+    }
+
     pluginlab::engine::PluginFingerprint measure(const juce::File& file)
     {
         const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner::scanFileInProcess(m_formats, file);

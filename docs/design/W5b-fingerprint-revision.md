@@ -111,8 +111,27 @@ interpretable when the settings change).
 
 ## 3. Open points for the author
 1. D1: reference form plus absolute (my proposal), or a symmetric form (then `max(RMS(a), RMS(b))` rather than the sum)?
+Answer: we use your poposal
 2. R2: pre-delay of 4096 samples enough (85 ms at 48 kHz)? Linear-phase plugins with long FIRs need more; it costs nothing but time.
+Answer: It will show that there is something, so 4096 is enough
 3. R3: 1 s render and the last 100 ms (the author's numbers) as defaults in the settings, agreed.
-4. R4: which layouts in the list besides mono/stereo are worth asking for (each asks the plugin, cheap)?
+   Answer: agreed
+4. R4: which layouts in the list besides mono/stereo are worth asking for (each asks the plugin, cheap)? 
+Answer, what are the most common layouts in the wild? LCR, quad, 5.1, 7.1, ambisonics 1st order. The rest is not worth it.
 5. R6: is "time-varying" an acceptable verdict for the summary, or should those plugins be measured with the LFO frozen when they offer that (not generic)?
+Answer: "time-varying" is good and general enough. I have for example a plugin that will add noise at a level high enough for you to detect. It is time varying too.
 6. Order: R1, R2, R3 first (they change existing numbers), then R5 (the table), then R4, R6, R7?
+Yes
+## 4. Progress
+- **R1 to R3 done (0.13.0, 2026-10-05).** Settings file `fingerprint_settings.json` (all thresholds, levels, lengths, block sizes; printed in every report; `PLUGINLAB_FINGERPRINT_SETTINGS`
+  for the tests); every difference relative (dB re reference) and absolute (dBFS), the absolute one decides for a silent reference; steps "continuous" / "switch"; column
+  "measured with"; latency with "nothing came out", reported after prepare and after audio, delayed impulse (4096 samples), output before the peak and before the impulse; the
+  response analysis is removed; block size test with 1 s render, decided on the last 0.1 s, "whole" for information, the same poke length for all block sizes; a sentence
+  under every table and a legend of the differences; the numbers in the findings. New test plugins: Linear Phase (255-tap FIR), Block Smoothing, Block Fault.
+- Found on the way, both defects of the test, not of the plugins:
+  - the small block size differences of the BL gain plugins came from the poke block, whose length was the block size (different input history); now identical;
+  - the stream way of the delivery test rendered B and the last A right after the change, without settling: a plugin that smooths its parameters (BL-Gain, WayQ) failed all
+    four ways against wrong references. A settle after every change fixes it (BL-Gain, WayQ: all ways ok now).
+- Not measurable yet: ZL Equalizer 2 ("runs neither with mono nor with stereo audio"), most likely because it has a side-chain input bus and the layout we ask for has one
+  input bus only. This belongs to R4 (exact layouts) and also concerns the loader and the engine.
+- The reports in `docs/fingerprints/` are made again with 0.13.0.

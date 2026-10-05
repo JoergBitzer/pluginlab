@@ -12,6 +12,9 @@
 // with PLUGINLAB_TEST_PLUGIN_CRASHES_IN_PROCESS=1 it crashes in processBlock (scanning and loading work).
 // PLUGINLAB_TEST_PLUGIN_DELAY_SAMPLES=N delays the audio by N samples; PLUGINLAB_TEST_PLUGIN_REPORTED_LATENCY=M is the latency it tells the
 // host (a plugin whose reported latency is wrong: the engine must measure it).
+// PLUGINLAB_TEST_PLUGIN_FIR_TAPS=N (odd) filters with a symmetric (linear phase) FIR of N taps: pre-ringing before the peak.
+// PLUGINLAB_TEST_PLUGIN_BLOCK_MODE=1 smooths the gain once per block (half the way to the target per block: the transient depends on the
+// block size, the steady state does not); =2 a one-pole low-pass whose state is reset at every block (a fault: depends on the block size).
 class TestPluginProcessor : public juce::AudioProcessor
 {
 public:
@@ -48,6 +51,10 @@ private:
     // the delay line of the audio (only used if the plugin delays the audio)
     std::vector<std::vector<float>> m_delayLines;
     int m_delayPosition = 0;
+    float m_smoothedGain = 1.0f;
+    std::vector<float> m_firCoefficients;
+    std::vector<std::vector<float>> m_firHistory;
+    int m_firPosition = 0;
 
     juce::AudioParameterFloat* m_gain = nullptr;
     juce::AudioParameterFloat* m_frequency = nullptr;

@@ -74,6 +74,8 @@ add_test(NAME PluginLabHostFingerprint
         -DPLUGIN_FILE=${PLUGINLAB_TEST_PLUGIN_DIR}/PluginLabTestGain.vst3
         -DREPORT_FILE=${CMAKE_CURRENT_BINARY_DIR}/host_fingerprint.md
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostFingerprint.cmake)
+# the measurement reads its settings from this file, not from the user's
+set_tests_properties(PluginLabHostFingerprint PROPERTIES ENVIRONMENT "PLUGINLAB_FINGERPRINT_SETTINGS=${CMAKE_CURRENT_BINARY_DIR}/fingerprint_settings.json")
 
 # The loader plugin is self-contained: its bundle holds the scanner (found next to the plugin binary when the plugin runs in a DAW).
 add_test(NAME PluginLabLoaderBundleHasScanner

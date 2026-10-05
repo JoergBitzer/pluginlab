@@ -15,6 +15,9 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
     {
         return false;
     }
+    juce::String warning;
+    const pluginlab::engine::FingerprintSettings settings =
+        pluginlab::engine::FingerprintSettings::loadOrCreate(pluginlab::engine::FingerprintSettings::getDefaultFile(), warning);
     juce::String report;
     for (const juce::PluginDescription& description : scan.descriptions)
     {
@@ -22,7 +25,9 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
         {
             continue;
         }
-        report += pluginlab::engine::createReport(pluginlab::engine::measureFingerprint(formatManager, description)) + "\n";
+        pluginlab::engine::PluginFingerprint fingerprint = pluginlab::engine::measureFingerprint(formatManager, description, settings);
+        fingerprint.settingsWarning = warning;
+        report += pluginlab::engine::createReport(fingerprint) + "\n";
     }
     if (report.isEmpty())
     {

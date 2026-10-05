@@ -65,6 +65,21 @@ inline juce::File getEqPrepareFaultPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestEqPrepare.vst3");
 }
 
+inline juce::File getLinearPhasePlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestLinearPhase.vst3");
+}
+
+inline juce::File getBlockSmoothingPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestBlockSmoothing.vst3");
+}
+
+inline juce::File getBlockFaultPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestBlockFault.vst3");
+}
+
 inline juce::File getCrashPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestCrash.vst3");
