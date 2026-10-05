@@ -15,6 +15,8 @@
 // PLUGINLAB_TEST_PLUGIN_FIR_TAPS=N (odd) filters with a symmetric (linear phase) FIR of N taps: pre-ringing before the peak.
 // PLUGINLAB_TEST_PLUGIN_BLOCK_MODE=1 smooths the gain once per block (half the way to the target per block: the transient depends on the
 // block size, the steady state does not); =2 a one-pole low-pass whose state is reset at every block (a fault: depends on the block size).
+// PLUGINLAB_TEST_PLUGIN_STEREO_MODE=1 cross feed (R += L / 2); =2 the gain is a width control (acts on L - R only).
+// PLUGINLAB_TEST_PLUGIN_SIDECHAIN=1 has a stereo side-chain input bus that is on by default.
 class TestPluginProcessor : public juce::AudioProcessor
 {
 public:
@@ -48,6 +50,8 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
 private:
+    static BusesProperties makeBuses();
+
     // the delay line of the audio (only used if the plugin delays the audio)
     std::vector<std::vector<float>> m_delayLines;
     int m_delayPosition = 0;

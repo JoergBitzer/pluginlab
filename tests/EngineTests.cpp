@@ -44,6 +44,7 @@ public:
         testLatencyMeasurement();
         testAlignment();
         testSwitching();
+        testSideChain();
         testOfflineRendering();
         testSessionFiles();
     }
@@ -178,6 +179,15 @@ private:
         expect(engine.addSlot(nullptr, "dry", error) == 0, error);
         expect(engine.addSlot(loadPlugin(testpaths::getLatencyPlugin()), "latency64", error) == 1, error);
         expect(engine.addSlot(loadPlugin(testpaths::getLatencyLiarPlugin()), "liar100", error) == 2, error);
+    }
+
+    void testSideChain()
+    {
+        beginTest("a plugin with a side-chain input runs in a slot (the side chain is switched off)");
+        pluginlab::engine::MeasurementEngine engine;
+        engine.prepare(kSampleRate, kBlockSize);
+        juce::String error;
+        expect(engine.addSlot(loadPlugin(testpaths::getSideChainPlugin()), "side chain", error) == 0, error);
     }
 
     static int findPeak(const juce::AudioBuffer<float>& buffer)

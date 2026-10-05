@@ -12,7 +12,11 @@ class ChannelAdapter
 public:
     // The channel count the plugin should run with in an engine with this many channels: the engine's own if the plugin supports it,
     // else stereo, else mono. Sets that layout on the plugin. Returns 0 if the plugin supports none of them.
+    // Other buses (side chain) are switched off when the plugin allows it.
     static int chooseLayout(juce::AudioPluginInstance& instance, int outerChannels);
+
+    // The channels the buffer of processBlock must have with the layout that is set (more than the main bus when a side chain stays on).
+    static int getProcessingChannels(const juce::AudioPluginInstance& instance);
 
     void prepare(int outerChannels, int pluginChannels, int maxBlockSize);
 

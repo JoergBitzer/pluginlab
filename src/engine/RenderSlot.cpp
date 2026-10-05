@@ -40,6 +40,11 @@ bool RenderSlot::prepare(double sampleRate, int maxBlockSize, int engineChannels
             error = m_name + " runs neither with mono nor with stereo audio";
             return false;
         }
+        if (ChannelAdapter::getProcessingChannels(instance) > m_pluginChannels)
+        {
+            error = m_name + " needs a side-chain input (or other extra channels) that cannot be switched off: not supported yet";
+            return false;
+        }
         m_latency = measureLatency(instance, sampleRate, maxBlockSize, m_pluginChannels);
     }
     m_adapter.prepare(engineChannels, m_pluginChannels, maxBlockSize);

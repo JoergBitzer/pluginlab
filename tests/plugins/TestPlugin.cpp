@@ -31,10 +31,19 @@ static const juce::AudioChannelSet kDefaultChannelSet = juce::AudioChannelSet::m
 static const juce::AudioChannelSet kDefaultChannelSet = juce::AudioChannelSet::stereo();
 #endif
 
+// the buses: main in and out, and with PLUGINLAB_TEST_PLUGIN_SIDECHAIN a stereo side-chain input that is on by default (it can be switched off)
+TestPluginProcessor::BusesProperties TestPluginProcessor::makeBuses()
+{
+    BusesProperties buses =
+        BusesProperties().withInput("Input", kDefaultChannelSet, true).withOutput("Output", kDefaultChannelSet, true);
+#if PLUGINLAB_TEST_PLUGIN_SIDECHAIN
+    buses = buses.withInput("Sidechain", juce::AudioChannelSet::stereo(), true);
+#endif
+    return buses;
+}
+
 TestPluginProcessor::TestPluginProcessor()
-    : juce::AudioProcessor(BusesProperties()
-                               .withInput("Input", kDefaultChannelSet, true)
-                               .withOutput("Output", kDefaultChannelSet, true))
+    : juce::AudioProcessor(makeBuses())
 {
 #if PLUGINLAB_TEST_PLUGIN_CRASHES
     // a plugin that crashes when it is created: scanning it must not take the host down
@@ -98,6 +107,14 @@ bool TestPluginProcessor::isBusesLayoutSupported(const BusesLayout& layouts) con
 {
     const juce::AudioChannelSet& outputSet = layouts.getMainOutputChannelSet();
     const bool outputIsMonoOrStereo = outputSet == juce::AudioChannelSet::mono() || outputSet == juce::AudioChannelSet::stereo();
+    if (layouts.inputBuses.size() > 1)
+    {
+        const juce::AudioChannelSet& sideChain = layouts.inputBuses[1];
+        if (! sideChain.isDisabled() && sideChain != juce::AudioChannelSet::stereo())
+        {
+            return false;
+        }
+    }
 #if PLUGINLAB_TEST_PLUGIN_MONO_ONLY
     return outputSet == juce::AudioChannelSet::mono() && layouts.getMainInputChannelSet() == outputSet;
 #else
@@ -122,10 +139,38 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     m_smoothedGain += (gain - m_smoothedGain) * kSmoothingPerBlock;
     gain = m_smoothedGain;
 #endif
+    const int mainChannels = getMainBusNumOutputChannels();
+#if PLUGINLAB_TEST_PLUGIN_STEREO_MODE == 2
+    // a width control: the gain acts on the side signal (L - R) only; with L = R it does nothing
+    if (! m_bypass->get() && mainChannels == 2)
+    {
+        float* left = buffer.getWritePointer(0);
+        float* right = buffer.getWritePointer(1);
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            const float mid = 0.5f * (left[sample] + right[sample]);
+            const float side = 0.5f * (left[sample] - right[sample]) * gain;
+            left[sample] = mid + side;
+            right[sample] = mid - side;
+        }
+    }
+#else
     if (! m_bypass->get())
     {
-        buffer.applyGain(gain);
+        for (int channel = 0; channel < mainChannels; ++channel)
+        {
+            buffer.applyGain(channel, 0, buffer.getNumSamples(), gain);
+        }
     }
+#endif
+#if PLUGINLAB_TEST_PLUGIN_STEREO_MODE == 1
+    // cross feed: half of the left channel is added to the right one
+    constexpr float kCrossFeed = 0.5f;
+    if (mainChannels == 2)
+    {
+        buffer.addFrom(1, 0, buffer, 0, 0, buffer.getNumSamples(), kCrossFeed);
+    }
+#endif
 
 #if PLUGINLAB_TEST_PLUGIN_BLOCK_MODE == 2
     // the fault: the state of the low-pass starts from zero in every block

@@ -1,7 +1,7 @@
 {
   "plugin": "Multi-Q",
   "identifier": "VST3-Multi-Q-cfb5dc60-fc4fef77",
-  "measured": "2026-10-05 22:38",
+  "measured": "2026-10-05 23:23",
   "summary": [
     {
       "key": "loads",
@@ -11,16 +11,37 @@
       "good": true
     },
     {
-      "key": "channels",
-      "test": "channel layouts (main bus in = out)",
+      "key": "layouts",
+      "test": "main-bus layouts accepted",
       "result": "mono, stereo",
+      "detail": "measured with 2 channel(s)",
+      "good": true
+    },
+    {
+      "key": "sideChain",
+      "test": "side-chain input (more than one input bus)",
+      "result": "no",
       "detail": "",
+      "good": true
+    },
+    {
+      "key": "midi",
+      "test": "MIDI",
+      "result": "none",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "coupling",
+      "test": "channels independent (one input driven, the other silent)",
+      "result": "no",
+      "detail": "L to R: -0.1 dB re the driven channel (-28.4 dBFS), R to L: -0.2 dB re the driven channel (-34.4 dBFS)",
       "good": true
     },
     {
       "key": "parameters",
       "test": "parameters / changing the audio",
-      "result": "191 / 42",
+      "result": "191 / 47",
       "detail": "",
       "good": true
     },
@@ -91,7 +112,7 @@
       "key": "silence",
       "test": "digital silence in gives digital silence out",
       "result": "no",
-      "detail": "peak -149.2 dBFS",
+      "detail": "peak -146.4 dBFS",
       "good": false
     }
   ]

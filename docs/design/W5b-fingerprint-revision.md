@@ -139,3 +139,8 @@ Yes
   legend and the findings follow; `PluginLabHost --fingerprint` writes them as `<report>.json`; the Developer page shows them as columns (orange = worth a look, tooltip =
   the number) and puts the buttons and the state of the report first. Tests: summary of the gain plugin all good, the latency liar "0 / 100" flagged, JSON round trip,
   CTest checks the JSON file. The time-invariance result (R6) and the channel coupling (R4) are added to the summary with those steps.
+- **R4 done (0.15.0, 2026-10-06).** Bus table and accepted layouts (mono, stereo, mono in / stereo out, LCR, quad, 5.1, 7.1, ambisonics 1st order), side chain, MIDI, instrument;
+  `chooseLayout` switches other buses (side chain) off when possible (also for the engine and the loader, which refuse a plugin whose side chain must stay on); signals with
+  several channels: noise L != R for all measurements, noise L = R as second signal of the parameter scan (two columns), all output channels compared (the worst channel is
+  named); channel coupling at the setting B. New test plugins Cross Feed, Width, Side Chain. Checked on real plugins: ZL Equalizer 2 is measurable now (side chain "Aux"
+  switched off); BL-StereoWidth: Width, WidthLimit, BassToMono and MonoOut change the audio only with L != R, the coupling is L to R -6.7 dB, R to L -22 dB.

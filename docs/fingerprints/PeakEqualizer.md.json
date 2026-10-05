@@ -1,7 +1,7 @@
 {
   "plugin": "PeakEqualizer",
   "identifier": "VST3-PeakEqualizer-7ceb86f0-9e8d6ab0",
-  "measured": "2026-10-05 22:38",
+  "measured": "2026-10-05 23:22",
   "summary": [
     {
       "key": "loads",
@@ -11,10 +11,31 @@
       "good": true
     },
     {
-      "key": "channels",
-      "test": "channel layouts (main bus in = out)",
+      "key": "layouts",
+      "test": "main-bus layouts accepted",
       "result": "mono, stereo",
+      "detail": "measured with 2 channel(s)",
+      "good": true
+    },
+    {
+      "key": "sideChain",
+      "test": "side-chain input (more than one input bus)",
+      "result": "no",
       "detail": "",
+      "good": true
+    },
+    {
+      "key": "midi",
+      "test": "MIDI",
+      "result": "none",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "coupling",
+      "test": "channels independent (one input driven, the other silent)",
+      "result": "yes",
+      "detail": "L to R: silent, R to L: silent",
       "good": true
     },
     {

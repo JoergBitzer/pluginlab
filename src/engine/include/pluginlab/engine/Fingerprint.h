@@ -15,6 +15,7 @@ struct Difference
     double relativeDb = -200.0;
     double absoluteDbfs = -200.0;
     bool referenceSilent = false;
+    int channel = 0;          // the output channel with the largest difference (all channels are compared)
 };
 
 struct ParameterFingerprint
@@ -27,8 +28,26 @@ struct ParameterFingerprint
     int numSteps = 0;
     bool automatable = false;
     bool changesTheAudio = false; // moving it to the low or the high test position changes the output of noise
-    Difference change;            // the larger of the two changes
+    Difference change;            // the larger of the changes (both test signals)
+    Difference changeSame;        // with the same noise on all channels (L = R)
+    Difference changeDifferent;   // with different noise on the channels (L != R; only for plugins with more than one channel)
     juce::String measuredWith;    // "defaults" (first pass) or "the others at <high>" (second pass)
+};
+
+// A bus of the plugin as it is created (before the host chooses a layout)
+struct BusFingerprint
+{
+    bool isInput = true;
+    int index = 0;
+    juce::String name;
+    juce::String defaultLayout;   // the channel set, "disabled" if the bus is off
+};
+
+// Whether a main-bus layout is accepted (in = out, or mono in / stereo out); other buses switched off if the plugin allows it
+struct LayoutFingerprint
+{
+    juce::String name;
+    bool accepted = false;
 };
 
 // The latency at one sample rate
@@ -75,6 +94,19 @@ struct PluginFingerprint
     juce::String message;
     bool supportsMono = false;
     bool supportsStereo = false;
+    int measuredChannels = 0;                 // the main-bus channels the measurement runs with (2 if the plugin takes stereo, else 1)
+    std::vector<BusFingerprint> buses;
+    std::vector<LayoutFingerprint> layouts;
+    bool hasSideChain = false;                // more than one input bus
+    bool acceptsMidi = false;
+    bool producesMidi = false;
+    bool isInstrument = false;
+    // Channel coupling (only with two channels): one input channel driven, the other silent: the output of the silent one relative to the
+    // output of the driven one, at the setting B
+    bool couplingMeasured = false;
+    Difference couplingLeftToRight;
+    Difference couplingRightToLeft;
+    bool channelsIndependent = true;
     std::vector<ParameterFingerprint> parameters;
     int numberOfParameters = 0;               // all of the plugin (only the first settings.maximumParameters are examined)
     std::vector<int> reactingParameters;      // indices of the parameters that change the audio

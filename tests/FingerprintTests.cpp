@@ -79,6 +79,39 @@ public:
         expect(pluginlab::engine::parseSummaryJson("not json").empty());
         logMessage(report);
 
+        beginTest("channels: the gain plugin takes mono and stereo, not surround; its channels are independent; no side chain");
+        expectEquals(gain.measuredChannels, 2);
+        for (const pluginlab::engine::LayoutFingerprint& layout : gain.layouts)
+        {
+            const bool expected = layout.name == "mono" || layout.name == "stereo";
+            expect(layout.accepted == expected, layout.name);
+        }
+        expect(! gain.hasSideChain);
+        expect(gain.couplingMeasured && gain.channelsIndependent);
+
+        beginTest("channels: cross feed is found (R gets half of L: -6 dB), a width control reacts only with L != R, a side chain is listed and switched off");
+        const pluginlab::engine::PluginFingerprint crossFeed = measure(testpaths::getCrossFeedPlugin());
+        expect(crossFeed.couplingMeasured && ! crossFeed.channelsIndependent, "the cross feed must be found");
+        expectWithinAbsoluteError(crossFeed.couplingLeftToRight.relativeDb, -6.02, 0.1);
+        expect(crossFeed.couplingRightToLeft.relativeDb < -100.0, "nothing goes from R to L");
+        const pluginlab::engine::PluginFingerprint width = measure(testpaths::getWidthPlugin());
+        expect(width.parameters[0].changesTheAudio, "the width gain changes the audio with L != R");
+        expect(width.parameters[0].changeSame.relativeDb < -80.0, "with L = R the width does nothing: " + juce::String(width.parameters[0].changeSame.relativeDb));
+        expect(width.parameters[0].changeDifferent.relativeDb > -80.0);
+        const pluginlab::engine::PluginFingerprint sideChain = measure(testpaths::getSideChainPlugin());
+        expect(sideChain.loaded, sideChain.message);
+        expect(sideChain.hasSideChain);
+        bool listed = false;
+        for (const pluginlab::engine::BusFingerprint& bus : sideChain.buses)
+        {
+            listed = listed || (bus.isInput && bus.index == 1 && bus.name == "Sidechain");
+        }
+        expect(listed, "the side-chain bus must be listed");
+        expect(! sideChain.reactingParameters.empty(), "the plugin is measured with the side chain switched off");
+        const pluginlab::engine::PluginFingerprint mono = measure(testpaths::getMonoPlugin());
+        expectEquals(mono.measuredChannels, 1);
+        expect(! mono.couplingMeasured);
+
         beginTest("the plugin that reports 0 samples latency but delays by 100: the report differs from the measurement at all rates");
         const pluginlab::engine::PluginFingerprint liar = measure(testpaths::getLatencyLiarPlugin());
         for (const pluginlab::engine::RateFingerprint& rate : liar.rates)

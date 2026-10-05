@@ -80,6 +80,21 @@ inline juce::File getBlockFaultPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestBlockFault.vst3");
 }
 
+inline juce::File getCrossFeedPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestCrossFeed.vst3");
+}
+
+inline juce::File getWidthPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestWidth.vst3");
+}
+
+inline juce::File getSideChainPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestSideChain.vst3");
+}
+
 inline juce::File getCrashPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestCrash.vst3");

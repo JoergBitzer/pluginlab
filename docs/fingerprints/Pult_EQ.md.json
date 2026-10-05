@@ -1,7 +1,7 @@
 {
   "plugin": "Pult EQ",
   "identifier": "VST3-Pult EQ-c296f6c4-3fd772eb",
-  "measured": "2026-10-05 22:38",
+  "measured": "2026-10-05 23:23",
   "summary": [
     {
       "key": "loads",
@@ -11,10 +11,31 @@
       "good": true
     },
     {
-      "key": "channels",
-      "test": "channel layouts (main bus in = out)",
+      "key": "layouts",
+      "test": "main-bus layouts accepted",
       "result": "stereo",
+      "detail": "measured with 2 channel(s)",
+      "good": true
+    },
+    {
+      "key": "sideChain",
+      "test": "side-chain input (more than one input bus)",
+      "result": "no",
       "detail": "",
+      "good": true
+    },
+    {
+      "key": "midi",
+      "test": "MIDI",
+      "result": "none",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "coupling",
+      "test": "channels independent (one input driven, the other silent)",
+      "result": "yes",
+      "detail": "L to R: -137.2 dB re the driven channel (-138.5 dBFS), R to L: -137.2 dB re the driven channel (-138.5 dBFS)",
       "good": true
     },
     {
@@ -63,7 +84,7 @@
       "key": "blockSizes",
       "test": "block size independent (steady state)",
       "result": "yes",
-      "detail": "largest at 1024: -142.5 dB / -143.6 dBFS",
+      "detail": "largest at 32: -142.4 dB / -143.5 dBFS",
       "good": true
     },
     {

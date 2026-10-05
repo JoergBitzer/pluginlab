@@ -4,21 +4,59 @@
 
 namespace pluginlab::engine
 {
+// The main buses get the candidate layout. Other buses (a side-chain input, extra outputs) are switched off if the plugin allows it,
+// else they keep their default layout (then the plugin needs more channels in its buffer: getProcessingChannels()).
 int ChannelAdapter::chooseLayout(juce::AudioPluginInstance& instance, int outerChannels)
 {
     const std::vector<juce::AudioChannelSet> candidates = {
         juce::AudioChannelSet::canonicalChannelSet(outerChannels), juce::AudioChannelSet::stereo(), juce::AudioChannelSet::mono()};
+    juce::AudioProcessor::BusesLayout base = instance.getBusesLayout();
+    if (base.inputBuses.isEmpty() || base.outputBuses.isEmpty())
+    {
+        base.inputBuses.clear();
+        base.outputBuses.clear();
+        base.inputBuses.add(juce::AudioChannelSet::disabled());
+        base.outputBuses.add(juce::AudioChannelSet::disabled());
+    }
     for (const juce::AudioChannelSet& candidate : candidates)
     {
-        juce::AudioProcessor::BusesLayout layout;
-        layout.inputBuses.add(candidate);
-        layout.outputBuses.add(candidate);
-        if (instance.checkBusesLayoutSupported(layout) && instance.setBusesLayout(layout))
+        for (const bool keepOtherBuses : {false, true})
         {
-            return candidate.size();
+            juce::AudioProcessor::BusesLayout layout = base;
+            for (int bus = 0; bus < layout.inputBuses.size(); ++bus)
+            {
+                if (bus == 0)
+                {
+                    layout.inputBuses.getReference(bus) = candidate;
+                }
+                else if (! keepOtherBuses)
+                {
+                    layout.inputBuses.getReference(bus) = juce::AudioChannelSet::disabled();
+                }
+            }
+            for (int bus = 0; bus < layout.outputBuses.size(); ++bus)
+            {
+                if (bus == 0)
+                {
+                    layout.outputBuses.getReference(bus) = candidate;
+                }
+                else if (! keepOtherBuses)
+                {
+                    layout.outputBuses.getReference(bus) = juce::AudioChannelSet::disabled();
+                }
+            }
+            if (instance.checkBusesLayoutSupported(layout) && instance.setBusesLayout(layout))
+            {
+                return candidate.size();
+            }
         }
     }
     return 0;
+}
+
+int ChannelAdapter::getProcessingChannels(const juce::AudioPluginInstance& instance)
+{
+    return juce::jmax(instance.getTotalNumInputChannels(), instance.getTotalNumOutputChannels());
 }
 
 void ChannelAdapter::prepare(int outerChannels, int pluginChannels, int maxBlockSize)

@@ -2,14 +2,17 @@
 
 - file: `/home/bitzer/.vst3/EQoder.vst3`
 - format: VST3, manufacturer: Jade Hochschule, version: 0.0.1
-- measured: 2026-10-05 22:38
+- measured: 2026-10-05 23:22
 - channels: mono yes, stereo yes
 
 ## Summary
 | test | result | detail |
 |---|---|---|
 | loads and runs with mono or stereo | yes |  |
-| channel layouts (main bus in = out) | mono, stereo |  |
+| main-bus layouts accepted | mono, stereo | measured with 2 channel(s) |
+| side-chain input (more than one input bus) | no |  |
+| MIDI | in |  |
+| channels independent (one input driven, the other silent) | yes | L to R: silent, R to L: silent |
 | parameters / changing the audio | 2099 / 2 |  |
 | latency at 48 kHz, reported / measured (samples) | **0 / 95** | 44.1 kHz: 0 / 87, 48.0 kHz: 0 / 95, 96.0 kHz: 0 / 191 |
 | reported latency = measured at all rates | **no** | 44.1 kHz: 0 / 87, 48.0 kHz: 0 / 95, 96.0 kHz: 0 / 191 |
@@ -31,75 +34,97 @@ How to read the differences: every difference is given as **relative / absolute*
 - Latency at 48000 Hz: the plugin reports 0 samples, measured 95 samples
 - Latency at 96000 Hz: the plugin reports 0 samples, measured 191 samples
 
-## Parameters
-Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 2099 parameters, the first 64 examined.
+## Channels and buses
+The buses of the plugin as it is created, the main-bus layouts it accepts (other buses switched off where possible), MIDI, and the coupling of the channels at the setting B: one input channel gets noise, the other silence; the output of the silent channel relative to the output of the driven one (below -100 dB = independent channels). The measurement runs with 2 channel(s); other channels of the plugin get silence.
 
-| no. | name | min | default | max | steps | automatable | changes the audio | measured with |
-|---|---|---|---|---|---|---|---|---|
-| 0 | Number of FilterUnits | 1.000000000000000000000000000000 | 6.000000000000000000000000000000 | 24.00000000000000000000000000000 | continuous | yes | no |  |
-| 1 | Number of Filters | 1.000000000000000000000000000000 | 7.000000000000000000000000000000 | 20.00000000000000000000000000000 | continuous | yes | no |  |
-| 2 | Gain at f0 | 0.000000000000000000000000000000 | 6.000000000000000000000000000000 | 20.00000000000000000000000000000 | continuous | yes | no |  |
-| 3 | Gain at last | 0.000000000000000000000000000000 | 6.000000000000000000000000000000 | 20.00000000000000000000000000000 | continuous | yes | no |  |
-| 4 | Form of Gains | 0.000000000000000000000000000000 | 1.000000000000000000000000000000 | 2.000000000000000000000000000000 | continuous | yes | no |  |
-| 5 | Q | 0.300000000000000044408920985006 | 20.00000000000000000000000000000 | 40.00000000000000000000000000000 | continuous | yes | no |  |
-| 6 | BWSpread | 0.300000000000000044408920985006 | 1.000000000000000000000000000000 | 4.000000000000000000000000000000 | continuous | yes | no |  |
-| 7 | FreqSpread | -2.06250000000000000000000000000 | 0.000000000000000000000000000000 | 2.125000000000000000000000000000 | continuous | yes | no |  |
-| 8 | OutGain | -89.7500000000000000000000000000 | 0.000000000000000000000000000000 | 10.00000000000000000000000000000 | continuous | yes | -0.0 dB / -24.8 dBFS | defaults |
-| 9 | SwitchParallel | 0.000000000000000000000000000000 | 0.000000000000000000000000000000 | 1.000000000000000000000000000000 | continuous | yes | no |  |
-| 10 | EnvAttack | 0.100000000000000005551115123125 | 150.0000000000000000000000000000 | 10000.00000000000000000000000000 | continuous | yes | no |  |
-| 11 | EnvDecay | 10.00000000000000000000000000000 | 150.0000000000000000000000000000 | 10000.00000000000000000000000000 | continuous | yes | no |  |
-| 12 | EnvRelease | 10.00000000000000000000000000000 | 150.0000000000000000000000000000 | 10000.00000000000000000000000000 | continuous | yes | no |  |
-| 13 | EnvDelay | 0.000000000000000000000000000000 | 0.000000000000000000000000000000 | 250.0000000000000000000000000000 | continuous | yes | no |  |
-| 14 | EnvHold | 0.000000000000000000000000000000 | 0.000000000000000000000000000000 | 250.0000000000000000000000000000 | continuous | yes | no |  |
-| 15 | EnvSustainLevel | 0.000000000000000000000000000000 | 1.000000000000000000000000000000 | 1.000000000000000000000000000000 | continuous | yes | no |  |
-| 16 | EnvLevel | 0.000000000000000000000000000000 | 1.000000000000000000000000000000 | 1.000000000000000000000000000000 | continuous | yes | no |  |
-| 17 | EnvInvert | Off | Off | On | switch | yes | no |  |
-| 18 | Bypass | Off | Off | On | switch | yes | 3.0 dB / -21.8 dBFS | defaults |
-| 19 | MIDI CC 0|0 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 20 | MIDI CC 0|1 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 21 | MIDI CC 0|2 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 22 | MIDI CC 0|3 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 23 | MIDI CC 0|4 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 24 | MIDI CC 0|5 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 25 | MIDI CC 0|6 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 26 | MIDI CC 0|7 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 27 | MIDI CC 0|8 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 28 | MIDI CC 0|9 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 29 | MIDI CC 0|10 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 30 | MIDI CC 0|11 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 31 | MIDI CC 0|12 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 32 | MIDI CC 0|13 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 33 | MIDI CC 0|14 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 34 | MIDI CC 0|15 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 35 | MIDI CC 0|16 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 36 | MIDI CC 0|17 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 37 | MIDI CC 0|18 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 38 | MIDI CC 0|19 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 39 | MIDI CC 0|20 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 40 | MIDI CC 0|21 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 41 | MIDI CC 0|22 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 42 | MIDI CC 0|23 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 43 | MIDI CC 0|24 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 44 | MIDI CC 0|25 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 45 | MIDI CC 0|26 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 46 | MIDI CC 0|27 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 47 | MIDI CC 0|28 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 48 | MIDI CC 0|29 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 49 | MIDI CC 0|30 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 50 | MIDI CC 0|31 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 51 | MIDI CC 0|32 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 52 | MIDI CC 0|33 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 53 | MIDI CC 0|34 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 54 | MIDI CC 0|35 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 55 | MIDI CC 0|36 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 56 | MIDI CC 0|37 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 57 | MIDI CC 0|38 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 58 | MIDI CC 0|39 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 59 | MIDI CC 0|40 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 60 | MIDI CC 0|41 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 61 | MIDI CC 0|42 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 62 | MIDI CC 0|43 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
-| 63 | MIDI CC 0|44 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no |  |
+| bus | name | default layout |
+|---|---|---|
+| input 0 | Input | Stereo |
+| output 0 | Output | Stereo |
+
+| layout | accepted |
+|---|---|
+| mono | yes |
+| stereo | yes |
+| mono in, stereo out | no |
+| LCR | no |
+| quad | no |
+| 5.1 | no |
+| 7.1 | no |
+| ambisonics 1st order | no |
+
+- side chain: no; MIDI in: yes, out: no; instrument: no
+- coupling L to R: silent, R to L: silent: channels independent yes
+
+## Parameters
+Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 2099 parameters, the first 64 examined. Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a width or mid/side control reacts only to this one).
+
+| no. | name | min | default | max | steps | automatable | changes (L = R) | changes (L != R) | measured with |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | Number of FilterUnits | 1.000000000000000000000000000000 | 6.000000000000000000000000000000 | 24.00000000000000000000000000000 | continuous | yes | no | no |  |
+| 1 | Number of Filters | 1.000000000000000000000000000000 | 7.000000000000000000000000000000 | 20.00000000000000000000000000000 | continuous | yes | no | no |  |
+| 2 | Gain at f0 | 0.000000000000000000000000000000 | 6.000000000000000000000000000000 | 20.00000000000000000000000000000 | continuous | yes | no | no |  |
+| 3 | Gain at last | 0.000000000000000000000000000000 | 6.000000000000000000000000000000 | 20.00000000000000000000000000000 | continuous | yes | no | no |  |
+| 4 | Form of Gains | 0.000000000000000000000000000000 | 1.000000000000000000000000000000 | 2.000000000000000000000000000000 | continuous | yes | no | no |  |
+| 5 | Q | 0.300000000000000044408920985006 | 20.00000000000000000000000000000 | 40.00000000000000000000000000000 | continuous | yes | no | no |  |
+| 6 | BWSpread | 0.300000000000000044408920985006 | 1.000000000000000000000000000000 | 4.000000000000000000000000000000 | continuous | yes | no | no |  |
+| 7 | FreqSpread | -2.06250000000000000000000000000 | 0.000000000000000000000000000000 | 2.125000000000000000000000000000 | continuous | yes | no | no |  |
+| 8 | OutGain | -89.7500000000000000000000000000 | 0.000000000000000000000000000000 | 10.00000000000000000000000000000 | continuous | yes | -0.0 dB / -24.8 dBFS | -0.0 dB / -24.8 dBFS | defaults |
+| 9 | SwitchParallel | 0.000000000000000000000000000000 | 0.000000000000000000000000000000 | 1.000000000000000000000000000000 | continuous | yes | no | no |  |
+| 10 | EnvAttack | 0.100000000000000005551115123125 | 150.0000000000000000000000000000 | 10000.00000000000000000000000000 | continuous | yes | no | no |  |
+| 11 | EnvDecay | 10.00000000000000000000000000000 | 150.0000000000000000000000000000 | 10000.00000000000000000000000000 | continuous | yes | no | no |  |
+| 12 | EnvRelease | 10.00000000000000000000000000000 | 150.0000000000000000000000000000 | 10000.00000000000000000000000000 | continuous | yes | no | no |  |
+| 13 | EnvDelay | 0.000000000000000000000000000000 | 0.000000000000000000000000000000 | 250.0000000000000000000000000000 | continuous | yes | no | no |  |
+| 14 | EnvHold | 0.000000000000000000000000000000 | 0.000000000000000000000000000000 | 250.0000000000000000000000000000 | continuous | yes | no | no |  |
+| 15 | EnvSustainLevel | 0.000000000000000000000000000000 | 1.000000000000000000000000000000 | 1.000000000000000000000000000000 | continuous | yes | no | no |  |
+| 16 | EnvLevel | 0.000000000000000000000000000000 | 1.000000000000000000000000000000 | 1.000000000000000000000000000000 | continuous | yes | no | no |  |
+| 17 | EnvInvert | Off | Off | On | switch | yes | no | no |  |
+| 18 | Bypass | Off | Off | On | switch | yes | 3.0 dB / -21.8 dBFS | 3.0 dB / -21.8 dBFS | defaults |
+| 19 | MIDI CC 0|0 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 20 | MIDI CC 0|1 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 21 | MIDI CC 0|2 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 22 | MIDI CC 0|3 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 23 | MIDI CC 0|4 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 24 | MIDI CC 0|5 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 25 | MIDI CC 0|6 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 26 | MIDI CC 0|7 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 27 | MIDI CC 0|8 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 28 | MIDI CC 0|9 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 29 | MIDI CC 0|10 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 30 | MIDI CC 0|11 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 31 | MIDI CC 0|12 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 32 | MIDI CC 0|13 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 33 | MIDI CC 0|14 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 34 | MIDI CC 0|15 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 35 | MIDI CC 0|16 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 36 | MIDI CC 0|17 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 37 | MIDI CC 0|18 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 38 | MIDI CC 0|19 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 39 | MIDI CC 0|20 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 40 | MIDI CC 0|21 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 41 | MIDI CC 0|22 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 42 | MIDI CC 0|23 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 43 | MIDI CC 0|24 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 44 | MIDI CC 0|25 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 45 | MIDI CC 0|26 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 46 | MIDI CC 0|27 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 47 | MIDI CC 0|28 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 48 | MIDI CC 0|29 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 49 | MIDI CC 0|30 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 50 | MIDI CC 0|31 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 51 | MIDI CC 0|32 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 52 | MIDI CC 0|33 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 53 | MIDI CC 0|34 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 54 | MIDI CC 0|35 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 55 | MIDI CC 0|36 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 56 | MIDI CC 0|37 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 57 | MIDI CC 0|38 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 58 | MIDI CC 0|39 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 59 | MIDI CC 0|40 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 60 | MIDI CC 0|41 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 61 | MIDI CC 0|42 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 62 | MIDI CC 0|43 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
+| 63 | MIDI CC 0|44 | 0.0000 | 0.0000 | 1.0000 | continuous | no | no | no |  |
 
 ## Latency at three sample rates
 An impulse (1.0 on all channels) after 4096 samples of silence, the plugin at its default parameters, 1.00 s watched. Measured = position of the largest output sample after the impulse. Reported = getLatencySamples() right after prepareToPlay and after the audio. Output before the peak: the largest output between the impulse and the peak, relative to the peak (a filter with pre-ringing, a look-ahead). Output before the impulse: signal the plugin makes of its own.
@@ -115,10 +140,10 @@ Four ways of giving the plugin its parameters, each with the settings A (default
 
 | way | repeatable | reacts | as after a change | result | A again (2nd / 3rd) | B against A | A, B against the references |
 |---|---|---|---|---|---|---|---|
-| one instance, parameters set after prepare (stream) | yes | yes | yes | ok | identical ; identical | -1.7 dB / -26.5 dBFS | identical ; identical |
-| new instance per render, parameters set before prepare | yes | yes | yes | ok | identical ; identical | -1.7 dB / -26.5 dBFS | identical ; identical |
-| new instance per render, parameters set after prepare | yes | yes | yes | ok | identical ; identical | -1.7 dB / -26.5 dBFS | identical ; identical |
-| new instance per render, after prepare every parameter first set to another value, then the target | yes | yes | yes | ok | identical ; identical | -1.7 dB / -26.5 dBFS | identical ; identical |
+| one instance, parameters set after prepare (stream) | yes | yes | yes | ok | identical ; identical | -1.7 dB / -26.5 dBFS (channel 2) | identical ; identical |
+| new instance per render, parameters set before prepare | yes | yes | yes | ok | identical ; identical | -1.7 dB / -26.5 dBFS (channel 2) | identical ; identical |
+| new instance per render, parameters set after prepare | yes | yes | yes | ok | identical ; identical | -1.7 dB / -26.5 dBFS (channel 2) | identical ; identical |
+| new instance per render, after prepare every parameter first set to another value, then the target | yes | yes | yes | ok | identical ; identical | -1.7 dB / -26.5 dBFS (channel 2) | identical ; identical |
 
 Most careful way that works: new instance per render, after prepare every parameter first set to another value, then the target.
 
@@ -149,6 +174,7 @@ Most careful way that works: new instance per render, after prepare every parame
   "sameBelowDb": -80.0,
   "blockIndependentBelowDb": -100.0,
   "silentReferenceDbfs": -150.0,
+  "couplingBelowDb": -100.0,
   "noiseLevel": 0.1,
   "settleSeconds": 0.25,
   "impulsePreDelaySamples": 4096,

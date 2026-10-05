@@ -14,6 +14,7 @@ const juce::Identifier kDifferentAboveDb("differentAboveDb");
 const juce::Identifier kSameBelowDb("sameBelowDb");
 const juce::Identifier kBlockIndependentBelowDb("blockIndependentBelowDb");
 const juce::Identifier kSilentReferenceDbfs("silentReferenceDbfs");
+const juce::Identifier kCouplingBelowDb("couplingBelowDb");
 const juce::Identifier kNoiseLevel("noiseLevel");
 const juce::Identifier kSettleSeconds("settleSeconds");
 const juce::Identifier kImpulsePreDelaySamples("impulsePreDelaySamples");
@@ -78,6 +79,7 @@ FingerprintSettings FingerprintSettings::loadOrCreate(const juce::File& file, ju
     readDouble(*object, kSameBelowDb, settings.sameBelowDb);
     readDouble(*object, kBlockIndependentBelowDb, settings.blockIndependentBelowDb);
     readDouble(*object, kSilentReferenceDbfs, settings.silentReferenceDbfs);
+    readDouble(*object, kCouplingBelowDb, settings.couplingBelowDb);
     readDouble(*object, kNoiseLevel, settings.noiseLevel);
     readDouble(*object, kSettleSeconds, settings.settleSeconds);
     readInt(*object, kImpulsePreDelaySamples, settings.impulsePreDelaySamples);
@@ -110,6 +112,7 @@ juce::String FingerprintSettings::toJson() const
     object->setProperty(kSameBelowDb, sameBelowDb);
     object->setProperty(kBlockIndependentBelowDb, blockIndependentBelowDb);
     object->setProperty(kSilentReferenceDbfs, silentReferenceDbfs);
+    object->setProperty(kCouplingBelowDb, couplingBelowDb);
     object->setProperty(kNoiseLevel, noiseLevel);
     object->setProperty(kSettleSeconds, settleSeconds);
     object->setProperty(kImpulsePreDelaySamples, impulsePreDelaySamples);

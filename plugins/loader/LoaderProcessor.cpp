@@ -183,6 +183,13 @@ bool LoaderProcessor::loadPlugin(const juce::PluginDescription& description, juc
 
     int hostedChannels = 0;
     hostedChannels = pluginlab::engine::ChannelAdapter::chooseLayout(plugin->getInstance(), getTotalNumInputChannels());
+    const bool extraChannelsStayOn = hostedChannels > 0
+                                  && pluginlab::engine::ChannelAdapter::getProcessingChannels(plugin->getInstance()) > hostedChannels;
+    if (extraChannelsStayOn)
+    {
+        errorMessage = description.name + " needs a side-chain input (or other extra channels) that cannot be switched off: not supported yet";
+        return false;
+    }
     if (hostedChannels == 0)
     {
         errorMessage = description.name + " runs neither with mono nor with stereo audio (the loader supports only these)";

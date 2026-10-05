@@ -1,7 +1,7 @@
 {
   "plugin": "WayQ",
   "identifier": "VST3-WayQ-30e8a42c-9dc5a373",
-  "measured": "2026-10-05 22:38",
+  "measured": "2026-10-05 23:23",
   "summary": [
     {
       "key": "loads",
@@ -11,16 +11,37 @@
       "good": true
     },
     {
-      "key": "channels",
-      "test": "channel layouts (main bus in = out)",
+      "key": "layouts",
+      "test": "main-bus layouts accepted",
       "result": "stereo",
+      "detail": "measured with 2 channel(s)",
+      "good": true
+    },
+    {
+      "key": "sideChain",
+      "test": "side-chain input (more than one input bus)",
+      "result": "no",
       "detail": "",
+      "good": true
+    },
+    {
+      "key": "midi",
+      "test": "MIDI",
+      "result": "none",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "coupling",
+      "test": "channels independent (one input driven, the other silent)",
+      "result": "yes",
+      "detail": "L to R: silent, R to L: -186.0 dB re the driven channel (-192.8 dBFS)",
       "good": true
     },
     {
       "key": "parameters",
       "test": "parameters / changing the audio",
-      "result": "29 / 12",
+      "result": "29 / 21",
       "detail": "",
       "good": true
     },
@@ -55,9 +76,9 @@
     {
       "key": "delivery",
       "test": "delivery of parameters (A, A, B, A): ways that work",
-      "result": "4 of 4 ways",
+      "result": "3 of 4 ways",
       "detail": "new instance per render, after prepare every parameter first set to another value, then the target",
-      "good": true
+      "good": false
     },
     {
       "key": "blockSizes",

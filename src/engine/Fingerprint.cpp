@@ -18,6 +18,7 @@ constexpr int kCompareLength = 8192;
 constexpr double kFloorDb = -200.0;
 constexpr double kTiny = 1.0e-20;
 constexpr int kReferenceSeed = 7;
+constexpr int kSecondSeed = 11;      // the second channel of the noise with L != R
 constexpr int kMaximumTextLength = 32;
 constexpr int kContinuousSteps = 0x7fffffff; // JUCE's number of steps of a continuous parameter
 constexpr int kSwitchSteps = 2;
@@ -72,12 +73,16 @@ juce::String formatDifference(const Difference& difference)
     {
         text += " (silent reference)";
     }
+    if (difference.channel > 0)
+    {
+        text += " (channel " + juce::String(difference.channel + 1) + ")";
+    }
     return text;
 }
 
-std::vector<float> makeNoise(int length, double level)
+std::vector<float> makeNoise(int length, double level, int seed)
 {
-    juce::Random random(kReferenceSeed);
+    juce::Random random(seed);
     std::vector<float> noise(static_cast<size_t>(length));
     for (float& sample : noise)
     {
@@ -86,8 +91,28 @@ std::vector<float> makeNoise(int length, double level)
     return noise;
 }
 
-// The difference of a from the reference b, over the samples from "from" to the end
-Difference compare(const std::vector<float>& a, const std::vector<float>& b, size_t from, const FingerprintSettings& settings)
+// A signal with one vector per channel. A plugin with more channels than the signal gets the last channel again.
+using Signal = std::vector<std::vector<float>>;
+
+// The same noise on every channel (L = R)
+Signal makeSameNoise(int length, double level)
+{
+    return Signal{makeNoise(length, level, kReferenceSeed)};
+}
+
+// Different, uncorrelated noise on the first two channels (L != R)
+Signal makeDifferentNoise(int length, double level)
+{
+    return Signal{makeNoise(length, level, kReferenceSeed), makeNoise(length, level, kSecondSeed)};
+}
+
+Signal makeSilence(int length)
+{
+    return Signal{std::vector<float>(static_cast<size_t>(length), 0.0f)};
+}
+
+// The difference of a from the reference b in one channel, over the samples from "from" to the end
+Difference compareChannel(const std::vector<float>& a, const std::vector<float>& b, size_t from, const FingerprintSettings& settings)
 {
     Difference result;
     const size_t length = std::min(a.size(), b.size());
@@ -130,6 +155,54 @@ double decisionValue(const Difference& difference)
         return difference.absoluteDbfs;
     }
     return difference.relativeDb;
+}
+
+// The difference of a from the reference b: every channel is compared, the channel with the largest difference is the result
+Difference compare(const Signal& a, const Signal& b, size_t from, const FingerprintSettings& settings)
+{
+    Difference largest;
+    bool first = true;
+    const size_t channels = std::min(a.size(), b.size());
+    for (size_t channel = 0; channel < channels; ++channel)
+    {
+        Difference difference = compareChannel(a[channel], b[channel], from, settings);
+        difference.channel = static_cast<int>(channel);
+        if (first || decisionValue(difference) > decisionValue(largest))
+        {
+            largest = difference;
+            first = false;
+        }
+    }
+    return largest;
+}
+
+// the level of the silent channel relative to the driven one; "nothing" (the floor) if the silent channel stays exactly silent
+double couplingDb(double silentDbfs, double drivenDbfs)
+{
+    if (silentDbfs <= kFloorDb)
+    {
+        return kFloorDb;
+    }
+    return silentDbfs - drivenDbfs;
+}
+
+// a level for the report: "silent" for exact silence
+juce::String formatLevel(double dbfs)
+{
+    if (dbfs <= kFloorDb)
+    {
+        return "silent";
+    }
+    return juce::String(dbfs, 1) + " dBFS";
+}
+
+size_t getLength(const Signal& signal)
+{
+    if (signal.empty())
+    {
+        return 0;
+    }
+    return signal.front().size();
 }
 
 bool isBelow(const Difference& difference, double threshold)
@@ -230,33 +303,44 @@ public:
         }
     }
 
-    // The first channel of the output; the input goes to all channels. Remembers whether a sample was not finite.
-    std::vector<float> process(const std::vector<float>& input)
+    // All main-bus output channels. Input channel c of the plugin gets channel c of the signal (or its last channel); further channels of
+    // the buffer (a side chain that stays on) get silence. Remembers whether an output sample was not finite.
+    Signal process(const Signal& input)
     {
-        std::vector<float> output;
-        output.reserve(input.size());
-        juce::AudioBuffer<float> buffer(m_channels, m_blockSize);
-        juce::MidiBuffer midi;
-        for (size_t start = 0; start < input.size(); start += static_cast<size_t>(m_blockSize))
+        const size_t length = getLength(input);
+        Signal output(static_cast<size_t>(m_channels));
+        for (std::vector<float>& channel : output)
         {
-            const int count = static_cast<int>(std::min(static_cast<size_t>(m_blockSize), input.size() - start));
-            juce::AudioBuffer<float> block(buffer.getArrayOfWritePointers(), m_channels, count);
+            channel.reserve(length);
+        }
+        const int bufferChannels = std::max(m_channels, ChannelAdapter::getProcessingChannels(*m_instance));
+        juce::AudioBuffer<float> buffer(bufferChannels, m_blockSize);
+        juce::MidiBuffer midi;
+        for (size_t start = 0; start < length; start += static_cast<size_t>(m_blockSize))
+        {
+            const int count = static_cast<int>(std::min(static_cast<size_t>(m_blockSize), length - start));
+            juce::AudioBuffer<float> block(buffer.getArrayOfWritePointers(), bufferChannels, count);
+            block.clear();
+            for (int channel = 0; channel < m_channels; ++channel)
+            {
+                const std::vector<float>& source = input[std::min(static_cast<size_t>(channel), input.size() - 1)];
+                for (int sample = 0; sample < count; ++sample)
+                {
+                    block.setSample(channel, sample, source[start + static_cast<size_t>(sample)]);
+                }
+            }
+            m_instance->processBlock(block, midi);
             for (int channel = 0; channel < m_channels; ++channel)
             {
                 for (int sample = 0; sample < count; ++sample)
                 {
-                    block.setSample(channel, sample, input[start + static_cast<size_t>(sample)]);
+                    const float value = block.getSample(channel, sample);
+                    if (! std::isfinite(value))
+                    {
+                        m_sawNonFinite = true;
+                    }
+                    output[static_cast<size_t>(channel)].push_back(value);
                 }
-            }
-            m_instance->processBlock(block, midi);
-            for (int sample = 0; sample < count; ++sample)
-            {
-                const float value = block.getSample(0, sample);
-                if (! std::isfinite(value))
-                {
-                    m_sawNonFinite = true;
-                }
-                output.push_back(value);
             }
         }
         return output;
@@ -269,7 +353,7 @@ public:
 
     void settle()
     {
-        process(std::vector<float>(static_cast<size_t>(m_sampleRate * m_settings.settleSeconds), 0.0f));
+        process(makeSilence(static_cast<int>(m_sampleRate * m_settings.settleSeconds)));
     }
 
 private:
@@ -299,7 +383,7 @@ public:
     // The careful way that all measurements use (most conservative first, LESSONS_LEARNED §2): a fresh instance, prepared; every parameter is
     // first set to another value and one block of noise of the reference length runs (the same input history for every block size), then
     // the setting is set; settled; then the input.
-    std::vector<float> render(double sampleRate, int blockSize, const std::vector<float>& setting, const std::vector<float>& input) const
+    Signal render(double sampleRate, int blockSize, const std::vector<float>& setting, const Signal& input) const
     {
         const std::unique_ptr<Rig> rig = make(sampleRate, blockSize);
         if (! rig->isValid())
@@ -308,14 +392,14 @@ public:
         }
         rig->prepare();
         rig->apply(makePokeValues(setting, m_settings));
-        rig->process(makeNoise(kReferenceBlock, m_settings.noiseLevel));
+        rig->process(makeDifferentNoise(kReferenceBlock, m_settings.noiseLevel));
         rig->apply(setting);
         rig->settle();
         return rig->process(input);
     }
 
     // a fresh instance, parameters set after prepare (no poke), settled, then the input
-    std::vector<float> renderAfterPrepare(double sampleRate, int blockSize, const std::vector<float>& setting, const std::vector<float>& input) const
+    Signal renderAfterPrepare(double sampleRate, int blockSize, const std::vector<float>& setting, const Signal& input) const
     {
         const std::unique_ptr<Rig> rig = make(sampleRate, blockSize);
         if (! rig->isValid())
@@ -336,13 +420,12 @@ private:
 
 // refA, refB: the output of the settings A and B reached by a change of the parameters after prepare (what the plugin does when it is
 // used the way a DAW does)
-DeliveryResult judgeDelivery(const juce::String& name, const std::vector<float>& a1, const std::vector<float>& a2, const std::vector<float>& b,
-                             const std::vector<float>& a3, const std::vector<float>& refA, const std::vector<float>& refB,
-                             const FingerprintSettings& settings)
+DeliveryResult judgeDelivery(const juce::String& name, const Signal& a1, const Signal& a2, const Signal& b, const Signal& a3, const Signal& refA,
+                             const Signal& refB, const FingerprintSettings& settings)
 {
     DeliveryResult result;
     result.name = name;
-    const size_t from = a1.size() - static_cast<size_t>(kCompareLength);
+    const size_t from = getLength(a1) - static_cast<size_t>(kCompareLength);
     result.secondA = compare(a2, a1, from, settings);
     result.thirdA = compare(a3, a1, from, settings);
     result.reaction = compare(b, a1, from, settings);
@@ -370,6 +453,71 @@ DeliveryResult judgeDelivery(const juce::String& name, const std::vector<float>&
 }
 }
 
+// the main-bus layouts that are asked for (decision of the author, W5b: the common ones in the wild)
+const juce::String kMonoName = "mono";
+const juce::String kStereoName = "stereo";
+
+std::vector<LayoutFingerprint> checkLayouts(juce::AudioPluginInstance& instance)
+{
+    struct Candidate
+    {
+        juce::String name;
+        juce::AudioChannelSet input;
+        juce::AudioChannelSet output;
+    };
+    const std::vector<Candidate> candidates = {
+        {kMonoName, juce::AudioChannelSet::mono(), juce::AudioChannelSet::mono()},
+        {kStereoName, juce::AudioChannelSet::stereo(), juce::AudioChannelSet::stereo()},
+        {"mono in, stereo out", juce::AudioChannelSet::mono(), juce::AudioChannelSet::stereo()},
+        {"LCR", juce::AudioChannelSet::createLCR(), juce::AudioChannelSet::createLCR()},
+        {"quad", juce::AudioChannelSet::quadraphonic(), juce::AudioChannelSet::quadraphonic()},
+        {"5.1", juce::AudioChannelSet::create5point1(), juce::AudioChannelSet::create5point1()},
+        {"7.1", juce::AudioChannelSet::create7point1(), juce::AudioChannelSet::create7point1()},
+        {"ambisonics 1st order", juce::AudioChannelSet::ambisonic(1), juce::AudioChannelSet::ambisonic(1)}};
+    std::vector<LayoutFingerprint> results;
+    const juce::AudioProcessor::BusesLayout base = instance.getBusesLayout();
+    for (const Candidate& candidate : candidates)
+    {
+        LayoutFingerprint result;
+        result.name = candidate.name;
+        if (! base.inputBuses.isEmpty() && ! base.outputBuses.isEmpty())
+        {
+            for (const bool keepOtherBuses : {false, true})
+            {
+                juce::AudioProcessor::BusesLayout layout = base;
+                for (int bus = 0; bus < layout.inputBuses.size(); ++bus)
+                {
+                    if (bus == 0)
+                    {
+                        layout.inputBuses.getReference(bus) = candidate.input;
+                    }
+                    else if (! keepOtherBuses)
+                    {
+                        layout.inputBuses.getReference(bus) = juce::AudioChannelSet::disabled();
+                    }
+                }
+                for (int bus = 0; bus < layout.outputBuses.size(); ++bus)
+                {
+                    if (bus == 0)
+                    {
+                        layout.outputBuses.getReference(bus) = candidate.output;
+                    }
+                    else if (! keepOtherBuses)
+                    {
+                        layout.outputBuses.getReference(bus) = juce::AudioChannelSet::disabled();
+                    }
+                }
+                result.accepted = result.accepted || instance.checkBusesLayoutSupported(layout);
+            }
+        }
+        results.push_back(result);
+    }
+    return results;
+}
+}
+
+namespace pluginlab::engine
+{
 juce::String describeSteps(int numSteps)
 {
     if (numSteps >= kContinuousSteps)
@@ -405,30 +553,50 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     }
     fingerprint.loaded = true;
 
-    // ---- layouts and parameters ----
-    for (const bool stereo : {false, true})
+    // ---- buses and layouts, from an instance as it is created ----
     {
-        juce::AudioProcessor::BusesLayout layout;
-        juce::AudioChannelSet set = juce::AudioChannelSet::mono();
-        if (stereo)
+        juce::String error;
+        const std::unique_ptr<juce::AudioPluginInstance> raw = formatManager.createPluginInstance(description, kReferenceRate, kReferenceBlock, error);
+        if (raw != nullptr)
         {
-            set = juce::AudioChannelSet::stereo();
-        }
-        layout.inputBuses.add(set);
-        layout.outputBuses.add(set);
-        if (first->get().checkBusesLayoutSupported(layout))
-        {
-            if (stereo)
+            for (const bool isInput : {true, false})
             {
-                fingerprint.supportsStereo = true;
+                for (int index = 0; index < raw->getBusCount(isInput); ++index)
+                {
+                    const juce::AudioProcessor::Bus* bus = raw->getBus(isInput, index);
+                    BusFingerprint entry;
+                    entry.isInput = isInput;
+                    entry.index = index;
+                    entry.name = bus->getName();
+                    entry.defaultLayout = bus->getCurrentLayout().getDescription();
+                    if (bus->getCurrentLayout().isDisabled())
+                    {
+                        entry.defaultLayout = "disabled";
+                    }
+                    fingerprint.buses.push_back(entry);
+                }
             }
-            else
+            fingerprint.hasSideChain = raw->getBusCount(true) > 1;
+            fingerprint.acceptsMidi = raw->acceptsMidi();
+            fingerprint.producesMidi = raw->producesMidi();
+            fingerprint.layouts = checkLayouts(*raw);
+            for (const LayoutFingerprint& layout : fingerprint.layouts)
             {
-                fingerprint.supportsMono = true;
+                if (layout.name == kMonoName && layout.accepted)
+                {
+                    fingerprint.supportsMono = true;
+                }
+                if (layout.name == kStereoName && layout.accepted)
+                {
+                    fingerprint.supportsStereo = true;
+                }
             }
         }
     }
+    fingerprint.isInstrument = description.isInstrument;
+    fingerprint.measuredChannels = first->getChannels();
 
+    // ---- parameters ----
     std::vector<float> defaults;
     const juce::Array<juce::AudioProcessorParameter*>& parameters = first->get().getParameters();
     fingerprint.numberOfParameters = parameters.size();
@@ -447,41 +615,64 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         defaults.push_back(parameter.getDefaultValue());
     }
 
-    // ---- which parameters change the audio ----
-    const std::vector<float> noise = makeNoise(kNoiseLength, settings.noiseLevel);
-    const std::vector<float> baseline = bench.render(kReferenceRate, kReferenceBlock, defaults, noise);
-    const size_t compareFrom = noise.size() - static_cast<size_t>(kCompareLength);
+    // ---- which parameters change the audio: with L = R, and (more than one channel) with L != R ----
+    const bool twoSignals = fingerprint.measuredChannels > 1;
+    const Signal sameNoise = makeSameNoise(kNoiseLength, settings.noiseLevel);
+    const Signal noise = makeDifferentNoise(kNoiseLength, settings.noiseLevel); // the signal of all other measurements
+    const size_t compareFrom = static_cast<size_t>(kNoiseLength - kCompareLength);
+    const Signal baseline = bench.render(kReferenceRate, kReferenceBlock, defaults, noise);
     // Pass 1 at the defaults. Pass 2: a parameter can have no effect at the defaults (the frequency of an EQ whose gain is 0 dB), so the
     // others are tried again with the parameters that reacted moved to the high position.
-    const auto scan = [&](const std::vector<float>& base, const std::vector<float>& reference, bool onlyUnreacted, const juce::String& context)
+    const auto scan = [&](const std::vector<float>& base, bool onlyUnreacted, const juce::String& context)
     {
+        const Signal referenceSame = bench.render(kReferenceRate, kReferenceBlock, base, sameNoise);
+        Signal referenceDifferent;
+        if (twoSignals)
+        {
+            referenceDifferent = bench.render(kReferenceRate, kReferenceBlock, base, noise);
+        }
         for (ParameterFingerprint& entry : fingerprint.parameters)
         {
             if (onlyUnreacted && entry.changesTheAudio)
             {
                 continue;
             }
-            Difference largest;
+            Difference largestSame;
+            Difference largestDifferent;
             for (const float value : {low, high})
             {
                 std::vector<float> setting = base;
                 setting[static_cast<size_t>(entry.index)] = value;
-                const std::vector<float> output = bench.render(kReferenceRate, kReferenceBlock, setting, noise);
-                const Difference change = compare(output, reference, compareFrom, settings);
-                if (decisionValue(change) > decisionValue(largest))
+                const Difference same = compare(bench.render(kReferenceRate, kReferenceBlock, setting, sameNoise), referenceSame, compareFrom, settings);
+                if (decisionValue(same) > decisionValue(largestSame))
                 {
-                    largest = change;
+                    largestSame = same;
                 }
+                if (twoSignals)
+                {
+                    const Difference different = compare(bench.render(kReferenceRate, kReferenceBlock, setting, noise), referenceDifferent, compareFrom, settings);
+                    if (decisionValue(different) > decisionValue(largestDifferent))
+                    {
+                        largestDifferent = different;
+                    }
+                }
+            }
+            Difference largest = largestSame;
+            if (decisionValue(largestDifferent) > decisionValue(largest))
+            {
+                largest = largestDifferent;
             }
             if (decisionValue(largest) > decisionValue(entry.change) || entry.measuredWith.isEmpty())
             {
                 entry.change = largest;
+                entry.changeSame = largestSame;
+                entry.changeDifferent = largestDifferent;
                 entry.measuredWith = context;
             }
             entry.changesTheAudio = isAbove(entry.change, settings.reactsAboveDb);
         }
     };
-    scan(defaults, baseline, false, "defaults");
+    scan(defaults, false, "defaults");
     std::vector<float> withReacting = defaults;
     for (const ParameterFingerprint& entry : fingerprint.parameters)
     {
@@ -492,8 +683,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     }
     if (withReacting != defaults)
     {
-        scan(withReacting, bench.render(kReferenceRate, kReferenceBlock, withReacting, noise), true,
-             "the others at " + juce::String(settings.highSetting, 2));
+        scan(withReacting, true, "the others at " + juce::String(settings.highSetting, 2));
     }
     for (const ParameterFingerprint& entry : fingerprint.parameters)
     {
@@ -514,7 +704,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         }
         std::vector<float> candidate = settingB;
         candidate[static_cast<size_t>(index)] = high;
-        const std::vector<float> output = bench.render(kReferenceRate, kReferenceBlock, candidate, noise);
+        const Signal output = bench.render(kReferenceRate, kReferenceBlock, candidate, noise);
         if (isAbove(compare(output, baseline, compareFrom, settings), settings.differentAboveDb))
         {
             settingB = candidate;
@@ -542,21 +732,21 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     }
 
     // ---- delivery: A, A, B, A in four ways ----
-    std::vector<float> referenceA;
-    std::vector<float> referenceB;
+    Signal referenceA;
+    Signal referenceB;
     {
         const std::unique_ptr<Rig> rig = bench.make(kReferenceRate, kReferenceBlock);
         rig->prepare();
         rig->settle();
         rig->apply(defaults);
-        const std::vector<float> a1 = rig->process(noise);
-        const std::vector<float> a2 = rig->process(noise);
+        const Signal a1 = rig->process(noise);
+        const Signal a2 = rig->process(noise);
         rig->apply(settingB);
         rig->settle(); // a plugin that smooths its parameters needs the time, as after every other change in the measurement
-        const std::vector<float> b = rig->process(noise);
+        const Signal b = rig->process(noise);
         rig->apply(defaults);
         rig->settle();
-        const std::vector<float> a3 = rig->process(noise);
+        const Signal a3 = rig->process(noise);
         referenceA = a3; // a setting reached by a change
         referenceB = b;
         fingerprint.delivery.push_back(judgeDelivery("one instance, parameters set after prepare (stream)", a1, a2, b, a3, referenceA, referenceB, settings));
@@ -592,13 +782,13 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     // ---- block size independence: a long render, decided on its end (the steady state) ----
     const int blockRenderLength = static_cast<int>(kReferenceRate * settings.blockRenderSeconds);
     const size_t steadyFrom = static_cast<size_t>(blockRenderLength - static_cast<int>(kReferenceRate * settings.blockCompareSeconds));
-    const std::vector<float> longNoise = makeNoise(blockRenderLength, settings.noiseLevel);
-    const std::vector<float> reference = bench.render(kReferenceRate, kReferenceBlock, settingB, longNoise);
+    const Signal longNoise = makeDifferentNoise(blockRenderLength, settings.noiseLevel);
+    const Signal reference = bench.render(kReferenceRate, kReferenceBlock, settingB, longNoise);
     for (const int blockSize : settings.blockSizes)
     {
         BlockSizeResult result;
         result.blockSize = blockSize;
-        const std::vector<float> output = bench.render(kReferenceRate, blockSize, settingB, longNoise);
+        const Signal output = bench.render(kReferenceRate, blockSize, settingB, longNoise);
         result.steadyState = compare(output, reference, steadyFrom, settings);
         result.whole = compare(output, reference, 0, settings);
         if (! isBelow(result.steadyState, settings.blockIndependentBelowDb))
@@ -610,21 +800,21 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
 
     // ---- determinism ----
     {
-        const std::vector<float> one = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
-        const std::vector<float> two = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
+        const Signal one = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
+        const Signal two = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
         const Difference difference = compare(one, two, 0, settings);
         fingerprint.deterministic = ! one.empty() && difference.absoluteDbfs <= kFloorDb;
     }
 
     // ---- robustness: every reacting parameter to both ends and back, then B again ----
     {
-        const std::vector<float> reachedB = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
+        const Signal reachedB = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
         const std::unique_ptr<Rig> rig = bench.make(kReferenceRate, kReferenceBlock);
         rig->prepare();
         rig->apply(settingB);
         rig->settle();
         rig->process(noise);
-        const std::vector<float> oneBlock = makeNoise(kReferenceBlock, settings.noiseLevel);
+        const Signal oneBlock = makeDifferentNoise(kReferenceBlock, settings.noiseLevel);
         int jumped = 0;
         for (const int index : fingerprint.reactingParameters)
         {
@@ -640,7 +830,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         rig->apply(settingB);
         rig->settle();
         rig->process(noise); // time to come back
-        const std::vector<float> afterwards = rig->process(noise);
+        const Signal afterwards = rig->process(noise);
         fingerprint.outputStaysFinite = ! rig->sawNonFinite();
         fingerprint.recoversFromJumps = fingerprint.outputStaysFinite && ! reachedB.empty()
                                      && isBelow(compare(afterwards, reachedB, compareFrom, settings), settings.sameBelowDb);
@@ -652,14 +842,43 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         rig->prepare();
         rig->apply(settingB);
         rig->settle();
-        const std::vector<float> output = rig->process(std::vector<float>(static_cast<size_t>(kCompareLength), 0.0f));
+        const Signal output = rig->process(makeSilence(kCompareLength));
         float peak = 0.0f;
-        for (const float sample : output)
+        for (const std::vector<float>& channel : output)
         {
-            peak = std::max(peak, std::abs(sample));
+            for (const float sample : channel)
+            {
+                peak = std::max(peak, std::abs(sample));
+            }
         }
         fingerprint.silenceStaysSilent = peak == 0.0f;
         fingerprint.idleLevelDb = toDb(peak);
+    }
+
+    // ---- channel coupling (two channels): one input driven, the other silent, at the setting B ----
+    if (fingerprint.measuredChannels == 2)
+    {
+        const std::vector<float> driven = makeNoise(kNoiseLength, settings.noiseLevel, kReferenceSeed);
+        const std::vector<float> quiet(static_cast<size_t>(kNoiseLength), 0.0f);
+        const Signal leftOnly = bench.render(kReferenceRate, kReferenceBlock, settingB, Signal{driven, quiet});
+        const Signal rightOnly = bench.render(kReferenceRate, kReferenceBlock, settingB, Signal{quiet, driven});
+        if (leftOnly.size() == 2 && rightOnly.size() == 2)
+        {
+            // the silent output against the driven one: "relative" = how loud the other channel is, relative to the driven channel
+            fingerprint.couplingLeftToRight = compareChannel(leftOnly[1], quiet, compareFrom, settings);
+            const Difference leftLevel = compareChannel(leftOnly[0], quiet, compareFrom, settings);
+            fingerprint.couplingLeftToRight.relativeDb = couplingDb(fingerprint.couplingLeftToRight.absoluteDbfs, leftLevel.absoluteDbfs);
+            fingerprint.couplingLeftToRight.referenceSilent = false;
+            fingerprint.couplingLeftToRight.channel = 1;
+            fingerprint.couplingRightToLeft = compareChannel(rightOnly[0], quiet, compareFrom, settings);
+            const Difference rightLevel = compareChannel(rightOnly[1], quiet, compareFrom, settings);
+            fingerprint.couplingRightToLeft.relativeDb = couplingDb(fingerprint.couplingRightToLeft.absoluteDbfs, rightLevel.absoluteDbfs);
+            fingerprint.couplingRightToLeft.referenceSilent = false;
+            fingerprint.couplingRightToLeft.channel = 0;
+            fingerprint.couplingMeasured = true;
+            fingerprint.channelsIndependent = fingerprint.couplingLeftToRight.relativeDb < settings.couplingBelowDb
+                                           && fingerprint.couplingRightToLeft.relativeDb < settings.couplingBelowDb;
+        }
     }
 
     // ---- what is noteworthy (with the numbers) ----
@@ -731,6 +950,16 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     return fingerprint;
 }
 
+// "the other channel stays silent" or "-6.0 dB re the driven channel (-29.0 dBFS)"
+juce::String describeCoupling(const Difference& coupling)
+{
+    if (coupling.absoluteDbfs <= kFloorDb)
+    {
+        return "silent";
+    }
+    return juce::String(coupling.relativeDb, 1) + " dB re the driven channel (" + formatLevel(coupling.absoluteDbfs) + ")";
+}
+
 std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
 {
     std::vector<SummaryItem> items;
@@ -750,20 +979,53 @@ std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
     {
         return items;
     }
-    juce::String channels;
-    if (fingerprint.supportsMono)
+    juce::String layouts;
+    for (const LayoutFingerprint& layout : fingerprint.layouts)
     {
-        channels = "mono";
-    }
-    if (fingerprint.supportsStereo)
-    {
-        if (channels.isNotEmpty())
+        if (! layout.accepted)
         {
-            channels += ", ";
+            continue;
         }
-        channels += "stereo";
+        if (layouts.isNotEmpty())
+        {
+            layouts += ", ";
+        }
+        layouts += layout.name;
     }
-    add("channels", "channel layouts (main bus in = out)", channels, {}, true);
+    add("layouts", "main-bus layouts accepted", layouts, "measured with " + juce::String(fingerprint.measuredChannels) + " channel(s)", true);
+    juce::String sideChainDetail;
+    for (const BusFingerprint& bus : fingerprint.buses)
+    {
+        if (bus.isInput && bus.index > 0)
+        {
+            if (sideChainDetail.isNotEmpty())
+            {
+                sideChainDetail += ", ";
+            }
+            sideChainDetail += bus.name + " (" + bus.defaultLayout + ")";
+        }
+    }
+    add("sideChain", "side-chain input (more than one input bus)", yesNo(fingerprint.hasSideChain), sideChainDetail, true);
+    juce::String midi = "none";
+    if (fingerprint.acceptsMidi && fingerprint.producesMidi)
+    {
+        midi = "in and out";
+    }
+    else if (fingerprint.acceptsMidi)
+    {
+        midi = "in";
+    }
+    else if (fingerprint.producesMidi)
+    {
+        midi = "out";
+    }
+    add("midi", "MIDI", midi, {}, true);
+    if (fingerprint.couplingMeasured)
+    {
+        add("coupling", "channels independent (one input driven, the other silent)", yesNo(fingerprint.channelsIndependent),
+            "L to R: " + describeCoupling(fingerprint.couplingLeftToRight) + ", R to L: " + describeCoupling(fingerprint.couplingRightToLeft),
+            true);
+    }
     add("parameters", "parameters / changing the audio", juce::String(fingerprint.numberOfParameters) + " / " + juce::String(static_cast<int>(fingerprint.reactingParameters.size())),
         {}, ! fingerprint.reactingParameters.empty());
 
@@ -894,6 +1156,16 @@ std::vector<SummaryItem> parseSummaryJson(const juce::String& json)
     return items;
 }
 
+// a change in the parameter table: the difference, or "no" if it is below the threshold
+juce::String describeChange(const Difference& change, const FingerprintSettings& settings)
+{
+    if (! isAbove(change, settings.reactsAboveDb))
+    {
+        return "no";
+    }
+    return formatDifference(change);
+}
+
 juce::String createReport(const PluginFingerprint& fingerprint)
 {
     const FingerprintSettings& settings = fingerprint.settings;
@@ -940,6 +1212,34 @@ juce::String createReport(const PluginFingerprint& fingerprint)
         text << "- " << finding << "\n";
     }
 
+    text << "\n## Channels and buses\n";
+    text << "The buses of the plugin as it is created, the main-bus layouts it accepts (other buses switched off where possible), MIDI, and the coupling of the "
+            "channels at the setting B: one input channel gets noise, the other silence; the output of the silent channel relative to the output of the driven one "
+            "(below " << juce::String(settings.couplingBelowDb, 0) << " dB = independent channels). The measurement runs with " << fingerprint.measuredChannels
+         << " channel(s); other channels of the plugin get silence.\n\n";
+    text << "| bus | name | default layout |\n|---|---|---|\n";
+    for (const BusFingerprint& bus : fingerprint.buses)
+    {
+        juce::String kind = "output ";
+        if (bus.isInput)
+        {
+            kind = "input ";
+        }
+        text << "| " << kind << bus.index << " | " << bus.name << " | " << bus.defaultLayout << " |\n";
+    }
+    text << "\n| layout | accepted |\n|---|---|\n";
+    for (const LayoutFingerprint& layout : fingerprint.layouts)
+    {
+        text << "| " << layout.name << " | " << yesNo(layout.accepted) << " |\n";
+    }
+    text << "\n- side chain: " << yesNo(fingerprint.hasSideChain) << "; MIDI in: " << yesNo(fingerprint.acceptsMidi) << ", out: " << yesNo(fingerprint.producesMidi)
+         << "; instrument: " << yesNo(fingerprint.isInstrument) << "\n";
+    if (fingerprint.couplingMeasured)
+    {
+        text << "- coupling L to R: " << describeCoupling(fingerprint.couplingLeftToRight) << ", R to L: " << describeCoupling(fingerprint.couplingRightToLeft)
+             << ": channels independent " << yesNo(fingerprint.channelsIndependent) << "\n";
+    }
+
     text << "\n## Parameters\n";
     text << "Noise (peak " << juce::String(settings.noiseLevel, 2) << ") through the plugin with each parameter at " << juce::String(settings.lowSetting, 2) << " and "
          << juce::String(settings.highSetting, 2) << " of its range, against the plugin at the base setting named in the last column; the larger change is shown. "
@@ -948,18 +1248,29 @@ juce::String createReport(const PluginFingerprint& fingerprint)
     {
         text << ", the first " << static_cast<int>(fingerprint.parameters.size()) << " examined";
     }
-    text << ".\n\n| no. | name | min | default | max | steps | automatable | changes the audio | measured with |\n|---|---|---|---|---|---|---|---|---|\n";
+    text << ". Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a "
+            "width or mid/side control reacts only to this one).\n\n| no. | name | min | default | max | steps | automatable | changes (L = R) | changes (L != R) | measured with |\n"
+            "|---|---|---|---|---|---|---|---|---|---|\n";
     for (const ParameterFingerprint& parameter : fingerprint.parameters)
     {
         text << "| " << parameter.index << " | " << parameter.name << " | " << parameter.textAtMinimum << " | " << parameter.textAtDefault << " | "
              << parameter.textAtMaximum << " | " << describeSteps(parameter.numSteps) << " | " << yesNo(parameter.automatable) << " | ";
         if (parameter.changesTheAudio)
         {
-            text << formatDifference(parameter.change) << " | " << parameter.measuredWith;
+            text << describeChange(parameter.changeSame, settings) << " | ";
+            if (fingerprint.measuredChannels > 1)
+            {
+                text << describeChange(parameter.changeDifferent, settings);
+            }
+            else
+            {
+                text << "-";
+            }
+            text << " | " << parameter.measuredWith;
         }
         else
         {
-            text << "no | ";
+            text << "no | no | ";
         }
         text << " |\n";
     }

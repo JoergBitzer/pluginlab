@@ -1,6 +1,6 @@
 # The fingerprint report: what is measured, how, and how to read it
 
-Version 0.14.0 (2026-10-05, after the revision steps R1 to R3 and R5 of `docs/design/W5b-fingerprint-revision.md`). Code: `src/engine/Fingerprint.cpp`,
+Version 0.15.0 (2026-10-06, after the revision steps R1 to R5 of `docs/design/W5b-fingerprint-revision.md`). Code: `src/engine/Fingerprint.cpp`,
 `src/engine/LatencyMeasurer.cpp`, settings `src/engine/FingerprintSettings.{h,cpp}`. Report text: `createReport()`.
 Purpose: say exactly what every line of the report means, so that a result can be judged as "the plugin does this" or "our test does this", and list the
 places where the test itself is still weak (section 6; the open ones are planned as R4 to R7). Section 7 is a checklist for a surprising result.
@@ -32,14 +32,17 @@ its own process, takes the plugin (the one with the identifier, or every plugin 
 ### 2.1 Test signals
 | Signal | Exact definition |
 |---|---|
-| **Noise** | `juce::Random` with seed 7, uniform white noise in [-noiseLevel, +noiseLevel] (default 0.1: peak -20 dBFS, RMS -24.8 dBFS). 12288 samples for the parameter and delivery tests, `blockRenderSeconds` (1 s) for the block size test. The same samples on **every channel** (L = R; a second signal with L != R comes with R4). Every render uses the same sequence, so renders are comparable sample by sample. |
+| **Noise L = R** | `juce::Random` with seed 7, uniform white noise in [-noiseLevel, +noiseLevel] (default 0.1: peak -20 dBFS, RMS -24.8 dBFS), the same samples on every channel. Used in the parameter scan only. |
+| **Noise L != R** | seed 7 on channel 1 (L), seed 11 on channel 2 (R) and further channels: uncorrelated. **The signal of every other measurement** (parameter scan as second signal, setting B, delivery, block sizes, determinism, jumps). 12288 samples, `blockRenderSeconds` (1 s) for the block size test. Every render uses the same sequences, so renders are comparable sample by sample. |
+| **One channel driven** | the L noise on one channel, silence on the other (channel coupling). |
 | **Impulse** | `impulsePreDelaySamples` (4096) samples of silence, then 1.0 (0 dBFS) on every channel, then silence for `latencyObserveSeconds` (1 s). |
 | **Silence** | zeros. |
 | **Poke block** | the first 512 samples of the noise, **the same length for every block size** (so that the input history before the measured signal is equal). |
 
 ### 2.2 The channel layout
-`ChannelAdapter::chooseLayout(instance, 2)`: stereo, else mono. The plugin runs with that layout ("channels: mono yes/no, stereo yes/no" from
-`checkBusesLayoutSupported`). Only **output channel 0** is analysed (all channels with R4). No MIDI is sent.
+`ChannelAdapter::chooseLayout(instance, 2)`: the main buses get stereo, else mono; **other buses (a side-chain input, extra outputs) are switched off** if the plugin allows it,
+else they keep their default layout and get silence (the engine and the loader refuse such a plugin for now). **All main-bus output channels are analysed**: a difference is the
+difference of the channel where it is largest (the report names the channel when it is not the first). No MIDI is sent.
 
 ### 2.3 The building blocks
 - **make(rate, block)**: `createPluginInstance(description, rate, block)`, then the layout.
@@ -107,6 +110,16 @@ block size independent, the largest steady-state difference in the detail (`bloc
 The same rows are written as JSON next to the report (`<report>.json`: plugin, identifier, date, and the list of items with key, test, result, detail, good). The Developer
 page reads it and shows the results as columns, one row per plugin, orange where a result is worth a look, the detail as tooltip.
 
+### 3.0b Channels and buses (R4)
+- **Bus table**: every bus of the plugin as it is created (input/output, index, name, default layout or "disabled").
+- **Layout table**: whether the plugin accepts these main-bus layouts (other buses switched off if possible): mono, stereo, mono in / stereo out, LCR, quad, 5.1, 7.1,
+  ambisonics 1st order (the author's list of the common ones).
+- side chain (more than one input bus), MIDI in/out, instrument flag.
+- **Channel coupling** (only with two channels, at the setting B): render with noise on L and silence on R, and the other way round; the level of the silent output relative
+  to the driven output (dB re the driven channel, and its level in dBFS, "silent" for exact zeros). Below `couplingBelowDb` (-100 dB) in both directions = channels independent.
+  Coupling is a property, not a fault (a widener, a cross feed, a stereo reverb couple on purpose): it is never bold in the summary.
+Summary keys of R4: `layouts` (the accepted ones), `sideChain` (with the names of the extra input buses), `midi`, `coupling`.
+
 ### 3.1 Header
 `file`, `format`, `manufacturer`, `version`, `measured` (date), a settings warning if any, `channels: mono yes/no, stereo yes/no`. "no" for both: another layout
 (surround, side chain only, instrument): `not measured`. Then a short legend of the differences (2.4).
@@ -122,7 +135,8 @@ Fixed rules, each only when its condition holds, with the numbers:
 
 ### 3.3 Parameters
 One row per examined parameter: `no.`, `name`, `min`, `default`, `max` (the plugin's text for normalised 0, default, 1), `steps` (**continuous**, **switch** for two
-steps, else the number), `automatable`, **`changes the audio`** (a difference, 2.4) and **`measured with`**.
+steps, else the number), `automatable`, **`changes (L = R)`**, **`changes (L != R)`** (differences, 2.4; the second only with more than one channel) and **`measured with`**.
+A parameter that changes the audio only with L != R acts on the difference of the channels (a width control, a mid/side balance): with L = R there is no side signal.
 Sequence (step 2):
 1. `baseline` = render(48 kHz, 512, defaults, noise) ("A").
 2. **Pass 1**: every parameter at 0.25 and at 0.75 (the others at their defaults); difference against the baseline over the last 8192 samples; the larger counts;
@@ -189,6 +203,9 @@ The JSON of the settings the report was made with (2.5).
 | Linear Phase (255-tap FIR, reported 127) | measured 127, reported 127, output before the peak present; no finding |
 | Block Smoothing | block size independent (steady state); "whole" differs |
 | Block Fault | "depends on the block size also after 1.00 s" |
+| Cross Feed (R += L / 2) | coupling L to R -6.0 dB, R to L silent: channels not independent |
+| Width (gain acts on L - R) | the gain changes the audio with L != R only |
+| Side Chain (stereo side-chain input, on by default) | the side chain is listed and switched off; measured normally |
 | EQ Prepare (resets in `prepareToPlay`) | stream: A again differs; before/after prepare: "the first delivery was lost"; only the poked way passes |
 
 ## 5. Example: the own PeakEQ and the BL gain plugins
@@ -197,19 +214,18 @@ added the synchronous block). Its 44.1 kHz design fault (W5) is no longer in the
 BL-Gain12 and BL-Gain24: nothing unusual; every way ok; all block sizes identical.
 
 ## 6. Where the test is still weak (open; the planned step in brackets)
-1. **Noise is the same on L and R, only output channel 0 is analysed** (R4): a width or mid/side control reads "no"; a pan shows only the gain of channel 0.
-2. **Parameters that act only together** (R6): all bands of an EQ off by default (Venn Audio Free EQ): nothing reacts.
-3. **Time-varying plugins** (R6): an LFO, a random element, dither or a noise generator gives "not deterministic", "repeatable: no", "does not come back",
+1. **Parameters that act only together** (R6): all bands of an EQ off by default (Venn Audio Free EQ): nothing reacts.
+2. **Time-varying plugins** (R6): an LFO, a random element, dither or a noise generator gives "not deterministic", "repeatable: no", "does not come back",
    "not silent". They are not yet labelled "time-varying".
-4. **The recovery test moves switches and choices together with the rest** (R6); a mode change that resets the plugin can read "does not come back".
-5. **Silence is exact** (R6): any output above zero fails (-149 dBFS of a denormal guard as well); a threshold will come into the settings.
-6. **The stream way defines "correct"** (R6): a plugin that ignores parameter changes in the stream way makes all references wrong in the same way.
-7. **The setting B is not printed** (R7): "0.75 of the knob" cannot be read in the plugin's units yet.
-8. **Latency is the largest peak at the default parameters** (by design): for a plugin with a long tail or a later peak (reverb, delay, a first reflection below a
+3. **The recovery test moves switches and choices together with the rest** (R6); a mode change that resets the plugin can read "does not come back".
+4. **Silence is exact** (R6): any output above zero fails (-149 dBFS of a denormal guard as well); a threshold will come into the settings.
+5. **The stream way defines "correct"** (R6): a plugin that ignores parameter changes in the stream way makes all references wrong in the same way.
+6. **The setting B is not printed** (R7): "0.75 of the knob" cannot be read in the plugin's units yet.
+7. **Latency is the largest peak at the default parameters** (by design): for a plugin with a long tail or a later peak (reverb, delay, a first reflection below a
    later one) it is not a "block latency"; for a plugin that is silent at its defaults (mix 0, a gate) nothing comes out.
-9. **Parameters are moved to 0.25 and 0.75 with noise at -20 dBFS** (settings): a threshold at -10 dB, a slow LFO, an attack of seconds or an effect only at 0 or 1 reads "no".
-10. **Instruments and plugins without audio input**: "no parameter changed the audio" and "nothing came out" (no MIDI is sent).
-11. **Wrapper effects**: the VST3 hosting adds a hidden Bypass parameter to plugins that do not declare one; parameter texts come from the hosting layer.
+8. **Parameters are moved to 0.25 and 0.75 with noise at -20 dBFS** (settings): a threshold at -10 dB, a slow LFO, an attack of seconds or an effect only at 0 or 1 reads "no".
+9. **Instruments and plugins without audio input**: "no parameter changed the audio" and "nothing came out" (no MIDI is sent).
+10. **Wrapper effects**: the VST3 hosting adds a hidden Bypass parameter to plugins that do not declare one; parameter texts come from the hosting layer.
 
 ## 7. Checklist: is this result right?
 1. **Does it run at all?** "channels" yes, parameters listed. No report: the plugin crashed in the measurement process.

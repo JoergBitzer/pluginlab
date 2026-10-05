@@ -2,14 +2,17 @@
 
 - file: `/tmp/claude-1000/-home-bitzer-AudioDev/cb378125-017c-4b6c-a2ae-35e52500030b/scratchpad/venn/FreeEQ.vst3`
 - format: VST3, manufacturer: Venn Audio, version: 1.5.7
-- measured: 2026-10-05 22:38
+- measured: 2026-10-05 23:22
 - channels: mono yes, stereo yes
 
 ## Summary
 | test | result | detail |
 |---|---|---|
 | loads and runs with mono or stereo | yes |  |
-| channel layouts (main bus in = out) | mono, stereo |  |
+| main-bus layouts accepted | mono, stereo | measured with 2 channel(s) |
+| side-chain input (more than one input bus) | no |  |
+| MIDI | none |  |
+| channels independent (one input driven, the other silent) | yes | L to R: silent, R to L: silent |
 | parameters / changing the audio | **37 / 0** |  |
 | latency at 48 kHz, reported / measured (samples) | 0 / 0 | 44.1 kHz: 0 / 0, 48.0 kHz: 0 / 0, 96.0 kHz: 0 / 0 |
 | reported latency = measured at all rates | yes | 44.1 kHz: 0 / 0, 48.0 kHz: 0 / 0, 96.0 kHz: 0 / 0 |
@@ -29,48 +32,70 @@ How to read the differences: every difference is given as **relative / absolute*
 ## Findings
 - No parameter changed the audio (an instrument, a pure analyser, parameters that act only together, or parameters that are not read after prepare)
 
-## Parameters
-Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 37 parameters.
+## Channels and buses
+The buses of the plugin as it is created, the main-bus layouts it accepts (other buses switched off where possible), MIDI, and the coupling of the channels at the setting B: one input channel gets noise, the other silence; the output of the silent channel relative to the output of the driven one (below -100 dB = independent channels). The measurement runs with 2 channel(s); other channels of the plugin get silence.
 
-| no. | name | min | default | max | steps | automatable | changes the audio | measured with |
-|---|---|---|---|---|---|---|---|---|
-| 0 | Band 1 Enabled | Off | Off | On | switch | yes | no |  |
-| 1 | Band 1 Frequency | -1.000 | -0.682 | 1.000 | continuous | yes | no |  |
-| 2 | Band 1 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no |  |
-| 3 | Band 1 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no |  |
-| 4 | Band 1 Type | 1 | 5 | 7 | continuous | yes | no |  |
-| 5 | Band 2 Enabled | Off | Off | On | switch | yes | no |  |
-| 6 | Band 2 Frequency | -1.000 | -0.334 | 1.000 | continuous | yes | no |  |
-| 7 | Band 2 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no |  |
-| 8 | Band 2 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no |  |
-| 9 | Band 2 Type | 1 | 5 | 7 | continuous | yes | no |  |
-| 10 | Band 3 Enabled | Off | Off | On | switch | yes | no |  |
-| 11 | Band 3 Frequency | -1.000 | -0.132 | 1.000 | continuous | yes | no |  |
-| 12 | Band 3 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no |  |
-| 13 | Band 3 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no |  |
-| 14 | Band 3 Type | 1 | 5 | 7 | continuous | yes | no |  |
-| 15 | Band 4 Enabled | Off | Off | On | switch | yes | no |  |
-| 16 | Band 4 Frequency | -1.000 | 0.132 | 1.000 | continuous | yes | no |  |
-| 17 | Band 4 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no |  |
-| 18 | Band 4 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no |  |
-| 19 | Band 4 Type | 1 | 5 | 7 | continuous | yes | no |  |
-| 20 | Band 5 Enabled | Off | Off | On | switch | yes | no |  |
-| 21 | Band 5 Frequency | -1.000 | 0.598 | 1.000 | continuous | yes | no |  |
-| 22 | Band 5 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no |  |
-| 23 | Band 5 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no |  |
-| 24 | Band 5 Type | 1 | 5 | 7 | continuous | yes | no |  |
-| 25 | Band 6 Enabled | Off | Off | On | switch | yes | no |  |
-| 26 | Band 6 Frequency | -1.000 | 0.800 | 1.000 | continuous | yes | no |  |
-| 27 | Band 6 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no |  |
-| 28 | Band 6 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no |  |
-| 29 | Band 6 Type | 1 | 5 | 7 | continuous | yes | no |  |
-| 30 | Band 1 Slope | 0 | 1 | 3 | continuous | yes | no |  |
-| 31 | Band 2 Slope | 0 | 1 | 3 | continuous | yes | no |  |
-| 32 | Band 3 Slope | 0 | 1 | 3 | continuous | yes | no |  |
-| 33 | Band 4 Slope | 0 | 1 | 3 | continuous | yes | no |  |
-| 34 | Band 5 Slope | 0 | 1 | 3 | continuous | yes | no |  |
-| 35 | Band 6 Slope | 0 | 1 | 3 | continuous | yes | no |  |
-| 36 | Bypass | Off | Off | On | switch | yes | no |  |
+| bus | name | default layout |
+|---|---|---|
+| input 0 | Input | Stereo |
+| output 0 | Output | Stereo |
+
+| layout | accepted |
+|---|---|
+| mono | yes |
+| stereo | yes |
+| mono in, stereo out | no |
+| LCR | no |
+| quad | no |
+| 5.1 | no |
+| 7.1 | no |
+| ambisonics 1st order | no |
+
+- side chain: no; MIDI in: no, out: no; instrument: no
+- coupling L to R: silent, R to L: silent: channels independent yes
+
+## Parameters
+Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 37 parameters. Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a width or mid/side control reacts only to this one).
+
+| no. | name | min | default | max | steps | automatable | changes (L = R) | changes (L != R) | measured with |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | Band 1 Enabled | Off | Off | On | switch | yes | no | no |  |
+| 1 | Band 1 Frequency | -1.000 | -0.682 | 1.000 | continuous | yes | no | no |  |
+| 2 | Band 1 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no | no |  |
+| 3 | Band 1 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no | no |  |
+| 4 | Band 1 Type | 1 | 5 | 7 | continuous | yes | no | no |  |
+| 5 | Band 2 Enabled | Off | Off | On | switch | yes | no | no |  |
+| 6 | Band 2 Frequency | -1.000 | -0.334 | 1.000 | continuous | yes | no | no |  |
+| 7 | Band 2 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no | no |  |
+| 8 | Band 2 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no | no |  |
+| 9 | Band 2 Type | 1 | 5 | 7 | continuous | yes | no | no |  |
+| 10 | Band 3 Enabled | Off | Off | On | switch | yes | no | no |  |
+| 11 | Band 3 Frequency | -1.000 | -0.132 | 1.000 | continuous | yes | no | no |  |
+| 12 | Band 3 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no | no |  |
+| 13 | Band 3 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no | no |  |
+| 14 | Band 3 Type | 1 | 5 | 7 | continuous | yes | no | no |  |
+| 15 | Band 4 Enabled | Off | Off | On | switch | yes | no | no |  |
+| 16 | Band 4 Frequency | -1.000 | 0.132 | 1.000 | continuous | yes | no | no |  |
+| 17 | Band 4 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no | no |  |
+| 18 | Band 4 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no | no |  |
+| 19 | Band 4 Type | 1 | 5 | 7 | continuous | yes | no | no |  |
+| 20 | Band 5 Enabled | Off | Off | On | switch | yes | no | no |  |
+| 21 | Band 5 Frequency | -1.000 | 0.598 | 1.000 | continuous | yes | no | no |  |
+| 22 | Band 5 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no | no |  |
+| 23 | Band 5 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no | no |  |
+| 24 | Band 5 Type | 1 | 5 | 7 | continuous | yes | no | no |  |
+| 25 | Band 6 Enabled | Off | Off | On | switch | yes | no | no |  |
+| 26 | Band 6 Frequency | -1.000 | 0.800 | 1.000 | continuous | yes | no | no |  |
+| 27 | Band 6 Resonance | 0.000 | 0.500 | 1.000 | continuous | yes | no | no |  |
+| 28 | Band 6 Gain | -35.00 | 0.00 | 35.00 | continuous | yes | no | no |  |
+| 29 | Band 6 Type | 1 | 5 | 7 | continuous | yes | no | no |  |
+| 30 | Band 1 Slope | 0 | 1 | 3 | continuous | yes | no | no |  |
+| 31 | Band 2 Slope | 0 | 1 | 3 | continuous | yes | no | no |  |
+| 32 | Band 3 Slope | 0 | 1 | 3 | continuous | yes | no | no |  |
+| 33 | Band 4 Slope | 0 | 1 | 3 | continuous | yes | no | no |  |
+| 34 | Band 5 Slope | 0 | 1 | 3 | continuous | yes | no | no |  |
+| 35 | Band 6 Slope | 0 | 1 | 3 | continuous | yes | no | no |  |
+| 36 | Bypass | Off | Off | On | switch | yes | no | no |  |
 
 ## Latency at three sample rates
 An impulse (1.0 on all channels) after 4096 samples of silence, the plugin at its default parameters, 1.00 s watched. Measured = position of the largest output sample after the impulse. Reported = getLatencySamples() right after prepareToPlay and after the audio. Output before the peak: the largest output between the impulse and the peak, relative to the peak (a filter with pre-ringing, a look-ahead). Output before the impulse: signal the plugin makes of its own.
@@ -120,6 +145,7 @@ No way of delivering the parameters passed the test.
   "sameBelowDb": -80.0,
   "blockIndependentBelowDb": -100.0,
   "silentReferenceDbfs": -150.0,
+  "couplingBelowDb": -100.0,
   "noiseLevel": 0.1,
   "settleSeconds": 0.25,
   "impulsePreDelaySamples": 4096,

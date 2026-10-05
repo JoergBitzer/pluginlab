@@ -2,14 +2,17 @@
 
 - file: `/home/bitzer/AudioDev/measurement_tool/plugins/ZeroEQ_1.0.7_Linux_VST3_LV2_CLAP_Standalone/VST3/ZeroEQ.vst3`
 - format: VST3, manufacturer: Jun Murakami, version: 1.0.7
-- measured: 2026-10-05 22:38
+- measured: 2026-10-05 23:23
 - channels: mono yes, stereo yes
 
 ## Summary
 | test | result | detail |
 |---|---|---|
 | loads and runs with mono or stereo | yes |  |
-| channel layouts (main bus in = out) | mono, stereo |  |
+| main-bus layouts accepted | mono, stereo | measured with 2 channel(s) |
+| side-chain input (more than one input bus) | no |  |
+| MIDI | none |  |
+| channels independent (one input driven, the other silent) | yes | L to R: silent, R to L: silent |
 | parameters / changing the audio | 72 / 43 |  |
 | latency at 48 kHz, reported / measured (samples) | 0 / 0 | 44.1 kHz: 0 / 0, 48.0 kHz: 0 / 0, 96.0 kHz: 0 / 0 |
 | reported latency = measured at all rates | yes | 44.1 kHz: 0 / 0, 48.0 kHz: 0 / 0, 96.0 kHz: 0 / 0 |
@@ -29,75 +32,97 @@ How to read the differences: every difference is given as **relative / absolute*
 ## Findings
 - nothing unusual found
 
-## Parameters
-Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 72 parameters, the first 64 examined.
+## Channels and buses
+The buses of the plugin as it is created, the main-bus layouts it accepts (other buses switched off where possible), MIDI, and the coupling of the channels at the setting B: one input channel gets noise, the other silence; the output of the silent channel relative to the output of the driven one (below -100 dB = independent channels). The measurement runs with 2 channel(s); other channels of the plugin get silence.
 
-| no. | name | min | default | max | steps | automatable | changes the audio | measured with |
-|---|---|---|---|---|---|---|---|---|
-| 0 | Bypass | Off | Off | On | switch | yes | 14.0 dB / -12.6 dBFS | the others at 0.75 |
-| 1 | Output Gain | -24.0 | 0.0 | 24.0 | continuous | yes | 9.5 dB / -15.3 dBFS | defaults |
-| 2 | Analyzer | Off | Pre+Post | Pre+Post | 4 | yes | no |  |
-| 3 | Bottom Panel Open | Off | On | On | switch | no | no |  |
-| 4 | EQ dB Range | +/-3 dB | +/-12 dB | +/-32 dB | 5 | no | no |  |
-| 5 | Band 1 On | Off | Off | On | switch | yes | -21.5 dB / -46.3 dBFS | defaults |
-| 6 | Band 1 Type | Bell | HighPass | Notch | 6 | yes | no |  |
-| 7 | Band 1 Freq | 20.0000000 | 30.0000000 | 20000.0000000 | continuous | yes | no |  |
-| 8 | Band 1 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | no |  |
-| 9 | Band 1 Q | 0.1000000 | 0.7070000 | 18.0000000 | continuous | yes | no |  |
-| 10 | Band 1 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | no |  |
-| 11 | Band 2 On | Off | Off | On | switch | yes | -18.1 dB / -42.9 dBFS | defaults |
-| 12 | Band 2 Type | Bell | HighPass | Notch | 6 | yes | no |  |
-| 13 | Band 2 Freq | 20.0000000 | 60.0000000 | 20000.0000000 | continuous | yes | no |  |
-| 14 | Band 2 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | no |  |
-| 15 | Band 2 Q | 0.1000000 | 0.7070000 | 18.0000000 | continuous | yes | no |  |
-| 16 | Band 2 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | no |  |
-| 17 | Band 3 On | Off | On | On | switch | yes | 4.6 dB / -22.1 dBFS | the others at 0.75 |
-| 18 | Band 3 Type | Bell | LowShelf | Notch | 6 | yes | 0.0 dB / -24.8 dBFS | defaults |
-| 19 | Band 3 Freq | 20.0000000 | 119.9999924 | 20000.0000000 | continuous | yes | 4.6 dB / -22.0 dBFS | the others at 0.75 |
-| 20 | Band 3 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | -9.1 dB / -33.9 dBFS | defaults |
-| 21 | Band 3 Q | 0.1000000 | 0.7070000 | 18.0000000 | continuous | yes | no |  |
-| 22 | Band 3 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | 25.1 dB / -1.5 dBFS | the others at 0.75 |
-| 23 | Band 4 On | Off | On | On | switch | yes | -6.1 dB / -32.7 dBFS | the others at 0.75 |
-| 24 | Band 4 Type | Bell | Bell | Notch | 6 | yes | 0.0 dB / -24.8 dBFS | defaults |
-| 25 | Band 4 Freq | 20.0000000 | 250.0000153 | 20000.0000000 | continuous | yes | 9.3 dB / -17.4 dBFS | the others at 0.75 |
-| 26 | Band 4 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | -8.1 dB / -32.9 dBFS | defaults |
-| 27 | Band 4 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no |  |
-| 28 | Band 4 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | 12.9 dB / -13.7 dBFS | the others at 0.75 |
-| 29 | Band 5 On | Off | On | On | switch | yes | -11.9 dB / -38.5 dBFS | the others at 0.75 |
-| 30 | Band 5 Type | Bell | Bell | Notch | 6 | yes | 0.1 dB / -24.7 dBFS | defaults |
-| 31 | Band 5 Freq | 20.0000000 | 499.9999695 | 20000.0000000 | continuous | yes | 10.5 dB / -16.2 dBFS | the others at 0.75 |
-| 32 | Band 5 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | -4.1 dB / -29.0 dBFS | defaults |
-| 33 | Band 5 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no |  |
-| 34 | Band 5 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | -11.8 dB / -38.4 dBFS | the others at 0.75 |
-| 35 | Band 6 On | Off | On | On | switch | yes | -17.8 dB / -44.4 dBFS | the others at 0.75 |
-| 36 | Band 6 Type | Bell | Bell | Notch | 6 | yes | 0.2 dB / -24.6 dBFS | defaults |
-| 37 | Band 6 Freq | 20.0000000 | 1000.0000000 | 20000.0000000 | continuous | yes | 10.8 dB / -15.8 dBFS | the others at 0.75 |
-| 38 | Band 6 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | -1.5 dB / -26.3 dBFS | defaults |
-| 39 | Band 6 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no |  |
-| 40 | Band 6 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | -19.6 dB / -46.2 dBFS | the others at 0.75 |
-| 41 | Band 7 On | Off | On | On | switch | yes | -23.8 dB / -50.4 dBFS | the others at 0.75 |
-| 42 | Band 7 Type | Bell | Bell | Notch | 6 | yes | 0.3 dB / -24.5 dBFS | defaults |
-| 43 | Band 7 Freq | 20.0000000 | 2000.0002441 | 20000.0000000 | continuous | yes | 10.9 dB / -15.7 dBFS | the others at 0.75 |
-| 44 | Band 7 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | 1.4 dB / -23.5 dBFS | defaults |
-| 45 | Band 7 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no |  |
-| 46 | Band 7 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | -25.6 dB / -52.3 dBFS | the others at 0.75 |
-| 47 | Band 8 On | Off | On | On | switch | yes | -29.9 dB / -56.6 dBFS | the others at 0.75 |
-| 48 | Band 8 Type | Bell | Bell | Notch | 6 | yes | 0.6 dB / -24.2 dBFS | defaults |
-| 49 | Band 8 Freq | 20.0000000 | 3999.9995117 | 20000.0000000 | continuous | yes | 11.0 dB / -15.7 dBFS | the others at 0.75 |
-| 50 | Band 8 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | 4.1 dB / -20.8 dBFS | defaults |
-| 51 | Band 8 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no |  |
-| 52 | Band 8 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | -31.8 dB / -58.5 dBFS | the others at 0.75 |
-| 53 | Band 9 On | Off | On | On | switch | yes | -36.6 dB / -63.3 dBFS | the others at 0.75 |
-| 54 | Band 9 Type | Bell | Bell | Notch | 6 | yes | 0.8 dB / -24.0 dBFS | defaults |
-| 55 | Band 9 Freq | 20.0000000 | 7999.9995117 | 20000.0000000 | continuous | yes | 11.0 dB / -15.7 dBFS | the others at 0.75 |
-| 56 | Band 9 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | 6.2 dB / -18.7 dBFS | defaults |
-| 57 | Band 9 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no |  |
-| 58 | Band 9 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | -38.5 dB / -65.1 dBFS | the others at 0.75 |
-| 59 | Band 10 On | Off | On | On | switch | yes | -41.4 dB / -68.0 dBFS | the others at 0.75 |
-| 60 | Band 10 Type | Bell | HighShelf | Notch | 6 | yes | 0.7 dB / -24.2 dBFS | defaults |
-| 61 | Band 10 Freq | 20.0000000 | 12000.0009766 | 20000.0000000 | continuous | yes | 11.0 dB / -15.6 dBFS | the others at 0.75 |
-| 62 | Band 10 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | 10.5 dB / -14.3 dBFS | defaults |
-| 63 | Band 10 Q | 0.1000000 | 0.7070000 | 18.0000000 | continuous | yes | no |  |
+| bus | name | default layout |
+|---|---|---|
+| input 0 | Input | Stereo |
+| output 0 | Output | Stereo |
+
+| layout | accepted |
+|---|---|
+| mono | yes |
+| stereo | yes |
+| mono in, stereo out | no |
+| LCR | no |
+| quad | no |
+| 5.1 | no |
+| 7.1 | no |
+| ambisonics 1st order | no |
+
+- side chain: no; MIDI in: no, out: no; instrument: no
+- coupling L to R: silent, R to L: silent: channels independent yes
+
+## Parameters
+Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 72 parameters, the first 64 examined. Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a width or mid/side control reacts only to this one).
+
+| no. | name | min | default | max | steps | automatable | changes (L = R) | changes (L != R) | measured with |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | Bypass | Off | Off | On | switch | yes | 14.0 dB / -12.6 dBFS (channel 2) | 14.2 dB / -12.6 dBFS (channel 2) | the others at 0.75 |
+| 1 | Output Gain | -24.0 | 0.0 | 24.0 | continuous | yes | 9.5 dB / -15.3 dBFS | 9.5 dB / -15.3 dBFS | defaults |
+| 2 | Analyzer | Off | Pre+Post | Pre+Post | 4 | yes | no | no |  |
+| 3 | Bottom Panel Open | Off | On | On | switch | no | no | no |  |
+| 4 | EQ dB Range | +/-3 dB | +/-12 dB | +/-32 dB | 5 | no | no | no |  |
+| 5 | Band 1 On | Off | Off | On | switch | yes | -21.5 dB / -46.3 dBFS | -21.3 dB / -46.1 dBFS (channel 2) | defaults |
+| 6 | Band 1 Type | Bell | HighPass | Notch | 6 | yes | no | no |  |
+| 7 | Band 1 Freq | 20.0000000 | 30.0000000 | 20000.0000000 | continuous | yes | no | no |  |
+| 8 | Band 1 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | no | no |  |
+| 9 | Band 1 Q | 0.1000000 | 0.7070000 | 18.0000000 | continuous | yes | no | no |  |
+| 10 | Band 1 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | no | no |  |
+| 11 | Band 2 On | Off | Off | On | switch | yes | -18.1 dB / -42.9 dBFS | -18.1 dB / -42.9 dBFS | defaults |
+| 12 | Band 2 Type | Bell | HighPass | Notch | 6 | yes | no | no |  |
+| 13 | Band 2 Freq | 20.0000000 | 60.0000000 | 20000.0000000 | continuous | yes | no | no |  |
+| 14 | Band 2 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | no | no |  |
+| 15 | Band 2 Q | 0.1000000 | 0.7070000 | 18.0000000 | continuous | yes | no | no |  |
+| 16 | Band 2 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | no | no |  |
+| 17 | Band 3 On | Off | On | On | switch | yes | 4.6 dB / -22.1 dBFS (channel 2) | 6.0 dB / -20.8 dBFS (channel 2) | the others at 0.75 |
+| 18 | Band 3 Type | Bell | LowShelf | Notch | 6 | yes | 0.0 dB / -24.8 dBFS | 0.0 dB / -24.8 dBFS | defaults |
+| 19 | Band 3 Freq | 20.0000000 | 119.9999924 | 20000.0000000 | continuous | yes | 4.6 dB / -22.0 dBFS (channel 2) | 6.1 dB / -20.7 dBFS (channel 2) | the others at 0.75 |
+| 20 | Band 3 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | -9.1 dB / -33.9 dBFS | -9.1 dB / -33.9 dBFS | defaults |
+| 21 | Band 3 Q | 0.1000000 | 0.7070000 | 18.0000000 | continuous | yes | no | no |  |
+| 22 | Band 3 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | 25.1 dB / -1.5 dBFS | 25.9 dB / -0.9 dBFS (channel 2) | the others at 0.75 |
+| 23 | Band 4 On | Off | On | On | switch | yes | -6.1 dB / -32.7 dBFS | -5.1 dB / -31.9 dBFS (channel 2) | the others at 0.75 |
+| 24 | Band 4 Type | Bell | Bell | Notch | 6 | yes | 0.0 dB / -24.8 dBFS | 0.0 dB / -24.7 dBFS (channel 2) | defaults |
+| 25 | Band 4 Freq | 20.0000000 | 250.0000153 | 20000.0000000 | continuous | yes | 9.3 dB / -17.4 dBFS (channel 2) | 9.3 dB / -17.4 dBFS | the others at 0.75 |
+| 26 | Band 4 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | -8.1 dB / -32.9 dBFS | -7.2 dB / -32.0 dBFS (channel 2) | defaults |
+| 27 | Band 4 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no | no |  |
+| 28 | Band 4 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | 12.9 dB / -13.7 dBFS | 14.7 dB / -12.1 dBFS (channel 2) | the others at 0.75 |
+| 29 | Band 5 On | Off | On | On | switch | yes | -11.9 dB / -38.5 dBFS | -10.9 dB / -37.7 dBFS (channel 2) | the others at 0.75 |
+| 30 | Band 5 Type | Bell | Bell | Notch | 6 | yes | 0.1 dB / -24.7 dBFS | 0.1 dB / -24.7 dBFS (channel 2) | defaults |
+| 31 | Band 5 Freq | 20.0000000 | 499.9999695 | 20000.0000000 | continuous | yes | 10.5 dB / -16.2 dBFS (channel 2) | 10.5 dB / -16.2 dBFS | the others at 0.75 |
+| 32 | Band 5 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | -4.1 dB / -29.0 dBFS | -4.0 dB / -28.8 dBFS (channel 2) | defaults |
+| 33 | Band 5 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no | no |  |
+| 34 | Band 5 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | -11.8 dB / -38.4 dBFS (channel 2) | -10.6 dB / -37.3 dBFS (channel 2) | the others at 0.75 |
+| 35 | Band 6 On | Off | On | On | switch | yes | -17.8 dB / -44.4 dBFS | -16.8 dB / -43.6 dBFS (channel 2) | the others at 0.75 |
+| 36 | Band 6 Type | Bell | Bell | Notch | 6 | yes | 0.2 dB / -24.6 dBFS | 0.2 dB / -24.6 dBFS | defaults |
+| 37 | Band 6 Freq | 20.0000000 | 1000.0000000 | 20000.0000000 | continuous | yes | 10.8 dB / -15.8 dBFS | 10.8 dB / -15.8 dBFS | the others at 0.75 |
+| 38 | Band 6 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | -1.5 dB / -26.3 dBFS | -1.5 dB / -26.2 dBFS (channel 2) | defaults |
+| 39 | Band 6 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no | no |  |
+| 40 | Band 6 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | -19.6 dB / -46.2 dBFS | -18.6 dB / -45.4 dBFS (channel 2) | the others at 0.75 |
+| 41 | Band 7 On | Off | On | On | switch | yes | -23.8 dB / -50.4 dBFS | -22.8 dB / -49.6 dBFS (channel 2) | the others at 0.75 |
+| 42 | Band 7 Type | Bell | Bell | Notch | 6 | yes | 0.3 dB / -24.5 dBFS | 0.3 dB / -24.5 dBFS | defaults |
+| 43 | Band 7 Freq | 20.0000000 | 2000.0002441 | 20000.0000000 | continuous | yes | 10.9 dB / -15.7 dBFS | 10.9 dB / -15.7 dBFS | the others at 0.75 |
+| 44 | Band 7 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | 1.4 dB / -23.5 dBFS | 1.4 dB / -23.5 dBFS | defaults |
+| 45 | Band 7 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no | no |  |
+| 46 | Band 7 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | -25.6 dB / -52.3 dBFS | -24.7 dB / -51.5 dBFS (channel 2) | the others at 0.75 |
+| 47 | Band 8 On | Off | On | On | switch | yes | -29.9 dB / -56.6 dBFS | -29.0 dB / -55.8 dBFS (channel 2) | the others at 0.75 |
+| 48 | Band 8 Type | Bell | Bell | Notch | 6 | yes | 0.6 dB / -24.2 dBFS | 0.6 dB / -24.2 dBFS | defaults |
+| 49 | Band 8 Freq | 20.0000000 | 3999.9995117 | 20000.0000000 | continuous | yes | 11.0 dB / -15.7 dBFS | 11.0 dB / -15.7 dBFS | the others at 0.75 |
+| 50 | Band 8 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | 4.1 dB / -20.8 dBFS | 4.1 dB / -20.8 dBFS | defaults |
+| 51 | Band 8 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no | no |  |
+| 52 | Band 8 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | -31.8 dB / -58.5 dBFS | -30.9 dB / -57.6 dBFS (channel 2) | the others at 0.75 |
+| 53 | Band 9 On | Off | On | On | switch | yes | -36.6 dB / -63.3 dBFS | -35.7 dB / -62.4 dBFS (channel 2) | the others at 0.75 |
+| 54 | Band 9 Type | Bell | Bell | Notch | 6 | yes | 0.8 dB / -24.0 dBFS | 0.8 dB / -23.9 dBFS (channel 2) | defaults |
+| 55 | Band 9 Freq | 20.0000000 | 7999.9995117 | 20000.0000000 | continuous | yes | 11.0 dB / -15.7 dBFS | 11.0 dB / -15.7 dBFS | the others at 0.75 |
+| 56 | Band 9 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | 6.2 dB / -18.7 dBFS | 6.3 dB / -18.5 dBFS (channel 2) | defaults |
+| 57 | Band 9 Q | 0.1000000 | 1.0000000 | 18.0000000 | continuous | yes | no | no |  |
+| 58 | Band 9 Slope | 6 dB/oct | 18 dB/oct | 48 dB/oct | 6 | yes | -38.5 dB / -65.1 dBFS | -37.5 dB / -64.3 dBFS (channel 2) | the others at 0.75 |
+| 59 | Band 10 On | Off | On | On | switch | yes | -41.4 dB / -68.0 dBFS | -40.4 dB / -67.2 dBFS (channel 2) | the others at 0.75 |
+| 60 | Band 10 Type | Bell | HighShelf | Notch | 6 | yes | 0.7 dB / -24.2 dBFS | 0.7 dB / -24.0 dBFS (channel 2) | defaults |
+| 61 | Band 10 Freq | 20.0000000 | 12000.0009766 | 20000.0000000 | continuous | yes | 11.0 dB / -15.6 dBFS (channel 2) | 11.0 dB / -15.6 dBFS | the others at 0.75 |
+| 62 | Band 10 Gain | -32.0 | 0.0 | 32.0 | continuous | yes | 10.5 dB / -14.3 dBFS | 10.5 dB / -14.3 dBFS | defaults |
+| 63 | Band 10 Q | 0.1000000 | 0.7070000 | 18.0000000 | continuous | yes | no | no |  |
 
 ## Latency at three sample rates
 An impulse (1.0 on all channels) after 4096 samples of silence, the plugin at its default parameters, 1.00 s watched. Measured = position of the largest output sample after the impulse. Reported = getLatencySamples() right after prepareToPlay and after the audio. Output before the peak: the largest output between the impulse and the peak, relative to the peak (a filter with pre-ringing, a look-ahead). Output before the impulse: signal the plugin makes of its own.
@@ -147,6 +172,7 @@ Most careful way that works: new instance per render, after prepare every parame
   "sameBelowDb": -80.0,
   "blockIndependentBelowDb": -100.0,
   "silentReferenceDbfs": -150.0,
+  "couplingBelowDb": -100.0,
   "noiseLevel": 0.1,
   "settleSeconds": 0.25,
   "impulsePreDelaySamples": 4096,

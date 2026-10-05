@@ -16,6 +16,7 @@ struct FingerprintSettings
     double sameBelowDb = -80.0;              // two outputs count as the same
     double blockIndependentBelowDb = -100.0; // block size independent (steady state)
     double silentReferenceDbfs = -150.0;     // a reference below this level counts as silent: the absolute difference decides
+    double couplingBelowDb = -100.0;         // the channels are independent if the silent one stays below this, relative to the driven one
 
     // signals and timing
     double noiseLevel = 0.1;                 // peak of the uniform white noise (linear)

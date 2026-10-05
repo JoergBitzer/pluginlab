@@ -1,6 +1,6 @@
 {
-  "plugin": "BL-Gain24",
-  "identifier": "VST3-BL-Gain24-92dadd9f-677f6c4",
+  "plugin": "BL-StereoWidth",
+  "identifier": "VST3-BL-StereoWidth-7ccf7ca6-fa9ffd3",
   "measured": "2026-10-05 23:22",
   "summary": [
     {
@@ -13,7 +13,7 @@
     {
       "key": "layouts",
       "test": "main-bus layouts accepted",
-      "result": "mono, stereo",
+      "result": "stereo, mono in, stereo out",
       "detail": "measured with 2 channel(s)",
       "good": true
     },
@@ -34,14 +34,14 @@
     {
       "key": "coupling",
       "test": "channels independent (one input driven, the other silent)",
-      "result": "yes",
-      "detail": "L to R: silent, R to L: silent",
+      "result": "no",
+      "detail": "L to R: -6.7 dB re the driven channel (-29.0 dBFS), R to L: -22.0 dB re the driven channel (-36.7 dBFS)",
       "good": true
     },
     {
       "key": "parameters",
       "test": "parameters / changing the audio",
-      "result": "2 / 2",
+      "result": "15 / 10",
       "detail": "",
       "good": true
     },
@@ -76,9 +76,9 @@
     {
       "key": "delivery",
       "test": "delivery of parameters (A, A, B, A): ways that work",
-      "result": "4 of 4 ways",
-      "detail": "new instance per render, after prepare every parameter first set to another value, then the target",
-      "good": true
+      "result": "none",
+      "detail": "",
+      "good": false
     },
     {
       "key": "blockSizes",
@@ -104,9 +104,9 @@
     {
       "key": "recovers",
       "test": "recovers from parameter jumps",
-      "result": "yes",
+      "result": "no",
       "detail": "",
-      "good": true
+      "good": false
     },
     {
       "key": "silence",

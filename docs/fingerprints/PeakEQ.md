@@ -2,14 +2,17 @@
 
 - file: `/home/bitzer/.vst3/PeakEQ.vst3`
 - format: VST3, manufacturer: Jade Hochschule, version: 0.0.1
-- measured: 2026-10-05 22:38
+- measured: 2026-10-05 23:22
 - channels: mono yes, stereo yes
 
 ## Summary
 | test | result | detail |
 |---|---|---|
 | loads and runs with mono or stereo | yes |  |
-| channel layouts (main bus in = out) | mono, stereo |  |
+| main-bus layouts accepted | mono, stereo | measured with 2 channel(s) |
+| side-chain input (more than one input bus) | no |  |
+| MIDI | none |  |
+| channels independent (one input driven, the other silent) | yes | L to R: silent, R to L: silent |
 | parameters / changing the audio | 4 / 4 |  |
 | latency at 48 kHz, reported / measured (samples) | **0 / 96** | 44.1 kHz: 0 / 88, 48.0 kHz: 0 / 96, 96.0 kHz: 0 / 192 |
 | reported latency = measured at all rates | **no** | 44.1 kHz: 0 / 88, 48.0 kHz: 0 / 96, 96.0 kHz: 0 / 192 |
@@ -31,15 +34,37 @@ How to read the differences: every difference is given as **relative / absolute*
 - Latency at 48000 Hz: the plugin reports 0 samples, measured 96 samples
 - Latency at 96000 Hz: the plugin reports 0 samples, measured 192 samples
 
-## Parameters
-Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 4 parameters.
+## Channels and buses
+The buses of the plugin as it is created, the main-bus layouts it accepts (other buses switched off where possible), MIDI, and the coupling of the channels at the setting B: one input channel gets noise, the other silence; the output of the silent channel relative to the output of the driven one (below -100 dB = independent channels). The measurement runs with 2 channel(s); other channels of the plugin get silence.
 
-| no. | name | min | default | max | steps | automatable | changes the audio | measured with |
-|---|---|---|---|---|---|---|---|---|
-| 0 | gain | -24.0000000000000000000000000000 | 0.000000000000000000000000000000 | 24.00000000000000000000000000000 | continuous | yes | -5.2 dB / -30.0 dBFS | defaults |
-| 1 | Frequency | 20.00000000000000000000000000000 | 1000.000000000000000000000000000 | 18000.00000000000000000000000000 | continuous | yes | -1.2 dB / -24.3 dBFS | the others at 0.75 |
-| 2 | Q | 0.100000001490116119384765625000 | 1.000000000000000000000000000000 | 10.00000000000000000000000000000 | continuous | yes | -8.7 dB / -31.7 dBFS | the others at 0.75 |
-| 3 | Bypass | Off | Off | On | switch | yes | 3.0 dB / -21.8 dBFS | defaults |
+| bus | name | default layout |
+|---|---|---|
+| input 0 | Input | Stereo |
+| output 0 | Output | Stereo |
+
+| layout | accepted |
+|---|---|
+| mono | yes |
+| stereo | yes |
+| mono in, stereo out | no |
+| LCR | no |
+| quad | no |
+| 5.1 | no |
+| 7.1 | no |
+| ambisonics 1st order | no |
+
+- side chain: no; MIDI in: no, out: no; instrument: no
+- coupling L to R: silent, R to L: silent: channels independent yes
+
+## Parameters
+Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 4 parameters. Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a width or mid/side control reacts only to this one).
+
+| no. | name | min | default | max | steps | automatable | changes (L = R) | changes (L != R) | measured with |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | gain | -24.0000000000000000000000000000 | 0.000000000000000000000000000000 | 24.00000000000000000000000000000 | continuous | yes | -5.2 dB / -30.0 dBFS | -5.1 dB / -29.9 dBFS (channel 2) | defaults |
+| 1 | Frequency | 20.00000000000000000000000000000 | 1000.000000000000000000000000000 | 18000.00000000000000000000000000 | continuous | yes | -1.2 dB / -24.3 dBFS | -1.2 dB / -24.3 dBFS | the others at 0.75 |
+| 2 | Q | 0.100000001490116119384765625000 | 1.000000000000000000000000000000 | 10.00000000000000000000000000000 | continuous | yes | -8.7 dB / -31.7 dBFS | -8.6 dB / -31.6 dBFS (channel 2) | the others at 0.75 |
+| 3 | Bypass | Off | Off | On | switch | yes | 3.0 dB / -21.8 dBFS | 3.1 dB / -21.7 dBFS (channel 2) | defaults |
 
 ## Latency at three sample rates
 An impulse (1.0 on all channels) after 4096 samples of silence, the plugin at its default parameters, 1.00 s watched. Measured = position of the largest output sample after the impulse. Reported = getLatencySamples() right after prepareToPlay and after the audio. Output before the peak: the largest output between the impulse and the peak, relative to the peak (a filter with pre-ringing, a look-ahead). Output before the impulse: signal the plugin makes of its own.
@@ -55,10 +80,10 @@ Four ways of giving the plugin its parameters, each with the settings A (default
 
 | way | repeatable | reacts | as after a change | result | A again (2nd / 3rd) | B against A | A, B against the references |
 |---|---|---|---|---|---|---|---|
-| one instance, parameters set after prepare (stream) | yes | yes | yes | ok | identical ; identical | -8.9 dB / -33.7 dBFS | identical ; identical |
-| new instance per render, parameters set before prepare | yes | yes | yes | ok | identical ; identical | -8.9 dB / -33.7 dBFS | identical ; identical |
-| new instance per render, parameters set after prepare | yes | yes | yes | ok | identical ; identical | -8.9 dB / -33.7 dBFS | identical ; identical |
-| new instance per render, after prepare every parameter first set to another value, then the target | yes | yes | yes | ok | identical ; identical | -8.9 dB / -33.7 dBFS | identical ; identical |
+| one instance, parameters set after prepare (stream) | yes | yes | yes | ok | identical ; identical | -8.4 dB / -33.1 dBFS (channel 2) | identical ; identical |
+| new instance per render, parameters set before prepare | yes | yes | yes | ok | identical ; identical | -8.4 dB / -33.1 dBFS (channel 2) | identical ; identical |
+| new instance per render, parameters set after prepare | yes | yes | yes | ok | identical ; identical | -8.4 dB / -33.1 dBFS (channel 2) | identical ; identical |
+| new instance per render, after prepare every parameter first set to another value, then the target | yes | yes | yes | ok | identical ; identical | -8.4 dB / -33.1 dBFS (channel 2) | identical ; identical |
 
 Most careful way that works: new instance per render, after prepare every parameter first set to another value, then the target.
 
@@ -89,6 +114,7 @@ Most careful way that works: new instance per render, after prepare every parame
   "sameBelowDb": -80.0,
   "blockIndependentBelowDb": -100.0,
   "silentReferenceDbfs": -150.0,
+  "couplingBelowDb": -100.0,
   "noiseLevel": 0.1,
   "settleSeconds": 0.25,
   "impulsePreDelaySamples": 4096,
