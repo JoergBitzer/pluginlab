@@ -67,6 +67,14 @@ add_test(NAME PluginLabHostReport
         -DWITH_VST2=${PLUGINLAB_VST2}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostReport.cmake)
 
+# End to end: the fingerprint of one plugin through the command line of the host (the way the Developer page runs it).
+add_test(NAME PluginLabHostFingerprint
+    COMMAND ${CMAKE_COMMAND}
+        -DHOST_APPLICATION=$<TARGET_FILE:PluginLabHost>
+        -DPLUGIN_FILE=${PLUGINLAB_TEST_PLUGIN_DIR}/PluginLabTestGain.vst3
+        -DREPORT_FILE=${CMAKE_CURRENT_BINARY_DIR}/host_fingerprint.md
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostFingerprint.cmake)
+
 # The loader plugin is self-contained: its bundle holds the scanner (found next to the plugin binary when the plugin runs in a DAW).
 add_test(NAME PluginLabLoaderBundleHasScanner
     COMMAND ${CMAKE_COMMAND}

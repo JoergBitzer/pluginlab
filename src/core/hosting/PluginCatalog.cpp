@@ -116,18 +116,23 @@ juce::String describePluginFile(const juce::File& pluginFile)
     return juce::String(description.hashCode64());
 }
 
+juce::Time getNewestModificationTime(const juce::File& pluginFile)
+{
+    juce::Time newest = pluginFile.getLastModificationTime();
+    for (const juce::File& file : getPluginFiles(pluginFile))
+    {
+        newest = std::max(newest, file.getLastModificationTime());
+    }
+    return newest;
+}
+
 juce::String getModifiedText(const juce::File& pluginFile)
 {
     if (! pluginFile.exists())
     {
         return {};
     }
-    juce::Time newest = pluginFile.getLastModificationTime();
-    for (const juce::File& file : getPluginFiles(pluginFile))
-    {
-        newest = std::max(newest, file.getLastModificationTime());
-    }
-    return newest.formatted(kDateFormat);
+    return getNewestModificationTime(pluginFile).formatted(kDateFormat);
 }
 
 juce::String getNowText()

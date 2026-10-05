@@ -730,7 +730,7 @@ juce::String createReport(const PluginFingerprint& fingerprint)
         text << "- " << finding << "\n";
     }
 
-    text << "\n## Parameters\n| # | name | min | default | max | steps | automatable | changes the audio (dB) |\n|---|---|---|---|---|---|---|---|\n";
+    text << "\n## Parameters\n| no. | name | min | default | max | steps | automatable | changes the audio (dB) |\n|---|---|---|---|---|---|---|---|\n";
     for (const ParameterFingerprint& parameter : fingerprint.parameters)
     {
         text << "| " << parameter.index << " | " << parameter.name << " | " << parameter.textAtMinimum << " | " << parameter.textAtDefault << " | "

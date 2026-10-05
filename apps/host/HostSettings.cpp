@@ -12,6 +12,7 @@ const juce::String kListFolderKey = "listFolder";
 const juce::String kListsFolderName = "lists";
 const juce::String kLastAudioListName = "last_session.audiolist";
 const juce::String kLastPluginSetName = "last_session.pluginset";
+const juce::String kFingerprintFolderName = "fingerprints";
 const juce::String kRestoreMarkerName = "restoring_plugins.marker";
 }
 
@@ -85,6 +86,11 @@ juce::File HostSettings::getLastSessionAudioList() const
 juce::File HostSettings::getLastSessionPluginSet() const
 {
     return getFolder().getChildFile(kLastPluginSetName);
+}
+
+juce::File HostSettings::getFingerprintFolder() const
+{
+    return getFolder().getChildFile(kFingerprintFolderName);
 }
 
 juce::File HostSettings::getRestoreMarker() const

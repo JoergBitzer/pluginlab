@@ -19,7 +19,7 @@ juce::File resolveFile(const juce::String& text)
 // Command line modes without a window (files, because a GUI program on Windows has no console; CI checks the files):
 //   --write-version <file>              writes the version into the file and quits
 //   --report <plugin folder> <file>     scans the folder, loads the plugins, writes a report (see HostReport.h) and quits
-//   --fingerprint <plugin file> <file>  measures the fingerprint of the plugin (see HostFingerprint.h), writes it and quits
+//   --fingerprint <plugin file> <file> [<plugin id>]  measures the fingerprint of the plugin (see HostFingerprint.h), writes it and quits
 // Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
 // after the scan, --compare <audio file> [<plugin file>] opens the Compare page with the file, a dry slot and the plugin
 const juce::String kWriteVersionOption = "--write-version";
@@ -27,6 +27,8 @@ const juce::String kReportOption = "--report";
 const juce::String kFingerprintOption = "--fingerprint"; // --fingerprint <plugin file> <report file>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
+const juce::String kDeveloperOption = "--developer"; // --developer <plugin file> [--view]: opens the Developer page and makes (and shows) the report
+const juce::String kViewOption = "--view";
 const juce::String kPlayOption = "--play"; // --play <seconds> <report file> (with --compare): plays, writes the report, quits
 const juce::String kCompareOption = "--compare"; // --compare <audio file> [<plugin file>]: opens the Compare page
 constexpr int kArgumentsOfOneValue = 1;
@@ -107,7 +109,14 @@ public:
         const int fingerprintIndex = arguments.indexOf(kFingerprintOption);
         if (fingerprintIndex >= 0 && fingerprintIndex + kArgumentsOfReport < arguments.size())
         {
-            const bool written = pluginlab::host::writeFingerprintReport(resolveFile(arguments[fingerprintIndex + 1]), resolveFile(arguments[fingerprintIndex + 2]));
+            juce::String identifier;
+            const int identifierIndex = fingerprintIndex + kArgumentsOfReport + 1;
+            if (identifierIndex < arguments.size() && ! arguments[identifierIndex].startsWith("--"))
+            {
+                identifier = arguments[identifierIndex].unquoted();
+            }
+            const bool written = pluginlab::host::writeFingerprintReport(resolveFile(arguments[fingerprintIndex + 1]),
+                                                                         resolveFile(arguments[fingerprintIndex + 2]), identifier);
             int returnValue = kExitOk;
             if (! written)
             {
@@ -138,6 +147,13 @@ public:
             {
                 options.compareSlotPlugin = resolveFile(arguments[compareIndex + 2]);
             }
+        }
+
+        const int developerIndex = arguments.indexOf(kDeveloperOption);
+        if (developerIndex >= 0 && developerIndex + kArgumentsOfOneValue < arguments.size())
+        {
+            options.developerPlugin = resolveFile(arguments[developerIndex + 1]);
+            options.developerView = arguments.contains(kViewOption);
         }
 
         const int playIndex = arguments.indexOf(kPlayOption);

@@ -22,6 +22,9 @@ public:
     juce::File getLastSessionAudioList() const;
     juce::File getLastSessionPluginSet() const;
 
+    // Where the fingerprint reports of the Developer page are kept
+    juce::File getFingerprintFolder() const;
+
     // A file that exists while the plugins of the last session are being loaded: if it is still there at the next start, loading them
     // did not finish (a plugin crashed the program).
     juce::File getRestoreMarker() const;

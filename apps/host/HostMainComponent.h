@@ -28,13 +28,15 @@ struct StartupOptions
     juce::String pluginNameToLoad; // loaded after the scan has finished
     juce::File compareAudioFile;   // --compare: opens the Compare page with this file and (compareSlotPlugin) a plugin slot
     juce::File compareSlotPlugin;
+    juce::File developerPlugin;    // --developer <plugin file> [--view]: loads the plugin, opens the Developer page and makes the report
+    bool developerView = false;    // ... and shows it when it is ready
     double playSeconds = 0.0;      // --play <seconds> <report file>: plays on the Compare page, writes the report and quits
     juce::File playReportFile;
 
     // true if the program was started for a manual test: it then does not ask to restore the last session
     bool isManualTest() const
     {
-        return scanFolder != juce::File() || pluginNameToLoad.isNotEmpty() || compareAudioFile != juce::File();
+        return scanFolder != juce::File() || pluginNameToLoad.isNotEmpty() || compareAudioFile != juce::File() || developerPlugin != juce::File();
     }
 };
 

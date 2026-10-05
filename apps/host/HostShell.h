@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "ComparePanel.h"
+#include "DeveloperPanel.h"
 #include "HostMainComponent.h"
 #include "HostSettings.h"
 #include "pluginlab/engine/MeasurementEngine.h"
@@ -37,5 +38,6 @@ private:
     bool m_sessionIsSaved = false; // switched on after the questions of the start (an answer "no" must not overwrite the old session at once)
     HostMainComponent* m_pluginsPage = nullptr; // owned by the tab
     ComparePanel* m_comparePage = nullptr;      // owned by the tab
+    DeveloperPanel* m_developerPage = nullptr;  // owned by the tab
 };
 }

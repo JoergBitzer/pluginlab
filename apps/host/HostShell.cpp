@@ -11,6 +11,7 @@ namespace
 constexpr int kTabBarHeight = 30;
 const juce::String kPluginsTabName = "Plugins";
 const juce::String kCompareTabName = "Compare";
+const juce::String kDeveloperTabName = "Developer";
 constexpr double kMsPerSecond = 1000.0;
 constexpr int kWindowWidth = 1100;
 constexpr int kWindowHeight = 760;
@@ -31,6 +32,7 @@ HostShell::HostShell(const StartupOptions& options)
 
     m_pluginsPage = new HostMainComponent(m_engine, m_formatManager, m_settings, options);
     m_comparePage = new ComparePanel(m_engine, m_settings);
+    m_developerPage = new DeveloperPanel(m_engine, m_settings);
     m_pluginsPage->onSlotsChanged = [this] { slotsChanged(); };
     m_comparePage->onFilesChanged = [this] { filesChanged(); };
     m_comparePage->onShowEditorOfSlot = [this](int slot) { m_pluginsPage->showEditorOfSlot(slot); };
@@ -40,6 +42,7 @@ HostShell::HostShell(const StartupOptions& options)
     setTabBarDepth(kTabBarHeight);
     addTab(kPluginsTabName, background, m_pluginsPage, true);
     addTab(kCompareTabName, background, m_comparePage, true);
+    addTab(kDeveloperTabName, background, m_developerPage, true);
     setSize(kWindowWidth, kWindowHeight);
     m_comparePage->slotsChanged();
 
@@ -61,6 +64,23 @@ HostShell::HostShell(const StartupOptions& options)
         {
             m_comparePage->startPlaying();
             startTimer(static_cast<int>(options.playSeconds * kMsPerSecond));
+        }
+    }
+
+    if (options.developerPlugin != juce::File())
+    {
+        juce::AudioPluginFormatManager manager;
+        ui::addGuiFormats(manager);
+        const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(manager, options.developerPlugin);
+        if (! scan.descriptions.isEmpty())
+        {
+            m_pluginsPage->loadPlugin(scan.descriptions[0]);
+            setCurrentTabIndex(2);
+            if (options.developerView)
+            {
+                m_developerPage->onReportReady = [this](int row) { m_developerPage->viewReport(row); };
+            }
+            m_developerPage->generateReport(0);
         }
     }
 
@@ -114,12 +134,14 @@ void HostShell::changeEngineRate(double sampleRate)
     m_engine.addSlot(nullptr, kDryName, error);
     m_pluginsPage->refresh();
     m_comparePage->slotsChanged();
+    m_developerPage->refresh();
     saveSession();
 }
 
 void HostShell::slotsChanged()
 {
     m_comparePage->slotsChanged();
+    m_developerPage->refresh();
     saveSession();
 }
 
@@ -233,6 +255,7 @@ void HostShell::restorePluginSet()
     marker.deleteFile();
     m_pluginsPage->refresh();
     m_comparePage->slotsChanged();
+    m_developerPage->refresh();
     endRestore();
 }
 

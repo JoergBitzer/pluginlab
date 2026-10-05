@@ -2,6 +2,7 @@
 
 #include "TestPluginPaths.h"
 #include "pluginlab/engine/Fingerprint.h"
+#include "pluginlab/engine/ReportText.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
 
@@ -102,6 +103,17 @@ public:
         }
         expect(prepareFault.recommendedDelivery.contains("another value"), prepareFault.recommendedDelivery);
         logMessage(pluginlab::engine::createReport(prepareFault));
+
+        beginTest("the tables of a report are aligned for a window with a monospaced font, the other lines stay");
+        const juce::String markdown = "# Title\n\ntext line\n| a | long header |\n|---|---|\n| wide cell | b |\n\n- list\n";
+        const juce::String aligned = pluginlab::engine::alignMarkdownTables(markdown);
+        expect(aligned.contains("# Title\n"));
+        expect(aligned.contains("a          long header\n"), aligned);
+        expect(aligned.contains("---------  -----------\n"), aligned);
+        expect(aligned.contains("wide cell  b\n"), aligned);
+        expect(aligned.contains("- list\n"));
+        const juce::String real = pluginlab::engine::alignMarkdownTables(pluginlab::engine::createReport(gain));
+        expect(! real.contains("|---"), "no Markdown separator line may be left");
     }
 
 private:

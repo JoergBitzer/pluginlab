@@ -39,6 +39,9 @@ struct CatalogEntry
 // stamp than the one of a validation means: the plugin changed after it was validated.
 juce::String describePluginFile(const juce::File& pluginFile);
 
+// The time of the newest file of the plugin (of the file, or of the files in a bundle)
+juce::Time getNewestModificationTime(const juce::File& pluginFile);
+
 // The date of the newest file of the plugin ("2026-10-04 14:13"), empty if the plugin does not exist.
 juce::String getModifiedText(const juce::File& pluginFile);
 
