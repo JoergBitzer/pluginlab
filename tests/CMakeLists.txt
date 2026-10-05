@@ -15,6 +15,7 @@ target_sources(PluginLabTests
         BrowserTests.cpp
         CatalogTests.cpp
         EngineTests.cpp
+        FingerprintTests.cpp
         ProbeTests.cpp
         RealWorldTests.cpp)
 

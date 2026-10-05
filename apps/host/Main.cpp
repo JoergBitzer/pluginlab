@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "HostShell.h"
+#include "HostFingerprint.h"
 #include "HostReport.h"
 #include "pluginlab/PluginLabVersion.h"
 
@@ -18,10 +19,12 @@ juce::File resolveFile(const juce::String& text)
 // Command line modes without a window (files, because a GUI program on Windows has no console; CI checks the files):
 //   --write-version <file>              writes the version into the file and quits
 //   --report <plugin folder> <file>     scans the folder, loads the plugins, writes a report (see HostReport.h) and quits
+//   --fingerprint <plugin file> <file>  measures the fingerprint of the plugin (see HostFingerprint.h), writes it and quits
 // Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
 // after the scan, --compare <audio file> [<plugin file>] opens the Compare page with the file, a dry slot and the plugin
 const juce::String kWriteVersionOption = "--write-version";
 const juce::String kReportOption = "--report";
+const juce::String kFingerprintOption = "--fingerprint"; // --fingerprint <plugin file> <report file>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
 const juce::String kPlayOption = "--play"; // --play <seconds> <report file> (with --compare): plays, writes the report, quits
@@ -91,6 +94,20 @@ public:
             const juce::File pluginFolder = resolveFile(arguments[reportIndex + 1]);
             const juce::File reportFile = resolveFile(arguments[reportIndex + 2]);
             const bool written = pluginlab::host::writeReport(pluginFolder, reportFile);
+            int returnValue = kExitOk;
+            if (! written)
+            {
+                returnValue = kExitReportFailed;
+            }
+            setApplicationReturnValue(returnValue);
+            quit();
+            return;
+        }
+
+        const int fingerprintIndex = arguments.indexOf(kFingerprintOption);
+        if (fingerprintIndex >= 0 && fingerprintIndex + kArgumentsOfReport < arguments.size())
+        {
+            const bool written = pluginlab::host::writeFingerprintReport(resolveFile(arguments[fingerprintIndex + 1]), resolveFile(arguments[fingerprintIndex + 2]));
             int returnValue = kExitOk;
             if (! written)
             {

@@ -49,6 +49,22 @@ inline juce::File getLatencyLiarPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestLatencyLie.vst3");
 }
 
+// RBJ peaking EQs: correct, designed for 44.1 kHz whatever the host rate, prepareToPlay resets to hard-coded values
+inline juce::File getEqPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestEq.vst3");
+}
+
+inline juce::File getEqFsFaultPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestEqFs.vst3");
+}
+
+inline juce::File getEqPrepareFaultPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestEqPrepare.vst3");
+}
+
 inline juce::File getCrashPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestCrash.vst3");

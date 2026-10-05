@@ -12,6 +12,7 @@ target_sources(PluginLabHost
         HostMainComponent.cpp
         HostSettings.cpp
         HostShell.cpp
+        HostFingerprint.cpp
         HostReport.cpp)
 
 target_compile_definitions(PluginLabHost

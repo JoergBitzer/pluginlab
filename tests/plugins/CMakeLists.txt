@@ -59,3 +59,42 @@ pluginlab_add_test_plugin(PluginLabTestMono "PluginLab Test Mono" Tmn1 0 0 TRUE 
 # a plugin that delays the audio by 64 samples and says so, and one that delays by 100 samples and reports 0 (the latency must be measured)
 pluginlab_add_test_plugin(PluginLabTestLatency "PluginLab Test Latency" Tlt1 0 0 TRUE FALSE 0 64 64)
 pluginlab_add_test_plugin(PluginLabTestLatencyLie "PluginLab Test Latency Lie" Tll1 0 0 TRUE FALSE 0 100 0)
+
+# An RBJ peaking EQ for the fingerprint tests: correct, with the 44.1 kHz fault, with the prepareToPlay fault
+function(pluginlab_add_test_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE FS_BUG PREPARE_BUG)
+    juce_add_plugin(${TARGET_NAME}
+        COMPANY_NAME "Jade_Hochschule"
+        IS_SYNTH FALSE
+        NEEDS_MIDI_INPUT FALSE
+        NEEDS_MIDI_OUTPUT FALSE
+        VST3_CATEGORIES "Fx" "EQ"
+        VST3_AUTO_MANIFEST TRUE
+        COPY_PLUGIN_AFTER_BUILD TRUE
+        VST3_COPY_DIR "${PLUGINLAB_TEST_PLUGIN_DIR}"
+        PLUGIN_MANUFACTURER_CODE IHAJ
+        PLUGIN_CODE ${PLUGIN_CODE}
+        FORMATS VST3
+        PLUGIN_NAME "${DISPLAY_NAME}"
+        PRODUCT_NAME "${TARGET_NAME}")
+
+    target_sources(${TARGET_NAME} PRIVATE TestEqPlugin.cpp)
+
+    target_compile_definitions(${TARGET_NAME}
+        PUBLIC
+            JUCE_WEB_BROWSER=0
+            JUCE_USE_CURL=0
+            JUCE_VST3_CAN_REPLACE_VST2=0
+            PLUGINLAB_TEST_EQ_FS_BUG=${FS_BUG}
+            PLUGINLAB_TEST_EQ_PREPARE_BUG=${PREPARE_BUG})
+
+    target_link_libraries(${TARGET_NAME}
+        PRIVATE
+            juce::juce_audio_utils
+        PUBLIC
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_warning_flags)
+endfunction()
+
+pluginlab_add_test_eq_plugin(PluginLabTestEq "PluginLab Test EQ" Teq1 0 0)
+pluginlab_add_test_eq_plugin(PluginLabTestEqFs "PluginLab Test EQ Fs Fault" Teq2 1 0)
+pluginlab_add_test_eq_plugin(PluginLabTestEqPrepare "PluginLab Test EQ Prepare Fault" Teq3 0 1)

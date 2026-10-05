@@ -3,6 +3,7 @@
 add_library(pluginlab_engine STATIC
     AudioFileSource.cpp
     ChannelAdapter.cpp
+    Fingerprint.cpp
     LatencyMeasurer.cpp
     MeasurementEngine.cpp
     OfflineRenderer.cpp
@@ -17,6 +18,7 @@ target_link_libraries(pluginlab_engine
     PUBLIC
         pluginlab_core
         juce::juce_audio_formats
+        juce::juce_dsp
     PRIVATE
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
