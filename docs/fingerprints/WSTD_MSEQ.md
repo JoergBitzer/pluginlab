@@ -2,8 +2,27 @@
 
 - file: `/home/bitzer/AudioDev/measurement_tool/plugins/ext/wstd/wstd-mseq-v1.0.1/WSTD_MSEQ.vst3`
 - format: VST3, manufacturer: Wasted Audio, version: 1.0.1
-- measured: 2026-10-05 21:37
+- measured: 2026-10-05 22:38
 - channels: mono no, stereo yes
+
+## Summary
+| test | result | detail |
+|---|---|---|
+| loads and runs with mono or stereo | yes |  |
+| channel layouts (main bus in = out) | stereo |  |
+| parameters / changing the audio | 10 / 4 |  |
+| latency at 48 kHz, reported / measured (samples) | **0 / 1** | 44.1 kHz: 0 / 1, 48.0 kHz: 0 / 1, 96.0 kHz: 0 / 1 |
+| reported latency = measured at all rates | **no** | 44.1 kHz: 0 / 1, 48.0 kHz: 0 / 1, 96.0 kHz: 0 / 1 |
+| output before the peak of the impulse response | no |  |
+| output before the impulse (signal of its own) | no |  |
+| delivery of parameters (A, A, B, A): ways that work | 4 of 4 ways | new instance per render, after prepare every parameter first set to another value, then the target |
+| block size independent (steady state) | yes | largest at 32: identical |
+| deterministic (two instances, bit exact) | yes |  |
+| output stays finite after parameter jumps | yes |  |
+| recovers from parameter jumps | yes |  |
+| digital silence in gives digital silence out | yes |  |
+
+Bold: worth a look (see the findings and the details below).
 
 How to read the differences: every difference is given as **relative / absolute**: relative = RMS(output - reference) / RMS(reference) in dB (0 dB: the change is as large as the signal, -40 dB: 1 %, +6 dB: twice the signal, as for a polarity inversion); absolute = RMS(output - reference) in dBFS. "identical": bit exact. For a silent reference only the absolute value counts.
 

@@ -1,6 +1,6 @@
 # Runs "PluginLabHost --fingerprint <plugin file> <report file>" and checks the report of the gain plugin.
 # Arguments: HOST_APPLICATION, PLUGIN_FILE, REPORT_FILE
-file(REMOVE "${REPORT_FILE}")
+file(REMOVE "${REPORT_FILE}" "${REPORT_FILE}.json")
 
 execute_process(
     COMMAND "${HOST_APPLICATION}" --fingerprint "${PLUGIN_FILE}" "${REPORT_FILE}"
@@ -15,7 +15,16 @@ if(NOT EXISTS "${REPORT_FILE}")
 endif()
 
 file(READ "${REPORT_FILE}" REPORT)
-foreach(EXPECTED "# Fingerprint: PluginLab Test Gain" "## Findings" "## Delivery of parameters" "## Block sizes")
+if(NOT EXISTS "${REPORT_FILE}.json")
+    message(FATAL_ERROR "PluginLabHost did not write the summary ${REPORT_FILE}.json")
+endif()
+file(READ "${REPORT_FILE}.json" SUMMARY)
+string(FIND "${SUMMARY}" "\"key\": \"deterministic\"" POSITION)
+if(POSITION EQUAL -1)
+    message(FATAL_ERROR "The summary does not contain the item 'deterministic'")
+endif()
+
+foreach(EXPECTED "# Fingerprint: PluginLab Test Gain" "## Summary" "## Findings" "## Delivery of parameters" "## Block sizes")
     string(FIND "${REPORT}" "${EXPECTED}" POSITION)
     if(POSITION EQUAL -1)
         message(FATAL_ERROR "The report does not contain '${EXPECTED}'")

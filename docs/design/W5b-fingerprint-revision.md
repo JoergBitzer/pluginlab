@@ -135,3 +135,7 @@ Yes
 - Not measurable yet: ZL Equalizer 2 ("runs neither with mono nor with stereo audio"), most likely because it has a side-chain input bus and the layout we ask for has one
   input bus only. This belongs to R4 (exact layouts) and also concerns the loader and the engine.
 - The reports in `docs/fingerprints/` are made again with 0.13.0.
+- **R5 done (0.14.0, 2026-10-05).** `summarize()` gives the single results (key, test, result, detail, good); the report starts with them as a table (bold = worth a look), the
+  legend and the findings follow; `PluginLabHost --fingerprint` writes them as `<report>.json`; the Developer page shows them as columns (orange = worth a look, tooltip =
+  the number) and puts the buttons and the state of the report first. Tests: summary of the gain plugin all good, the latency liar "0 / 100" flagged, JSON round trip,
+  CTest checks the JSON file. The time-invariance result (R6) and the channel coupling (R4) are added to the summary with those steps.

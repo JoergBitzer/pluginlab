@@ -731,6 +731,169 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     return fingerprint;
 }
 
+std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
+{
+    std::vector<SummaryItem> items;
+    const auto add = [&items](const juce::String& key, const juce::String& test, const juce::String& result, const juce::String& detail, bool good)
+    {
+        SummaryItem item;
+        item.key = key;
+        item.test = test;
+        item.result = result;
+        item.detail = detail;
+        item.good = good;
+        items.push_back(item);
+    };
+
+    add("loads", "loads and runs with mono or stereo", yesNo(fingerprint.loaded), fingerprint.message, fingerprint.loaded);
+    if (! fingerprint.loaded)
+    {
+        return items;
+    }
+    juce::String channels;
+    if (fingerprint.supportsMono)
+    {
+        channels = "mono";
+    }
+    if (fingerprint.supportsStereo)
+    {
+        if (channels.isNotEmpty())
+        {
+            channels += ", ";
+        }
+        channels += "stereo";
+    }
+    add("channels", "channel layouts (main bus in = out)", channels, {}, true);
+    add("parameters", "parameters / changing the audio", juce::String(fingerprint.numberOfParameters) + " / " + juce::String(static_cast<int>(fingerprint.reactingParameters.size())),
+        {}, ! fingerprint.reactingParameters.empty());
+
+    // latency: the reference rate in the cell, all rates in the detail
+    const RateFingerprint* reference = nullptr;
+    bool latencyAgrees = true;
+    bool somethingCameOut = true;
+    bool preRinging = false;
+    bool ownSignal = false;
+    juce::String allRates;
+    for (const RateFingerprint& rate : fingerprint.rates)
+    {
+        if (rate.sampleRate == kReferenceRate)
+        {
+            reference = &rate;
+        }
+        somethingCameOut = somethingCameOut && rate.outputFound;
+        latencyAgrees = latencyAgrees && rate.outputFound && rate.reportedAfterAudio == rate.measuredLatency;
+        preRinging = preRinging || (rate.outputFound && rate.outputBeforePeakDb > kNothingDb);
+        ownSignal = ownSignal || rate.outputBeforeImpulseDbfs > kNothingDb;
+        if (allRates.isNotEmpty())
+        {
+            allRates += ", ";
+        }
+        allRates += juce::String(rate.sampleRate / 1000.0, 1) + " kHz: " + juce::String(rate.reportedAfterAudio) + " / ";
+        if (rate.outputFound)
+        {
+            allRates += juce::String(rate.measuredLatency);
+        }
+        else
+        {
+            allRates += "-";
+        }
+    }
+    juce::String latencyCell = "not measured";
+    if (reference != nullptr && reference->outputFound)
+    {
+        latencyCell = juce::String(reference->reportedAfterAudio) + " / " + juce::String(reference->measuredLatency);
+    }
+    else if (reference != nullptr)
+    {
+        latencyCell = juce::String(reference->reportedAfterAudio) + " / nothing came out";
+    }
+    add("latency", "latency at 48 kHz, reported / measured (samples)", latencyCell, allRates, somethingCameOut && latencyAgrees);
+    add("latencyAgrees", "reported latency = measured at all rates", yesNo(latencyAgrees), allRates, latencyAgrees);
+    add("outputBeforePeak", "output before the peak of the impulse response", yesNo(preRinging), {}, true);
+    add("ownSignal", "output before the impulse (signal of its own)", yesNo(ownSignal), {}, ! ownSignal);
+
+    int passedWays = 0;
+    for (const DeliveryResult& delivery : fingerprint.delivery)
+    {
+        if (delivery.passed)
+        {
+            ++passedWays;
+        }
+    }
+    juce::String deliveryCell = "none";
+    if (fingerprint.recommendedDelivery.isNotEmpty())
+    {
+        deliveryCell = juce::String(passedWays) + " of " + juce::String(static_cast<int>(fingerprint.delivery.size())) + " ways";
+    }
+    add("delivery", "delivery of parameters (A, A, B, A): ways that work", deliveryCell, fingerprint.recommendedDelivery,
+        passedWays == static_cast<int>(fingerprint.delivery.size()));
+
+    juce::String worstBlock;
+    double worstValue = kFloorDb;
+    for (const BlockSizeResult& block : fingerprint.blockSizes)
+    {
+        if (decisionValue(block.steadyState) > worstValue || worstBlock.isEmpty())
+        {
+            worstValue = decisionValue(block.steadyState);
+            worstBlock = "largest at " + juce::String(block.blockSize) + ": " + formatDifference(block.steadyState);
+        }
+    }
+    add("blockSizes", "block size independent (steady state)", yesNo(fingerprint.blockSizeIndependent), worstBlock, fingerprint.blockSizeIndependent);
+    add("deterministic", "deterministic (two instances, bit exact)", yesNo(fingerprint.deterministic), {}, fingerprint.deterministic);
+    add("finite", "output stays finite after parameter jumps", yesNo(fingerprint.outputStaysFinite), {}, fingerprint.outputStaysFinite);
+    add("recovers", "recovers from parameter jumps", yesNo(fingerprint.recoversFromJumps), {}, fingerprint.recoversFromJumps);
+    juce::String idle;
+    if (! fingerprint.silenceStaysSilent)
+    {
+        idle = "peak " + juce::String(fingerprint.idleLevelDb, 1) + " dBFS";
+    }
+    add("silence", "digital silence in gives digital silence out", yesNo(fingerprint.silenceStaysSilent), idle, fingerprint.silenceStaysSilent);
+    return items;
+}
+
+juce::String createSummaryJson(const PluginFingerprint& fingerprint)
+{
+    auto root = std::make_unique<juce::DynamicObject>();
+    root->setProperty("plugin", fingerprint.description.name);
+    root->setProperty("identifier", fingerprint.description.createIdentifierString());
+    root->setProperty("measured", juce::Time::getCurrentTime().formatted("%Y-%m-%d %H:%M"));
+    juce::Array<juce::var> items;
+    for (const SummaryItem& item : summarize(fingerprint))
+    {
+        auto object = std::make_unique<juce::DynamicObject>();
+        object->setProperty("key", item.key);
+        object->setProperty("test", item.test);
+        object->setProperty("result", item.result);
+        object->setProperty("detail", item.detail);
+        object->setProperty("good", item.good);
+        items.add(juce::var(object.release()));
+    }
+    root->setProperty("summary", items);
+    return juce::JSON::toString(juce::var(root.release()));
+}
+
+std::vector<SummaryItem> parseSummaryJson(const juce::String& json)
+{
+    std::vector<SummaryItem> items;
+    const juce::var parsed = juce::JSON::parse(json);
+    const juce::Array<juce::var>* list = parsed.getProperty("summary", {}).getArray();
+    if (list == nullptr)
+    {
+        return items;
+    }
+    for (const juce::var& entry : *list)
+    {
+        SummaryItem item;
+        item.key = entry.getProperty("key", {}).toString();
+        item.test = entry.getProperty("test", {}).toString();
+        item.result = entry.getProperty("result", {}).toString();
+        item.detail = entry.getProperty("detail", {}).toString();
+        item.good = static_cast<bool>(entry.getProperty("good", true));
+        items.push_back(item);
+    }
+    return items;
+}
+
 juce::String createReport(const PluginFingerprint& fingerprint)
 {
     const FingerprintSettings& settings = fingerprint.settings;
@@ -751,10 +914,22 @@ juce::String createReport(const PluginFingerprint& fingerprint)
     }
     text << "- channels: mono " << yesNo(fingerprint.supportsMono) << ", stereo " << yesNo(fingerprint.supportsStereo) << "\n\n";
 
+
+    text << "## Summary\n| test | result | detail |\n|---|---|---|\n";
+    for (const SummaryItem& item : summarize(fingerprint))
+    {
+        juce::String result = item.result;
+        if (! item.good)
+        {
+            result = "**" + result + "**";
+        }
+        text << "| " << item.test << " | " << result << " | " << item.detail << " |\n";
+    }
+    text << "\nBold: worth a look (see the findings and the details below).\n\n";
+
     text << "How to read the differences: every difference is given as **relative / absolute**: relative = RMS(output - reference) / RMS(reference) in dB "
             "(0 dB: the change is as large as the signal, -40 dB: 1 %, +6 dB: twice the signal, as for a polarity inversion); absolute = RMS(output - reference) in "
             "dBFS. \"identical\": bit exact. For a silent reference only the absolute value counts.\n\n";
-
     text << "## Findings\n";
     if (fingerprint.findings.empty())
     {

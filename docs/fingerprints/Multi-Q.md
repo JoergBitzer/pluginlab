@@ -2,8 +2,27 @@
 
 - file: `/home/bitzer/AudioDev/measurement_tool/plugins/ext/multi-q-linux/VST3/Multi-Q.vst3`
 - format: VST3, manufacturer: Dusk Audio, version: 0.10.9
-- measured: 2026-10-05 21:37
+- measured: 2026-10-05 22:38
 - channels: mono yes, stereo yes
+
+## Summary
+| test | result | detail |
+|---|---|---|
+| loads and runs with mono or stereo | yes |  |
+| channel layouts (main bus in = out) | mono, stereo |  |
+| parameters / changing the audio | 191 / 42 |  |
+| latency at 48 kHz, reported / measured (samples) | 60 / 60 | 44.1 kHz: 60 / 60, 48.0 kHz: 60 / 60, 96.0 kHz: 60 / 60 |
+| reported latency = measured at all rates | yes | 44.1 kHz: 60 / 60, 48.0 kHz: 60 / 60, 96.0 kHz: 60 / 60 |
+| output before the peak of the impulse response | no |  |
+| output before the impulse (signal of its own) | no |  |
+| delivery of parameters (A, A, B, A): ways that work | **2 of 4 ways** | new instance per render, parameters set after prepare |
+| block size independent (steady state) | yes | largest at 32: identical |
+| deterministic (two instances, bit exact) | yes |  |
+| output stays finite after parameter jumps | yes |  |
+| recovers from parameter jumps | **no** |  |
+| digital silence in gives digital silence out | **no** | peak -149.2 dBFS |
+
+Bold: worth a look (see the findings and the details below).
 
 How to read the differences: every difference is given as **relative / absolute**: relative = RMS(output - reference) / RMS(reference) in dB (0 dB: the change is as large as the signal, -40 dB: 1 %, +6 dB: twice the signal, as for a polarity inversion); absolute = RMS(output - reference) in dBFS. "identical": bit exact. For a silent reference only the absolute value counts.
 

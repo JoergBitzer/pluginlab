@@ -2,8 +2,27 @@
 
 - file: `/home/bitzer/AudioDev/measurement_tool/plugins/Pult.EQ_1_0_0_Linux_vst3/Pult EQ_1_0_0_Linux_vst3/Pult EQ.vst3`
 - format: VST3, manufacturer: Consistent Interruption, version: 1.0.0
-- measured: 2026-10-05 21:37
+- measured: 2026-10-05 22:38
 - channels: mono no, stereo yes
+
+## Summary
+| test | result | detail |
+|---|---|---|
+| loads and runs with mono or stereo | yes |  |
+| channel layouts (main bus in = out) | stereo |  |
+| parameters / changing the audio | 29 / 13 |  |
+| latency at 48 kHz, reported / measured (samples) | 1 / 1 | 44.1 kHz: 1 / 1, 48.0 kHz: 1 / 1, 96.0 kHz: 1 / 1 |
+| reported latency = measured at all rates | yes | 44.1 kHz: 1 / 1, 48.0 kHz: 1 / 1, 96.0 kHz: 1 / 1 |
+| output before the peak of the impulse response | no |  |
+| output before the impulse (signal of its own) | no |  |
+| delivery of parameters (A, A, B, A): ways that work | 4 of 4 ways | new instance per render, after prepare every parameter first set to another value, then the target |
+| block size independent (steady state) | yes | largest at 1024: -142.5 dB / -143.6 dBFS |
+| deterministic (two instances, bit exact) | **no** |  |
+| output stays finite after parameter jumps | yes |  |
+| recovers from parameter jumps | yes |  |
+| digital silence in gives digital silence out | **no** | peak -133.7 dBFS |
+
+Bold: worth a look (see the findings and the details below).
 
 How to read the differences: every difference is given as **relative / absolute**: relative = RMS(output - reference) / RMS(reference) in dB (0 dB: the change is as large as the signal, -40 dB: 1 %, +6 dB: twice the signal, as for a polarity inversion); absolute = RMS(output - reference) in dBFS. "identical": bit exact. For a silent reference only the absolute value counts.
 
@@ -61,9 +80,9 @@ Four ways of giving the plugin its parameters, each with the settings A (default
 | way | repeatable | reacts | as after a change | result | A again (2nd / 3rd) | B against A | A, B against the references |
 |---|---|---|---|---|---|---|---|
 | one instance, parameters set after prepare (stream) | yes | yes | yes | ok | -141.9 dB / -166.7 dBFS ; -142.6 dB / -167.3 dBFS | 22.9 dB / -1.9 dBFS | -142.6 dB / -167.3 dBFS ; identical |
-| new instance per render, parameters set before prepare | yes | yes | yes | ok | -142.5 dB / -167.3 dBFS ; -142.6 dB / -167.3 dBFS | 22.9 dB / -1.9 dBFS | -142.7 dB / -167.4 dBFS ; -142.5 dB / -143.7 dBFS |
-| new instance per render, parameters set after prepare | yes | yes | yes | ok | -142.5 dB / -167.2 dBFS ; -142.5 dB / -167.3 dBFS | 22.9 dB / -1.9 dBFS | -142.5 dB / -167.2 dBFS ; -142.4 dB / -143.7 dBFS |
-| new instance per render, after prepare every parameter first set to another value, then the target | yes | yes | yes | ok | -142.6 dB / -167.3 dBFS ; -142.6 dB / -167.4 dBFS | 22.9 dB / -1.9 dBFS | -142.6 dB / -167.4 dBFS ; -142.4 dB / -143.7 dBFS |
+| new instance per render, parameters set before prepare | yes | yes | yes | ok | -142.6 dB / -167.3 dBFS ; -142.5 dB / -167.3 dBFS | 22.9 dB / -1.9 dBFS | -142.6 dB / -167.3 dBFS ; -142.5 dB / -143.7 dBFS |
+| new instance per render, parameters set after prepare | yes | yes | yes | ok | -142.6 dB / -167.3 dBFS ; -142.7 dB / -167.4 dBFS | 22.9 dB / -1.9 dBFS | -142.6 dB / -167.3 dBFS ; -142.6 dB / -143.9 dBFS |
+| new instance per render, after prepare every parameter first set to another value, then the target | yes | yes | yes | ok | -142.5 dB / -167.3 dBFS ; -142.5 dB / -167.3 dBFS | 22.9 dB / -1.9 dBFS | -142.7 dB / -167.4 dBFS ; -142.6 dB / -143.8 dBFS |
 
 Most careful way that works: new instance per render, after prepare every parameter first set to another value, then the target.
 
@@ -72,12 +91,12 @@ Most careful way that works: new instance per render, after prepare every parame
 
 | block size | steady state | whole |
 |---|---|---|
-| 32 | -142.6 dB / -143.7 dBFS | -142.5 dB / -143.7 dBFS |
+| 32 | -142.5 dB / -143.6 dBFS | -142.5 dB / -143.7 dBFS |
 | 64 | -142.5 dB / -143.6 dBFS | -142.5 dB / -143.7 dBFS |
-| 128 | -142.7 dB / -143.8 dBFS | -142.6 dB / -143.7 dBFS |
-| 256 | -142.6 dB / -143.8 dBFS | -142.5 dB / -143.7 dBFS |
+| 128 | -142.6 dB / -143.7 dBFS | -142.6 dB / -143.8 dBFS |
+| 256 | -142.5 dB / -143.6 dBFS | -142.6 dB / -143.7 dBFS |
 | 1024 | -142.5 dB / -143.6 dBFS | -142.5 dB / -143.7 dBFS |
-| 2048 | -142.5 dB / -143.6 dBFS | -142.5 dB / -143.7 dBFS |
+| 2048 | -142.8 dB / -143.9 dBFS | -142.5 dB / -143.7 dBFS |
 | 509 | -142.6 dB / -143.7 dBFS | -142.5 dB / -143.7 dBFS |
 
 ## Other

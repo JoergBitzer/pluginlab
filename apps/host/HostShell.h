@@ -32,6 +32,7 @@ private:
     void endRestore();
 
     StartupOptions m_options;
+    juce::TooltipWindow m_tooltips{this}; // the tooltips of all pages (the buttons, the result columns of the Developer page)
     HostSettings m_settings;
     juce::AudioPluginFormatManager m_formatManager;
     pluginlab::engine::MeasurementEngine m_engine;

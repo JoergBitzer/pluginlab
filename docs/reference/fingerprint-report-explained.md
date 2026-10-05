@@ -1,6 +1,6 @@
 # The fingerprint report: what is measured, how, and how to read it
 
-Version 0.13.0 (2026-10-05, after the revision steps R1 to R3 of `docs/design/W5b-fingerprint-revision.md`). Code: `src/engine/Fingerprint.cpp`,
+Version 0.14.0 (2026-10-05, after the revision steps R1 to R3 and R5 of `docs/design/W5b-fingerprint-revision.md`). Code: `src/engine/Fingerprint.cpp`,
 `src/engine/LatencyMeasurer.cpp`, settings `src/engine/FingerprintSettings.{h,cpp}`. Report text: `createReport()`.
 Purpose: say exactly what every line of the report means, so that a result can be judged as "the plugin does this" or "our test does this", and list the
 places where the test itself is still weak (section 6; the open ones are planned as R4 to R7). Section 7 is a checklist for a surprising result.
@@ -96,6 +96,16 @@ Fixed in the code: block size 512 and 48 kHz as reference, 12288 noise samples o
 determinism = bit exact.
 
 ## 3. The report, section by section
+
+### 3.0 Summary (first section, R5)
+One row per single result: the test, the result, and the number behind it. **Bold** results are worth a look; each has a finding with the details. The rows, in
+order (key in the JSON in brackets): loads and runs with mono or stereo (`loads`); channel layouts (`channels`); parameters / changing the audio (`parameters`); latency at
+48 kHz reported / measured, all rates in the detail (`latency`); reported latency = measured at all rates (`latencyAgrees`); output before the peak (`outputBeforePeak`, never
+bold: it is a property, not a fault); output before the impulse (`ownSignal`); delivery: how many of the four ways work, the most careful one in the detail (`delivery`);
+block size independent, the largest steady-state difference in the detail (`blockSizes`); deterministic (`deterministic`); output stays finite (`finite`); recovers
+(`recovers`); digital silence in gives silence out, the idle peak in the detail (`silence`).
+The same rows are written as JSON next to the report (`<report>.json`: plugin, identifier, date, and the list of items with key, test, result, detail, good). The Developer
+page reads it and shows the results as columns, one row per plugin, orange where a result is worth a look, the detail as tooltip.
 
 ### 3.1 Header
 `file`, `format`, `manufacturer`, `version`, `measured` (date), a settings warning if any, `channels: mono yes/no, stereo yes/no`. "no" for both: another layout

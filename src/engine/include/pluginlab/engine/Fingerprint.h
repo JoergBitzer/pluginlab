@@ -96,7 +96,26 @@ struct PluginFingerprint
 PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
                                      const FingerprintSettings& settings = FingerprintSettings());
 
-// The fingerprint as a text report (Markdown).
+// One line of the summary: a single result of the fingerprint.
+struct SummaryItem
+{
+    juce::String key;     // stable name for programs (the JSON file, the columns of the Developer page)
+    juce::String test;    // what was tested, for people
+    juce::String result;  // "yes", "no", a way, "not measured", ...
+    juce::String detail;  // the number behind it
+    bool good = true;     // false: worth a look (shown as a finding)
+};
+
+// The single results of the fingerprint, in the order of the summary table.
+std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint);
+
+// The summary as JSON (plugin name, identifier, the date, and the items): written next to the report, read by the Developer page.
+juce::String createSummaryJson(const PluginFingerprint& fingerprint);
+
+// Reads the items back from such JSON (an empty list if the text is not one).
+std::vector<SummaryItem> parseSummaryJson(const juce::String& json);
+
+// The fingerprint as a text report (Markdown): the summary table first, then the findings and the details.
 juce::String createReport(const PluginFingerprint& fingerprint);
 
 // "continuous" for a continuous parameter, "switch" for two steps, else the number of steps

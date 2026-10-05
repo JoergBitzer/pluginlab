@@ -9,6 +9,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "HostSettings.h"
+#include "pluginlab/engine/Fingerprint.h"
 #include "pluginlab/engine/MeasurementEngine.h"
 
 namespace pluginlab::host
@@ -39,6 +40,7 @@ public:
     void paintRowBackground(juce::Graphics& g, int rowNumber, int width, int height, bool rowIsSelected) override;
     void paintCell(juce::Graphics& g, int rowNumber, int columnId, int width, int height, bool rowIsSelected) override;
     juce::Component* refreshComponentForCell(int rowNumber, int columnId, bool isRowSelected, juce::Component* existingComponentToUpdate) override;
+    juce::String getCellTooltip(int rowNumber, int columnId) override;
 
     // called by the job (message thread)
     void jobFinished(const juce::String& key, bool success);
@@ -68,7 +70,10 @@ private:
         State state = State::NoReport;
         juce::Time reportTime;
         bool outdated = false; // the plugin is newer than the report
+        std::vector<pluginlab::engine::SummaryItem> summary; // the single results of the report (from <report>.json)
     };
+
+    const pluginlab::engine::SummaryItem* findSummaryItem(const Row& row, int columnId) const;
 
     void updateRowFromDisk(Row& row) const;
     Row* findRow(const juce::String& key);

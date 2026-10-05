@@ -58,6 +58,25 @@ public:
         expect(! report.contains("2147483647"));
         expect(report.contains("## Settings used"));
         expect(! report.contains("feature"), "the response analysis is gone (it belongs to the analyzer)");
+        expect(report.indexOf("## Summary") < report.indexOf("## Findings"), "the summary comes first");
+        const std::vector<pluginlab::engine::SummaryItem> gainSummary = pluginlab::engine::summarize(gain);
+        for (const pluginlab::engine::SummaryItem& item : gainSummary)
+        {
+            expect(item.good || item.key == "parameters", "the gain plugin: " + item.key + " = " + item.result);
+        }
+        const std::vector<pluginlab::engine::SummaryItem> roundTrip =
+            pluginlab::engine::parseSummaryJson(pluginlab::engine::createSummaryJson(gain));
+        expectEquals(static_cast<int>(roundTrip.size()), static_cast<int>(gainSummary.size()));
+        if (roundTrip.size() == gainSummary.size())
+        {
+            for (size_t index = 0; index < roundTrip.size(); ++index)
+            {
+                expectEquals(roundTrip[index].key, gainSummary[index].key);
+                expectEquals(roundTrip[index].result, gainSummary[index].result);
+                expect(roundTrip[index].good == gainSummary[index].good);
+            }
+        }
+        expect(pluginlab::engine::parseSummaryJson("not json").empty());
         logMessage(report);
 
         beginTest("the plugin that reports 0 samples latency but delays by 100: the report differs from the measurement at all rates");
@@ -69,6 +88,15 @@ public:
             expectEquals(rate.measuredLatency, kLiarPluginDelay);
         }
         expect(! liar.findings.empty() && liar.findings[0].contains("reports 0 samples, measured 100"), "the lie must be a finding");
+        bool latencyFlagged = false;
+        for (const pluginlab::engine::SummaryItem& item : pluginlab::engine::summarize(liar))
+        {
+            if (item.key == "latency")
+            {
+                latencyFlagged = ! item.good && item.result == "0 / 100";
+            }
+        }
+        expect(latencyFlagged, "the summary must show 0 / 100 as worth a look");
         const pluginlab::engine::PluginFingerprint honest = measure(testpaths::getLatencyPlugin());
         expectEquals(honest.rates[0].measuredLatency, kLatencyPluginDelay);
         expect(honest.findings.empty());

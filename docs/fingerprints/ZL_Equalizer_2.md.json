@@ -1,0 +1,14 @@
+{
+  "plugin": "ZL Equalizer 2",
+  "identifier": "VST3-ZL Equalizer 2-173de323-86fa4be7",
+  "measured": "2026-10-05 22:38",
+  "summary": [
+    {
+      "key": "loads",
+      "test": "loads and runs with mono or stereo",
+      "result": "no",
+      "detail": "the plugin runs neither with mono nor with stereo audio",
+      "good": false
+    }
+  ]
+}

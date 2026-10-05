@@ -1,0 +1,98 @@
+{
+  "plugin": "Pult EQ",
+  "identifier": "VST3-Pult EQ-c296f6c4-3fd772eb",
+  "measured": "2026-10-05 22:38",
+  "summary": [
+    {
+      "key": "loads",
+      "test": "loads and runs with mono or stereo",
+      "result": "yes",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "channels",
+      "test": "channel layouts (main bus in = out)",
+      "result": "stereo",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "parameters",
+      "test": "parameters / changing the audio",
+      "result": "29 / 13",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "latency",
+      "test": "latency at 48 kHz, reported / measured (samples)",
+      "result": "1 / 1",
+      "detail": "44.1 kHz: 1 / 1, 48.0 kHz: 1 / 1, 96.0 kHz: 1 / 1",
+      "good": true
+    },
+    {
+      "key": "latencyAgrees",
+      "test": "reported latency = measured at all rates",
+      "result": "yes",
+      "detail": "44.1 kHz: 1 / 1, 48.0 kHz: 1 / 1, 96.0 kHz: 1 / 1",
+      "good": true
+    },
+    {
+      "key": "outputBeforePeak",
+      "test": "output before the peak of the impulse response",
+      "result": "no",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "ownSignal",
+      "test": "output before the impulse (signal of its own)",
+      "result": "no",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "delivery",
+      "test": "delivery of parameters (A, A, B, A): ways that work",
+      "result": "4 of 4 ways",
+      "detail": "new instance per render, after prepare every parameter first set to another value, then the target",
+      "good": true
+    },
+    {
+      "key": "blockSizes",
+      "test": "block size independent (steady state)",
+      "result": "yes",
+      "detail": "largest at 1024: -142.5 dB / -143.6 dBFS",
+      "good": true
+    },
+    {
+      "key": "deterministic",
+      "test": "deterministic (two instances, bit exact)",
+      "result": "no",
+      "detail": "",
+      "good": false
+    },
+    {
+      "key": "finite",
+      "test": "output stays finite after parameter jumps",
+      "result": "yes",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "recovers",
+      "test": "recovers from parameter jumps",
+      "result": "yes",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "silence",
+      "test": "digital silence in gives digital silence out",
+      "result": "no",
+      "detail": "peak -133.7 dBFS",
+      "good": false
+    }
+  ]
+}

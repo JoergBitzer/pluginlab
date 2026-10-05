@@ -19,10 +19,13 @@ constexpr int kColumnFormat = 3;
 constexpr int kColumnStatus = 4;
 constexpr int kColumnDate = 5;
 constexpr int kColumnActions = 6;
+constexpr int kFirstSummaryColumn = 10; // the columns of the single results follow, in the order of kSummaryColumns
+constexpr int kWidthSummary = 90;
+const juce::Colour kDoubtfulColour(0xffffa040);
 constexpr int kWidthNumber = 30;
-constexpr int kWidthName = 240;
+constexpr int kWidthName = 200;
 constexpr int kWidthFormat = 60;
-constexpr int kWidthStatus = 260;
+constexpr int kWidthStatus = 180;
 constexpr int kWidthDate = 150;
 constexpr int kWidthActions = 240;
 constexpr int kButtonWidth = 110;
@@ -34,6 +37,22 @@ constexpr int kReportWindowHeight = 720;
 constexpr float kTextFontHeight = 14.0f;
 const juce::String kReportExtension = ".md";
 const juce::String kDateFormat = "%Y-%m-%d %H:%M";
+}
+
+// The single results shown as columns: the key of the summary item and the column title (the full test name is the tooltip)
+struct SummaryColumn
+{
+    const char* key;
+    const char* title;
+};
+const SummaryColumn kSummaryColumns[] = {{"parameters", "Param. / react"},  {"latency", "Latency rep. / meas."}, {"delivery", "Delivery"},
+                                         {"blockSizes", "Block size indep."}, {"deterministic", "Deterministic"},       {"finite", "Finite"},
+                                         {"recovers", "Recovers"},          {"silence", "Silent"},                 {"ownSignal", "Own signal"}};
+constexpr int kNumberOfSummaryColumns = static_cast<int>(sizeof(kSummaryColumns) / sizeof(kSummaryColumns[0]));
+
+juce::File getSummaryFile(const juce::File& reportFile)
+{
+    return juce::File(reportFile.getFullPathName() + ".json");
 }
 
 // Runs "PluginLabHost --fingerprint" for one plugin in a child process and tells the panel when it has ended.
@@ -83,9 +102,14 @@ public:
             {
                 // (a child that died from a signal reports exit code 0 on POSIX: the report file is what counts)
                 success = temporary.existsAsFile() && temporary.getSize() > 0 && temporary.moveFileTo(m_reportFile);
+                if (success)
+                {
+                    getSummaryFile(temporary).moveFileTo(getSummaryFile(m_reportFile));
+                }
             }
         }
         temporary.deleteFile();
+        getSummaryFile(temporary).deleteFile();
         const juce::Component::SafePointer<DeveloperPanel> owner(&m_owner);
         const juce::String key = m_key;
         juce::MessageManager::callAsync([owner, key, success]
@@ -200,13 +224,19 @@ DeveloperPanel::DeveloperPanel(pluginlab::engine::MeasurementEngine& engine, Hos
     m_table.setModel(this);
     m_table.setRowHeight(kRowHeight);
     m_table.setHeaderHeight(kHeaderHeight);
+    // the buttons and the state of the report first (visible without scrolling), then the single results, then the date
     m_table.getHeader().addColumn("#", kColumnNumber, kWidthNumber);
     m_table.getHeader().addColumn("Plugin", kColumnName, kWidthName);
-    m_table.getHeader().addColumn("Format", kColumnFormat, kWidthFormat);
-    m_table.getHeader().addColumn("Report", kColumnStatus, kWidthStatus);
-    m_table.getHeader().addColumn("Date", kColumnDate, kWidthDate);
     m_table.getHeader().addColumn("", kColumnActions, kWidthActions);
-    m_infoLabel.setText("The plugins loaded on the Plugins page. A report tests a plugin technically (parameters, latency, sample rates, block sizes, "
+    m_table.getHeader().addColumn("Report", kColumnStatus, kWidthStatus);
+    for (int index = 0; index < kNumberOfSummaryColumns; ++index)
+    {
+        m_table.getHeader().addColumn(kSummaryColumns[index].title, kFirstSummaryColumn + index, kWidthSummary);
+    }
+    m_table.getHeader().addColumn("Format", kColumnFormat, kWidthFormat);
+    m_table.getHeader().addColumn("Date", kColumnDate, kWidthDate);
+    m_infoLabel.setText("The plugins loaded on the Plugins page. The columns show the single results of the last report (orange: worth a look; the tooltip "
+                        "gives the number). A report tests a plugin technically (parameters, latency at three sample rates, block sizes, "
                         "delivery of parameters, robustness) in a process of its own; it can take a minute. Reports are kept in "
                         + m_settings.getFingerprintFolder().getFullPathName() + ".",
                         juce::dontSendNotification);
@@ -241,6 +271,7 @@ juce::File DeveloperPanel::makeReportFile(const juce::PluginDescription& descrip
 void DeveloperPanel::updateRowFromDisk(Row& row) const
 {
     row.outdated = false;
+    row.summary.clear();
     if (! row.reportFile.existsAsFile() || row.reportFile.getSize() == 0)
     {
         row.state = State::NoReport;
@@ -248,6 +279,7 @@ void DeveloperPanel::updateRowFromDisk(Row& row) const
     }
     row.state = State::Ready;
     row.reportTime = row.reportFile.getLastModificationTime();
+    row.summary = pluginlab::engine::parseSummaryJson(getSummaryFile(row.reportFile).loadFileAsString());
     row.outdated = pluginlab::hosting::getNewestModificationTime(row.pluginFile) > row.reportTime;
 }
 
@@ -324,13 +356,13 @@ juce::String DeveloperPanel::getStatusText(int row) const
         case State::Waiting:
             return "waiting ...";
         case State::Running:
-            return "measuring ... (a process of its own)";
+            return "measuring ...";
         case State::Failed:
-            return "failed: the plugin crashed or could not be measured";
+            return "failed (crash?)";
         case State::Ready:
             if (entry.outdated)
             {
-                return "ready, but the plugin is newer than the report";
+                return "ready (plugin is newer)";
             }
             return "ready";
     }
@@ -384,12 +416,59 @@ void DeveloperPanel::paintCell(juce::Graphics& g, int rowNumber, int columnId, i
     {
         text = row.reportTime.formatted(kDateFormat);
     }
-    g.setColour(juce::Colour(0xffd0d0d0));
-    if (rowIsSelected)
+    juce::Colour colour(0xffd0d0d0);
+    const pluginlab::engine::SummaryItem* item = findSummaryItem(row, columnId);
+    if (item != nullptr)
     {
-        g.setColour(juce::Colours::white);
+        text = item->result;
+        if (! item->good)
+        {
+            colour = kDoubtfulColour;
+        }
     }
+    const bool doubtful = item != nullptr && ! item->good;
+    if (rowIsSelected && ! doubtful)
+    {
+        colour = juce::Colours::white;
+    }
+    g.setColour(colour);
     g.drawText(text, kMargin / 2, 0, width - kMargin, height, juce::Justification::centredLeft, true);
+}
+
+const pluginlab::engine::SummaryItem* DeveloperPanel::findSummaryItem(const Row& row, int columnId) const
+{
+    const int index = columnId - kFirstSummaryColumn;
+    if (index < 0 || index >= kNumberOfSummaryColumns)
+    {
+        return nullptr;
+    }
+    for (const pluginlab::engine::SummaryItem& item : row.summary)
+    {
+        if (item.key == kSummaryColumns[index].key)
+        {
+            return &item;
+        }
+    }
+    return nullptr;
+}
+
+juce::String DeveloperPanel::getCellTooltip(int rowNumber, int columnId)
+{
+    if (rowNumber < 0 || rowNumber >= static_cast<int>(m_rows.size()))
+    {
+        return {};
+    }
+    const pluginlab::engine::SummaryItem* item = findSummaryItem(m_rows[static_cast<size_t>(rowNumber)], columnId);
+    if (item == nullptr)
+    {
+        return {};
+    }
+    juce::String tip = item->test + ": " + item->result;
+    if (item->detail.isNotEmpty())
+    {
+        tip += " (" + item->detail + ")";
+    }
+    return tip;
 }
 
 juce::Component* DeveloperPanel::refreshComponentForCell(int rowNumber, int columnId, bool isRowSelected, juce::Component* existingComponentToUpdate)

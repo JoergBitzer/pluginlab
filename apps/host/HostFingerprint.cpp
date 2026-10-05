@@ -19,6 +19,7 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
     const pluginlab::engine::FingerprintSettings settings =
         pluginlab::engine::FingerprintSettings::loadOrCreate(pluginlab::engine::FingerprintSettings::getDefaultFile(), warning);
     juce::String report;
+    int measured = 0;
     for (const juce::PluginDescription& description : scan.descriptions)
     {
         if (pluginIdentifier.isNotEmpty() && description.createIdentifierString() != pluginIdentifier)
@@ -28,6 +29,14 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
         pluginlab::engine::PluginFingerprint fingerprint = pluginlab::engine::measureFingerprint(formatManager, description, settings);
         fingerprint.settingsWarning = warning;
         report += pluginlab::engine::createReport(fingerprint) + "\n";
+        // the single results for programs (the Developer page): <report>.json, or <report>.<n>.json for further plugins of the file
+        juce::String jsonPath = reportFile.getFullPathName() + ".json";
+        if (measured > 0)
+        {
+            jsonPath = reportFile.getFullPathName() + "." + juce::String(measured) + ".json";
+        }
+        juce::File(jsonPath).replaceWithText(pluginlab::engine::createSummaryJson(fingerprint));
+        ++measured;
     }
     if (report.isEmpty())
     {
