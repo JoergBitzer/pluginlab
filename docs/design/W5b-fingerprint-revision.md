@@ -92,6 +92,14 @@ interpretable when the settings change).
 - The stream reference problem (W13): a plugin that ignores parameter changes in the stream way gets "stream ignores parameter changes" from the reaction check of the
   stream row itself (B against A1), before the other ways are judged against it.
 
+### R6b Parameters that act only together (found with Venn Audio Free EQ, 2026-10-05)
+- Free EQ has six bands, all **disabled by default** ("Band n Enabled: Off"). Its report says "no parameter changed the audio": switching a band on alone (gain 0 dB) and
+  moving a gain alone (band off) both leave the audio unchanged, and the second pass only starts from parameters that reacted in the first. The plugin is fine; the scan
+  cannot find parameters that need a partner.
+- Fix: a pass 0 that flips every switch away from its default (and every choice to another value) before the scan, then the two passes as now with that base; if still
+  nothing reacts, try each switch together with each continuous parameter at 0.75 (pairs, capped). The report says which base the scan used.
+- Test plugin: the EQ test plugin with an "Enabled" switch that is off by default.
+
 ### R7 Setting B visible (P4)
 - Print the setting B at the top of the details: parameter name, normalised value, the plugin's text for it. B is still "the parameters that change the audio at 0.75,
   switches excluded", but now it can be read in the plugin's own units.
