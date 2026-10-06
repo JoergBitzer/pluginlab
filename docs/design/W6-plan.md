@@ -159,6 +159,29 @@ in a spectrogram an alias of a resampler shows as a line running the other way. 
 Open: a leak report of the test program at exit ("4 instances of AudioPluginFormat", JUCE assertion), already there before W6.2 and not part of it; to be looked at
 separately.
 
+### W6.3 nonlinear and utility references (0.21.0, done)
+In `pluginlab_reference`. A common base `Processor` (`reset`, `process(buffer)` with all channels at once, `getLatencySamples`) for all reference processors;
+`LinearProcessor` (W6.2) now derives from it. The noise generator of `pluginlab_signals` became a streaming class `NoiseGenerator` (same samples as before)
+with the theoretical RMS of its raw output, so that a noise adder can be scaled without measuring.
+- `Nonlinear.h`: `Waveshaper` (polynomial, hard clipper, tanh soft clipper) with the harmonics of a sine: closed form for the polynomial
+  (cos^n expansion) and the hard clipper (Fourier series of the clipped sine), numerical integration for any curve; `Quantizer` (N bits, mid-tread,
+  TPDF dither of +-1 step optional) with the expected SNR 6.02 N + 1.76 dB + 20 log A (4.77 dB less with dither).
+- `Utility.h`: `Gain` (dB, polarity), `ChannelMatrix` (2 x 2; crosstalk, M/S width), `DcOffset`, `HumAdder` (50/60 Hz plus harmonics at relative levels),
+  `NoiseAdder` (colour, RMS level, seed per channel), `Tremolo` (exact gain curve 1 - depth (1 - cos) / 2).
+
+`tests/NonlinearReferenceTests.cpp`. What the tests showed:
+- Polynomial: closed form = numerical integration within 1e-12; the processed sine matches within 0.001 dB (harmonics above -80 dB re H1).
+  Example y = x + 0.1 x^2 + 0.05 x^3 + 0.02 x^5 at A = 0.5: H2 -32.13 dB, H3 -49.17 dB, H5 -82.23 dB re H1, DC 0.0125.
+- Hard clipper: the Fourier series = numerical integration within 1e-9; processed within 0.001 dB. Teaching point found on the way: a sampled clipper
+  aliases; with fs/f0 = 612/13 its harmonics near 600 folded back onto the 7th harmonic by 0.004 dB. The test uses fs/f0 = 4755/101 (aliases
+  land on harmonics only near harmonic 4755). At 6 dB over the threshold: H3 -10.3 dB, H5 -16.3 dB re H1.
+- tanh(4 x): no even harmonics, small-signal gain = drive, THD 0.33 % / 4.6 % / 17.3 % / 30.1 % at A = 0.05 / 0.2 / 0.5 / 1.
+- Quantizer: SNR within 0.1 dB of the formula at 8, 12 and 16 bits, with and without dither (e.g. 16 bits: 98.05 dB against 98.09 dB; dithered
+  93.31 dB against 93.32 dB). A sine of 2 steps at 8 bits: H3 -34 dB re H1 without dither, at the noise floor (-48 dB, one DFT bin) with dither.
+- Gain, channel matrix, DC, hum and tremolo exact (float rounding); hum and tremolo continue across blocks. Noise adder at -30 dBFS RMS: white within
+  0.01 dB and correlation below 0.003; pink within 0.3 dB and correlation -0.06 (the slowest Voss row changes only every 2^15 samples, so 10 s of pink
+  noise holds few independent low-frequency values; the tolerances for pink are wider).
+
 ## 5. The questions and the author's answers (kept for the record)
 1. **Filter families:** RBJ, Orfanidis, Zölzer, analog prototypes, Butterworth/Linkwitz-Riley, linear-phase FIR and delays: enough, too much, something missing (e.g. Vicanek's matched
    biquads, state-variable filter / TPT/ZDF designs as many modern plugins use them)?

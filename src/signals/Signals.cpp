@@ -19,7 +19,6 @@ constexpr double kSmpteRatio = 4.0;
 constexpr double kCcifFirstHz = 19000.0;
 constexpr double kCcifSecondHz = 20000.0;
 constexpr double kCcifRatio = 1.0;
-constexpr int kPinkRows = 16;             // Voss-McCartney: rows of the generator
 
 // Copies channel 0 into the other channels as the relation says
 void applyRelation(juce::AudioBuffer<float>& buffer, ChannelRelation relation)
@@ -71,48 +70,10 @@ void applyFades(juce::AudioBuffer<float>& buffer, int fadeSamples)
 
 void fillNoise(float* data, int length, NoiseColour colour, int seed)
 {
-    juce::Random random(seed);
-    if (colour == NoiseColour::WhiteUniform)
-    {
-        for (int index = 0; index < length; ++index)
-        {
-            data[index] = random.nextFloat() * 2.0f - 1.0f;
-        }
-        return;
-    }
-    if (colour == NoiseColour::WhiteGaussian)
-    {
-        // Box-Muller
-        for (int index = 0; index < length; ++index)
-        {
-            const double first = std::max(1.0e-12, static_cast<double>(random.nextDouble()));
-            const double second = random.nextDouble();
-            data[index] = static_cast<float>(std::sqrt(-2.0 * std::log(first)) * std::cos(kTwoPi * second));
-        }
-        return;
-    }
-    // pink: Voss-McCartney, rows updated at rates halving from row to row
-    double rows[kPinkRows] = {};
-    double sum = 0.0;
-    for (int row = 0; row < kPinkRows; ++row)
-    {
-        rows[row] = random.nextDouble() * 2.0 - 1.0;
-        sum += rows[row];
-    }
+    NoiseGenerator generator(colour, seed);
     for (int index = 0; index < length; ++index)
     {
-        // the row to update: the number of trailing zeros of the counter
-        int counter = index + 1;
-        int row = 0;
-        while ((counter & 1) == 0 && row < kPinkRows - 1)
-        {
-            counter >>= 1;
-            ++row;
-        }
-        sum -= rows[row];
-        rows[row] = random.nextDouble() * 2.0 - 1.0;
-        sum += rows[row];
-        data[index] = static_cast<float>(sum + (random.nextDouble() * 2.0 - 1.0));
+        data[index] = static_cast<float>(generator.nextSample());
     }
 }
 
@@ -134,6 +95,63 @@ void scaleToRms(float* data, int length, double targetRms)
         data[index] *= gain;
     }
 }
+}
+
+NoiseGenerator::NoiseGenerator(NoiseColour colour, int seed)
+    : m_colour(colour)
+    , m_random(seed)
+{
+    if (colour == NoiseColour::Pink)
+    {
+        for (int row = 0; row < kPinkRows; ++row)
+        {
+            m_rows[row] = m_random.nextDouble() * 2.0 - 1.0;
+            m_sum += m_rows[row];
+        }
+    }
+}
+
+double NoiseGenerator::nextSample()
+{
+    if (m_colour == NoiseColour::WhiteUniform)
+    {
+        return m_random.nextFloat() * 2.0f - 1.0f;
+    }
+    if (m_colour == NoiseColour::WhiteGaussian)
+    {
+        // Box-Muller
+        const double first = std::max(1.0e-12, static_cast<double>(m_random.nextDouble()));
+        const double second = m_random.nextDouble();
+        return std::sqrt(-2.0 * std::log(first)) * std::cos(kTwoPi * second);
+    }
+    // pink: Voss-McCartney, rows updated at rates halving from row to row; the row to update is the number of trailing zeros of the counter
+    ++m_counter;
+    int counter = m_counter;
+    int row = 0;
+    while ((counter & 1) == 0 && row < kPinkRows - 1)
+    {
+        counter >>= 1;
+        ++row;
+    }
+    m_sum -= m_rows[row];
+    m_rows[row] = m_random.nextDouble() * 2.0 - 1.0;
+    m_sum += m_rows[row];
+    return m_sum + (m_random.nextDouble() * 2.0 - 1.0);
+}
+
+double NoiseGenerator::getRawRms(NoiseColour colour)
+{
+    // a uniform value in [-1, 1] has the variance 1/3; pink is the sum of kPinkRows + 1 of them
+    constexpr double kUniformVariance = 1.0 / 3.0;
+    if (colour == NoiseColour::WhiteUniform)
+    {
+        return std::sqrt(kUniformVariance);
+    }
+    if (colour == NoiseColour::WhiteGaussian)
+    {
+        return 1.0;
+    }
+    return std::sqrt((kPinkRows + 1) * kUniformVariance);
 }
 
 double dbToGain(double decibels)

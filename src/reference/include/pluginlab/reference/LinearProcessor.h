@@ -2,17 +2,16 @@
 
 #include <complex>
 
-#include <juce_audio_basics/juce_audio_basics.h>
+#include "pluginlab/reference/Processor.h"
 
 namespace pluginlab::reference
 {
 // A linear time-invariant reference processor: it processes audio and knows its own exact frequency response H(e^jw).
 // The processing runs in double precision with a state per channel.
-class LinearProcessor
+class LinearProcessor : public Processor
 {
 public:
     explicit LinearProcessor(double sampleRate);
-    virtual ~LinearProcessor() = default;
 
     double getSampleRate() const;
 
@@ -20,16 +19,12 @@ public:
     void setNumChannels(int channels);
     int getNumChannels() const;
 
-    virtual void reset() = 0;
     virtual double processSample(int channel, double input) = 0;
 
     // The exact frequency response at a frequency (the definition the processing is tested against)
     virtual std::complex<double> getResponse(double frequencyHz) const = 0;
 
-    // The delay a host should compensate (0 for minimum-phase filters, (taps - 1) / 2 for a linear-phase FIR)
-    virtual int getLatencySamples() const;
-
-    void process(juce::AudioBuffer<float>& buffer);
+    void process(juce::AudioBuffer<float>& buffer) override;
     void process(juce::AudioBuffer<double>& buffer);
 
 protected:

@@ -77,6 +77,27 @@ enum class NoiseColour
     WhiteGaussian,
     Pink
 };
+// A streaming noise source (the one makeNoise uses): uniform in [-1, 1], Gaussian (Box-Muller, RMS 1) or pink (Voss-McCartney with 16 rows
+// plus a white term). The raw output is not normalised; getRawRms gives its theoretical RMS, so a stream can be scaled to a level.
+class NoiseGenerator
+{
+public:
+    static constexpr int kPinkRows = 16;
+
+    NoiseGenerator(NoiseColour colour, int seed);
+    double nextSample();
+
+    // The RMS of the raw output: 1/sqrt(3) uniform, 1 Gaussian, sqrt((kPinkRows + 1) / 3) pink
+    static double getRawRms(NoiseColour colour);
+
+private:
+    NoiseColour m_colour;
+    juce::Random m_random;
+    double m_rows[kPinkRows] = {};
+    double m_sum = 0.0;
+    int m_counter = 0;
+};
+
 struct NoiseSettings
 {
     NoiseColour colour = NoiseColour::WhiteGaussian;

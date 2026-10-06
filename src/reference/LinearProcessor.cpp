@@ -43,11 +43,6 @@ int LinearProcessor::getNumChannels() const
     return m_channels;
 }
 
-int LinearProcessor::getLatencySamples() const
-{
-    return 0;
-}
-
 void LinearProcessor::process(juce::AudioBuffer<float>& buffer)
 {
     processBuffer(*this, buffer);

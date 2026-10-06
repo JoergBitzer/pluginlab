@@ -1,6 +1,7 @@
-# pluginlab_reference: the reference processors of W6.2 (docs/design/W6-plan.md): linear filters with their exact frequency
+# pluginlab_reference: the reference processors of W6.2 and W6.3 (docs/design/W6-plan.md): linear filters with their exact frequency
 # response (RBJ, Orfanidis, Zoelzer, state-variable, Butterworth / Linkwitz-Riley, linear-phase FIR, delays) and the analog
-# prototypes. No GUI, no hosting.
+# prototypes; nonlinear processors with known harmonics (polynomial, clippers, quantizer) and utilities (gain, channel matrix, DC, hum,
+# noise, tremolo). No GUI, no hosting.
 add_library(pluginlab_reference STATIC
     Analog.cpp
     Biquad.cpp
@@ -9,7 +10,10 @@ add_library(pluginlab_reference STATIC
     DirectFormFilter.cpp
     LinearPhaseFir.cpp
     LinearProcessor.cpp
-    StateVariableFilter.cpp)
+    Nonlinear.cpp
+    Processor.cpp
+    StateVariableFilter.cpp
+    Utility.cpp)
 
 target_include_directories(pluginlab_reference
     PUBLIC
@@ -22,6 +26,7 @@ target_compile_definitions(pluginlab_reference
 
 target_link_libraries(pluginlab_reference
     PUBLIC
+        pluginlab_signals
         juce::juce_audio_basics
     PRIVATE
         juce::juce_recommended_config_flags
