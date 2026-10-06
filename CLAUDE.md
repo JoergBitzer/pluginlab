@@ -32,7 +32,8 @@ ctest --test-dir build -C Debug --output-on-failure
 tools/run_pluginval.sh build/plugins/loader/PluginLabLoader_artefacts/Debug/VST3/PluginLabLoader.vst3 1
 ```
 Develop with the Debug build (JUCE assertions are on). On Linux the tests that start the GUI app need a display (`xvfb-run -a`
-on a machine without one). CI (`.github/workflows/ci.yml`) builds, tests and runs pluginval on Linux, Windows and macOS.
+on a machine without one). CI (`.github/workflows/ci.yml`) builds, tests and runs pluginval on Windows and macOS, only for a version tag
+(see "CI and tags" below); Linux is tested locally.
 
 ## Workflow rules (from the author)
 - Development rules of `planning.md` section 7 apply: step by step; for each new feature design (a note in `docs/design/`),
@@ -41,6 +42,11 @@ on a machine without one). CI (`.github/workflows/ci.yml`) builds, tests and run
   a new feature raises the second number and sets the third to 0 (1.0.3 -> 1.1.0); a fix or other change raises the third
   (1.1.0 -> 1.1.1). Documentation-only changes need no new version.
 - Release tags (`vX.Y.Z`) only on the user's explicit request.
+- **CI and tags** (as in JadeSpectrogram2, decided by the author 2026-10-06): pushing is fine at any time and starts no CI. CI (Windows and
+  macOS) starts only when a tag `vX.Y.Z` is pushed whose version equals `project(pluginlab VERSION X.Y.Z)` in the top-level CMakeLists.txt;
+  a tag that does not match stops the run in the first job, before anything is built. The "Run workflow" button on the Actions page starts it
+  by hand (no tag check). To test a version on Windows/macOS: bump the version, commit, `git tag vX.Y.Z`, `git push origin main vX.Y.Z`
+  (the tag only when the user asks for it), then watch the run with `gh run list` / `gh run watch`.
 - Update the documentation in the same change as the code.
 - Report results honestly: failed tests, skipped steps, things not tested (e.g. Windows/macOS).
 - The user works directly on `main` for now; commit per logical step, push when asked or when a work package is finished.
@@ -48,7 +54,7 @@ on a machine without one). CI (`.github/workflows/ci.yml`) builds, tests and run
 ### Not active yet (the author: for feature extensions of a working product; switch on later)
 - A new git branch per request (descriptive name, e.g. `feature/...`, `fix/...`); merge into main only when the user says so.
 - Run pluginval before every commit (`tools/run_pluginval.*`, all runs SUCCESS, zero JUCE assertions).
-(CI runs pluginval on every push regardless.)
+(CI runs pluginval for every version tag regardless.)
 
 ## Conventions (code style of the author, binding)
 - Readable code: no one-liners, no magic numbers, no magic constants, no magic strings. Readability is more important than

@@ -1,25 +1,40 @@
-# CI: build, run the tests and validate the loader plugin with pluginval on Linux, Windows and macOS.
+# CI: build, run the tests and validate the loader plugin with pluginval on Windows and macOS (Linux is the development machine).
+# It does not run on a normal push. It runs
+#  - when a tag vX.Y.Z is pushed that matches project(pluginlab VERSION X.Y.Z) in CMakeLists.txt (a tag that does not match
+#    stops the run before anything is built), or
+#  - with the "Run workflow" button on the Actions page (no tag check).
 name: CI
 
 on:
   push:
-  pull_request:
+    tags: ['v*.*.*']
   workflow_dispatch:
 
 env:
   LOADER_VST3: build/plugins/loader/PluginLabLoader_artefacts/Release/VST3/PluginLabLoader.vst3
 
 jobs:
+  check-version:
+    name: Tag matches the version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare the tag with the version in CMakeLists.txt
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(sed -n 's/^project(pluginlab VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
+          echo "tag ${GITHUB_REF_NAME}, CMakeLists version ${version}"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+
   build-and-test:
     name: ${{ matrix.name }}
+    needs: check-version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Linux
-            # older Ubuntu = older glibc
-            os: ubuntu-22.04
           - name: Windows
             os: windows-latest
           - name: macOS
@@ -29,15 +44,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libjack-jackd2-dev \
-            libfreetype-dev libfontconfig1-dev \
-            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libxi-dev \
-            libglu1-mesa-dev mesa-common-dev xvfb openbox
 
       - name: Configure
         shell: bash
@@ -49,10 +55,6 @@ jobs:
 
       # pluginval first: the scripts download it (tools/run_pluginval.*), the validator tests of PluginLabTests then find it
       # and must not be skipped (PLUGINLAB_REQUIRE_PLUGINVAL)
-      - name: Validate the loader plugin with pluginval (Linux)
-        if: runner.os == 'Linux'
-        run: xvfb-run -a tools/run_pluginval.sh "$LOADER_VST3" 1
-
       - name: Validate the loader plugin with pluginval (macOS)
         if: runner.os == 'macOS'
         run: tools/run_pluginval.sh "$LOADER_VST3" 1
@@ -63,16 +65,7 @@ jobs:
         run: tools/run_pluginval.ps1 "$env:LOADER_VST3" 1
 
       # PluginLabTests (juce::UnitTest), the end-to-end report of the host and the smoke test of PluginLabHost
-      - name: Test (Linux)
-        if: runner.os == 'Linux'
-        env:
-          PLUGINLAB_REQUIRE_PLUGINVAL: "1"
-        # a window manager (openbox) runs in the virtual display: VST2 editors (XEmbed) need atoms that only exist then;
-        # without it the hosted VST2 editor dies with an X "BadAtom" error
-        run: xvfb-run -a bash -c 'openbox & sleep 2; ctest --test-dir build -C Release --output-on-failure'
-
-      - name: Test (Windows, macOS)
-        if: runner.os != 'Linux'
+      - name: Test
         shell: bash
         env:
           PLUGINLAB_REQUIRE_PLUGINVAL: "1"
