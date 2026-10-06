@@ -204,15 +204,17 @@ void addSteppedSines(std::vector<SignalFile>& files, double sampleRate, int leng
         {
             continue; // the file is too short even for one step per octave
         }
-        juce::String steps = "frequency_Hz,start_sample,measure_start_sample,measure_length_samples\n";
+        juce::String steps = "frequency_Hz,start_sample,measure_start_sample,measure_length_samples,step_length_samples\n";
         for (const sig::SineStep& step : best.steps)
         {
-            steps << juce::String(step.frequencyHz, 4) << "," << step.start << "," << step.measureStart << "," << step.measureLength << "\n";
+            steps << juce::String(step.frequencyHz, 4) << "," << step.start << "," << step.measureStart << "," << step.measureLength << "," << step.length << "\n";
         }
         const juce::String description = "stepped sine (Audio Precision style) 20 kHz -> 20 Hz, " + juce::String(best.settings.stepsPerOctave)
                                          + " steps per octave (" + juce::String(static_cast<int>(best.steps.size())) + " steps), " + juce::String(level)
-                                         + " dBFS peak, L = R; each step: settling " + juce::String(best.settings.settleSeconds) + " s, then measurement >= "
-                                         + juce::String(best.settings.measureSeconds, 3) + " s and >= 4 periods (whole periods); the steps in the CSV file";
+                                         + " dBFS peak, L = R; each step: Hann fade-in " + juce::String(best.settings.fadeSeconds * 1000.0) + " ms, settling "
+                                         + juce::String(best.settings.settleSeconds) + " s, measurement >= "
+                                         + juce::String(best.settings.measureSeconds, 3) + " s and >= 4 periods (whole periods), Hann fade-out "
+                                         + juce::String(best.settings.fadeSeconds * 1000.0) + " ms; the steps in the CSV file";
         files.push_back({"steppedsine_20kHz_20Hz_" + describeLevel(level), description, fitLength(best.signal, length), steps});
     }
 }

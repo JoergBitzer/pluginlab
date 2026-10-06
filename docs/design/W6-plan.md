@@ -125,6 +125,10 @@ stepped sines 20 kHz -> 20 Hz (-6 and -20 dBFS; 3 steps per octave, the measurem
 Python prototype's soundfile: all as intended (CCIF shows -6.34 dBFS sample peak: the true peak is -6 dBFS, the samples miss it). CTest `PluginLabSignalsWrites`.
 Set written for the author: `~/Music/TestSignals/` (5 s and 10 s, 48 kHz).
 
+0.19.1 (author: the switches between the steps clicked, a click excites other frequencies): every step of the stepped sine now has a Hann fade-in and
+fade-out of `fadeSeconds` (default 10 ms, 0 = hard switches): | fade-in | latency + settling | measurement window | fade-out |. The fades lie outside
+the settling time and the window. For one 97 Hz step the energy at 1234.5 Hz fell from -57.4 dB (hard switches) to -118.1 dB re the tone.
+
 ### W6.2 linear references (0.18.0, done)
 `src/reference/` builds the static library `pluginlab_reference` (namespace `pluginlab::reference`, only `juce_audio_basics`). Every processor derives from
 `LinearProcessor`: `processSample` / `process(buffer)` in double precision with a state per channel, and `getResponse(f)`, its exact H(e^jw).

@@ -7,8 +7,11 @@
 namespace pluginlab::signals
 {
 // The stepped sine of the Audio Precision analyzers: log-spaced frequencies from high to low (20 kHz down to 20 Hz); every step is a sine
-// that lasts for the latency of the device, a settling time and a measurement time. The measurement window of each step holds a whole
-// number of periods. Slow, but reliable for the magnitude (no phase), THD, THD+N and crosstalk.
+// that lasts for a Hann fade-in, the latency of the device, a settling time, a measurement time and a Hann fade-out:
+//   | fade-in | latency + settling | measurement window (whole periods) | fade-out |
+// The fades keep the switches between the steps free of clicks (a click would excite other frequencies); they lie outside the settling
+// time and the measurement window, so the device settles on the full level and the window holds the sine at full level only.
+// Slow, but reliable for the magnitude (no phase), THD, THD+N and crosstalk.
 struct SteppedSineSettings
 {
     double sampleRate = 48000.0;
@@ -20,14 +23,16 @@ struct SteppedSineSettings
     double settleSeconds = 0.05;       // after the latency, before the measurement (the measurement decides: THD longer than the transfer function)
     double measureSeconds = 0.1;       // at least; rounded up to whole periods
     int minimumPeriods = 10;           // at low frequencies the window holds at least this many periods
+    double fadeSeconds = 0.01;         // Hann fade-in at the start and fade-out at the end of every step (0: hard switches)
 };
 
 struct SineStep
 {
     double frequencyHz = 0.0;
-    int start = 0;          // first sample of the step in the signal
-    int measureStart = 0;   // the measurement window of the step
-    int measureLength = 0;  // a whole number of periods (rounded to samples)
+    int start = 0;          // first sample of the step in the signal (the fade-in starts here)
+    int measureStart = 0;   // the measurement window of the step (start + fade + latency + settling)
+    int measureLength = 0;  // a whole number of periods (rounded to samples); the fade-out follows the window
+    int length = 0;         // of the whole step, fades included
 };
 
 struct SteppedSine

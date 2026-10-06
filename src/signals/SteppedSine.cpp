@@ -10,6 +10,13 @@ namespace
 {
 constexpr double kTwoPi = 6.283185307179586476925286766559;
 constexpr double kOctave = 2.0;
+constexpr double kPi = 3.14159265358979323846;
+
+// The rising half of a Hann window over fadeLength samples: 0 at the first sample, close to 1 at the last
+double getFadeGain(int sample, int fadeLength)
+{
+    return 0.5 - 0.5 * std::cos(kPi * sample / fadeLength);
+}
 }
 
 std::vector<double> getSteppedSineFrequencies(const SteppedSineSettings& settings)
@@ -29,30 +36,38 @@ SteppedSine makeSteppedSine(const SteppedSineSettings& settings, int channels)
     SteppedSine result;
     result.settings = settings;
     const double amplitude = dbToGain(settings.levelDbfsPeak);
+    const int fadeLength = static_cast<int>(std::round(settings.fadeSeconds * settings.sampleRate));
+    const int settleLength = static_cast<int>(std::round(settings.settleSeconds * settings.sampleRate));
     int position = 0;
-    std::vector<int> stepLengths;
     for (const double frequency : getSteppedSineFrequencies(settings))
     {
         SineStep step;
         step.frequencyHz = frequency;
         step.start = position;
-        step.measureStart = position + settings.latencySamples + static_cast<int>(std::round(settings.settleSeconds * settings.sampleRate));
+        step.measureStart = position + fadeLength + settings.latencySamples + settleLength;
         // a whole number of periods, at least minimumPeriods and at least measureSeconds
         const double periods = std::max(static_cast<double>(settings.minimumPeriods), std::ceil(settings.measureSeconds * frequency));
         step.measureLength = static_cast<int>(std::round(periods * settings.sampleRate / frequency));
-        const int length = step.measureStart + step.measureLength - position;
+        step.length = step.measureStart + step.measureLength + fadeLength - position;
         result.steps.push_back(step);
-        stepLengths.push_back(length);
-        position += length;
+        position += step.length;
     }
     result.signal = makeSilence(position, channels);
-    for (size_t index = 0; index < result.steps.size(); ++index)
+    for (const SineStep& step : result.steps)
     {
-        const SineStep& step = result.steps[index];
-        for (int sample = 0; sample < stepLengths[index]; ++sample)
+        for (int sample = 0; sample < step.length; ++sample)
         {
-            // every step starts with phase 0; the settling time takes the switch from the step before
-            const float value = static_cast<float>(amplitude * std::sin(kTwoPi * step.frequencyHz * sample / settings.sampleRate));
+            // every step starts with phase 0, faded in from and out to silence
+            double gain = 1.0;
+            if (sample < fadeLength)
+            {
+                gain = getFadeGain(sample, fadeLength);
+            }
+            if (sample >= step.length - fadeLength)
+            {
+                gain = getFadeGain(step.length - 1 - sample, fadeLength);
+            }
+            const float value = static_cast<float>(gain * amplitude * std::sin(kTwoPi * step.frequencyHz * sample / settings.sampleRate));
             for (int channel = 0; channel < channels; ++channel)
             {
                 result.signal.setSample(channel, step.start + sample, value);

@@ -117,6 +117,7 @@ public:
         testNoise();
         testSweptSine();
         testSteppedSine();
+        testSteppedSineFades();
         testWav();
     }
 
@@ -269,7 +270,7 @@ private:
 
     void testSteppedSine()
     {
-        beginTest("stepped sine: log-spaced from 20 kHz down to 20 Hz, windows after latency and settling, whole periods, the level in every window");
+        beginTest("stepped sine: log-spaced from 20 kHz down to 20 Hz, windows after fade-in, latency and settling, whole periods, the level in every window");
         pluginlab::signals::SteppedSineSettings settings;
         settings.latencySamples = 64;
         const pluginlab::signals::SteppedSine stepped = pluginlab::signals::makeSteppedSine(settings, 1);
@@ -278,13 +279,58 @@ private:
         expectWithinAbsoluteError(stepped.steps.back().frequencyHz, 20.0, 1.0e-9);
         for (const pluginlab::signals::SineStep& step : stepped.steps)
         {
-            expectEquals(step.measureStart - step.start, settings.latencySamples + static_cast<int>(settings.settleSeconds * kSampleRate));
+            const int fadeLength = static_cast<int>(settings.fadeSeconds * kSampleRate);
+            expectEquals(step.measureStart - step.start, fadeLength + settings.latencySamples + static_cast<int>(settings.settleSeconds * kSampleRate));
+            expectEquals(step.length, step.measureStart + step.measureLength + fadeLength - step.start);
             const double periods = step.measureLength * step.frequencyHz / kSampleRate;
             expect(std::abs(periods - std::round(periods)) < 0.02 * step.frequencyHz / 1000.0 + 0.02, "whole periods at " + juce::String(step.frequencyHz));
             const double level = amplitudeAt(stepped.signal.getReadPointer(0), step.measureStart, step.measureLength, step.frequencyHz, kSampleRate);
             expect(std::abs(pluginlab::signals::gainToDb(level) + 6.0) < 0.05, "level at " + juce::String(step.frequencyHz) + ": "
                                                                                      + juce::String(pluginlab::signals::gainToDb(level), 3));
         }
+    }
+
+    void testSteppedSineFades()
+    {
+        beginTest("stepped sine: Hann fades at every step: starts and ends at zero, no jump between steps, nothing outside the band of the step");
+        pluginlab::signals::SteppedSineSettings settings;
+        const pluginlab::signals::SteppedSine stepped = pluginlab::signals::makeSteppedSine(settings, 1);
+        const float* data = stepped.signal.getReadPointer(0);
+        const double amplitude = pluginlab::signals::dbToGain(settings.levelDbfsPeak);
+        for (const pluginlab::signals::SineStep& step : stepped.steps)
+        {
+            expectEquals(data[step.start], 0.0f);
+            // the last sample is the first sample of the mirrored fade: zero up to the rounding of the sine
+            expect(std::abs(data[step.start + step.length - 1]) < 1.0e-3 * amplitude, "the end of the step at " + juce::String(step.frequencyHz));
+        }
+        // a hard switch at 20 kHz jumps by about the amplitude; with the fades the largest sample-to-sample step of the highest step stays that of the sine
+        double largestJump = 0.0;
+        for (int index = stepped.steps[1].start - 20; index < stepped.steps[1].start + 20; ++index)
+        {
+            largestJump = std::max(largestJump, static_cast<double>(std::abs(data[index + 1] - data[index])));
+        }
+        const double sineSlope = amplitude * 2.0 * std::sin(kPi * stepped.steps[1].frequencyHz / kSampleRate);
+        expect(largestJump < 0.2 * sineSlope, "around the switch: " + juce::String(largestJump) + " against the sine's " + juce::String(sineSlope));
+
+        // the spectrum of one whole low step (fades included) far from the tone: 97 Hz (the step is not a whole number of periods long, as most
+        // steps), looked at 1234.5 Hz (no harmonic): at least 80 dB below the tone and far below a step with hard switches
+        constexpr double kFarHz = 1234.5;
+        settings.stepsPerOctave = 1;
+        settings.startHz = 97.0;
+        settings.stopHz = 48.5;
+        const pluginlab::signals::SteppedSine low = pluginlab::signals::makeSteppedSine(settings, 1);
+        const pluginlab::signals::SineStep& first = low.steps.front();
+        const double tone = amplitudeAt(low.signal.getReadPointer(0), first.start, first.length, first.frequencyHz, kSampleRate);
+        const double far = amplitudeAt(low.signal.getReadPointer(0), first.start, first.length, kFarHz, kSampleRate);
+        settings.fadeSeconds = 0.0;
+        const pluginlab::signals::SteppedSine hard = pluginlab::signals::makeSteppedSine(settings, 1);
+        const pluginlab::signals::SineStep& hardFirst = hard.steps.front();
+        const double hardTone = amplitudeAt(hard.signal.getReadPointer(0), hardFirst.start, hardFirst.length, hardFirst.frequencyHz, kSampleRate);
+        const double hardFar = amplitudeAt(hard.signal.getReadPointer(0), hardFirst.start, hardFirst.length, kFarHz, kSampleRate);
+        logMessage("stepped sine, one 97 Hz step: at 1234.5 Hz " + juce::String(pluginlab::signals::gainToDb(far / tone), 1) + " dB re the tone with 10 ms fades, "
+                   + juce::String(pluginlab::signals::gainToDb(hardFar / hardTone), 1) + " dB with hard switches");
+        expect(pluginlab::signals::gainToDb(far / tone) < -80.0);
+        expect(pluginlab::signals::gainToDb(far / tone) < pluginlab::signals::gainToDb(hardFar / hardTone) - 40.0);
     }
 
     void testWav()
