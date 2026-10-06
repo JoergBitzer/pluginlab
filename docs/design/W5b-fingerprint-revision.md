@@ -150,3 +150,5 @@ Yes
   two runs (continuous / switches and choices); `silenceBelowDbfs`; a finding when the stream way does not react; R6b: if nothing reacts, the scan from a base with the switches
   flipped, then switch / parameter pairs (Venn Audio Free EQ: 25 parameters found, clean); R7: the table "The settings A and B" in the plugin's own units. Test plugins
   Tremolo and EQ Switch. All steps of W5b are done.
+- **0.16.1:** the report window of the Developer page draws the report itself: headings bold, the results worth a look and the findings in the orange of the result
+  columns (the Markdown file keeps its bold marks), a button "Copy report (Markdown)" (the drawn text cannot be selected).

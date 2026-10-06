@@ -1445,9 +1445,9 @@ juce::String createReport(const PluginFingerprint& fingerprint)
         }
         text << "| " << item.test << " | " << result << " | " << item.detail << " |\n";
     }
-    text << "\nBold: worth a look (see the findings and the details below).\n\n";
+    text << "\nBold (orange on the Developer page): worth a look (see the findings and the details below).\n\n";
 
-    text << "How to read the differences: every difference is given as **relative / absolute**: relative = RMS(output - reference) / RMS(reference) in dB "
+    text << "How to read the differences: every difference is given as relative / absolute: relative = RMS(output - reference) / RMS(reference) in dB "
             "(0 dB: the change is as large as the signal, -40 dB: 1 %, +6 dB: twice the signal, as for a polarity inversion); absolute = RMS(output - reference) in "
             "dBFS. \"identical\": bit exact. For a silent reference only the absolute value counts.\n\n";
     text << "## Findings\n";

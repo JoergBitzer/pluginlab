@@ -129,7 +129,134 @@ private:
     juce::String m_key;
 };
 
-// A window with the report: a read-only text with a monospaced font, the tables aligned, the headings larger.
+// The report drawn line by line in a monospaced font: headings bold, results worth a look (**...** in the Markdown) and the findings in the
+// colour of the Developer page. (A text editor cannot reliably change font or colour from line to line.) The two "**" marks of a
+// highlighted text become spaces after it, so the aligned table columns stay aligned.
+class ReportView : public juce::Component
+{
+public:
+    explicit ReportView(const juce::String& markdown)
+    {
+        bool inFindings = false;
+        for (const juce::String& line : juce::StringArray::fromLines(pluginlab::engine::alignMarkdownTables(markdown)))
+        {
+            Line entry;
+            if (line.startsWith("# ") || line.startsWith("## "))
+            {
+                entry.text = line.fromFirstOccurrenceOf(" ", false, false);
+                entry.heading = true;
+                inFindings = entry.text == kFindingsHeading;
+                m_lines.push_back(entry);
+                continue;
+            }
+            entry.text = line;
+            entry.finding = inFindings && line.startsWith("- ") && ! line.contains(kNothingUnusual);
+            m_lines.push_back(entry);
+        }
+        const juce::Font font = makeFont(true);
+        int widest = 0;
+        for (const Line& entry : m_lines)
+        {
+            widest = juce::jmax(widest, static_cast<int>(juce::GlyphArrangement::getStringWidth(font, entry.text)));
+        }
+        setSize(widest + 2 * kViewMargin, static_cast<int>(m_lines.size()) * kLineHeight + 2 * kViewMargin);
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        g.fillAll(findColour(juce::ResizableWindow::backgroundColourId).darker(kBackgroundDarker));
+        int y = kViewMargin;
+        for (const Line& entry : m_lines)
+        {
+            if (entry.heading)
+            {
+                g.setFont(makeFont(true));
+                g.setColour(kHeadingColour);
+                g.drawSingleLineText(entry.text, kViewMargin, y + kBaseline);
+                y += kLineHeight;
+                continue;
+            }
+            g.setFont(makeFont(false));
+            drawLine(g, entry, y);
+            y += kLineHeight;
+        }
+    }
+
+private:
+    struct Line
+    {
+        juce::String text;
+        bool heading = false;
+        bool finding = false;
+    };
+
+    static juce::Font makeFont(bool bold)
+    {
+        int style = juce::Font::plain;
+        if (bold)
+        {
+            style = juce::Font::bold;
+        }
+        return juce::Font(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), kTextFontHeight, style));
+    }
+
+    // the line in pieces: text between "**" marks in the highlight colour, the marks themselves as spaces
+    void drawLine(juce::Graphics& g, const Line& entry, int y) const
+    {
+        const juce::Font font = makeFont(false);
+        juce::Colour normal = kTextColour;
+        if (entry.finding)
+        {
+            normal = kHighlightColour;
+        }
+        float x = static_cast<float>(kViewMargin);
+        bool highlighted = false;
+        juce::String rest = entry.text;
+        while (rest.isNotEmpty())
+        {
+            const int mark = rest.indexOf(kHighlightMark);
+            juce::String piece = rest;
+            if (mark >= 0)
+            {
+                piece = rest.substring(0, mark);
+            }
+            juce::Colour colour = normal;
+            if (highlighted)
+            {
+                colour = kHighlightColour;
+            }
+            g.setColour(colour);
+            g.drawSingleLineText(piece, static_cast<int>(x), y + kBaseline);
+            x += juce::GlyphArrangement::getStringWidth(font, piece);
+            if (mark < 0)
+            {
+                break;
+            }
+            if (highlighted)
+            {
+                x += juce::GlyphArrangement::getStringWidth(font, kMarkReplacement); // both marks after the text: the columns stay aligned
+            }
+            highlighted = ! highlighted;
+            rest = rest.substring(mark + kHighlightMark.length());
+        }
+    }
+
+    static constexpr int kViewMargin = 10;
+    static constexpr int kLineHeight = 18;
+    static constexpr int kBaseline = 14;
+    static constexpr float kBackgroundDarker = 0.3f;
+    inline static const juce::String kHighlightMark = "**";
+    inline static const juce::String kMarkReplacement = "    ";
+    inline static const juce::String kFindingsHeading = "Findings";
+    inline static const juce::String kNothingUnusual = "nothing unusual";
+    inline static const juce::Colour kTextColour{0xffd0d0d0};
+    inline static const juce::Colour kHeadingColour{0xff80c0ff};
+    inline static const juce::Colour kHighlightColour{0xffffa040};
+
+    std::vector<Line> m_lines;
+};
+
+// A window with the report (ReportView in a scrolling view) and a button that copies the report (Markdown) to the clipboard.
 class ReportWindow : public juce::DocumentWindow
 {
 public:
@@ -137,36 +264,19 @@ public:
         : juce::DocumentWindow(title, juce::Desktop::getInstance().getDefaultLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId),
                                juce::DocumentWindow::allButtons),
           m_owner(owner),
-          m_key(key)
+          m_key(key),
+          m_markdown(markdown),
+          m_view(markdown)
     {
-        m_text.setMultiLine(true, false); // no wrapping: the tables are wide, the editor scrolls
-        m_text.setReadOnly(true);
-        m_text.setScrollbarsShown(true);
-        m_text.setCaretVisible(false);
-
-        // one font only (a text editor cannot reliably change the font from line to line); the headings are underlined with characters
-        m_text.setFont(juce::Font(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), kTextFontHeight, juce::Font::plain)));
-        juce::String text;
-        for (const juce::String& line : juce::StringArray::fromLines(pluginlab::engine::alignMarkdownTables(markdown)))
-        {
-            if (line.startsWith("# "))
-            {
-                const juce::String title = line.substring(2);
-                text += title.toUpperCase() + "\n" + juce::String::repeatedString("=", title.length()) + "\n";
-                continue;
-            }
-            if (line.startsWith("## "))
-            {
-                const juce::String heading = line.substring(3);
-                text += heading + "\n" + juce::String::repeatedString("~", heading.length()) + "\n";
-                continue;
-            }
-            text += line + "\n";
-        }
-        m_text.setText(text, false);
-        m_text.moveCaretToTop(false);
+        m_viewport.setViewedComponent(&m_view, false);
+        m_viewport.setScrollBarsShown(true, true);
+        m_copyButton.onClick = [this] { juce::SystemClipboard::copyTextToClipboard(m_markdown); };
+        m_content.addAndMakeVisible(m_viewport);
+        m_content.addAndMakeVisible(m_copyButton);
+        m_content.onResize = [this] { layout(); };
+        m_content.setSize(kReportWindowWidth, kReportWindowHeight);
         setUsingNativeTitleBar(true);
-        setContentNonOwned(&m_text, false);
+        setContentNonOwned(&m_content, true);
         setResizable(true, false);
         centreWithSize(kReportWindowWidth, kReportWindowHeight);
         setVisible(true);
@@ -178,9 +288,38 @@ public:
     }
 
 private:
+    // a plain component that tells when it was resized
+    class Content : public juce::Component
+    {
+    public:
+        std::function<void()> onResize;
+
+        void resized() override
+        {
+            if (onResize)
+            {
+                onResize();
+            }
+        }
+    };
+
+    void layout()
+    {
+        juce::Rectangle<int> area = m_content.getLocalBounds();
+        m_copyButton.setBounds(area.removeFromBottom(kCopyRowHeight).reduced(kMargin / 2).removeFromLeft(kCopyButtonWidth));
+        m_viewport.setBounds(area);
+    }
+
+    static constexpr int kCopyRowHeight = 36;
+    static constexpr int kCopyButtonWidth = 200;
+
     DeveloperPanel& m_owner;
     juce::String m_key;
-    juce::TextEditor m_text;
+    juce::String m_markdown;
+    ReportView m_view;
+    juce::Viewport m_viewport;
+    juce::TextButton m_copyButton{"Copy report (Markdown)"};
+    Content m_content;
 };
 
 // The cell with the two buttons of a row
