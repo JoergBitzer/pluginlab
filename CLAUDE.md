@@ -20,6 +20,9 @@ pluginlab (mission: divide the myth from reality) measures, compares and matches
 - `apps/signals/`: `PluginLabSignals <folder> [--seconds 5,10] [--rate 48000]` writes the standard test signals (stereo, 32-bit float WAV)
   with `signals.txt` (what every file is) and the step lists of the stepped sines (CSV). The author keeps a set in `~/Music/TestSignals/`.
 - `plugins/loader/`: `pluginlab_loader_core` (LoaderProcessor + LoaderEditor, also used by the tests) and the plugin `PluginLabLoader` (VST3).
+- `plugins/reference/`: the three reference plugins (PluginLab Reference EQ / Nonlinear / Utility), AdvancedAudioTemplate instances in the
+  simple form around `pluginlab_reference`; see `plugins/reference/README.md` (template origin, changes to the template code, controls).
+  Built into `<build>/reference_plugins`; a Release build installs them into `~/.vst3`.
 - `tests/`: `PluginLabTests` (`juce::UnitTest` console app, registered with CTest), `CheckHostVersion.cmake`, `CheckHostReport.cmake`;
   `tests/plugins/`: test plugins with known behavior (Gain: 4 parameters, state, VST3 + VST2; Crash: crashes when created; Crash Process: crashes while processing), built into `<build>/test_plugins`.
 - `tools/`: `run_pluginval.sh` / `.ps1`.

@@ -125,3 +125,12 @@ inline juce::File getScannerExecutable()
     return juce::File(PLUGINLAB_SCANNER_EXECUTABLE);
 }
 }
+
+// The reference plugins of W6.4 (plugins/reference), built into their own folder
+namespace testpaths
+{
+inline juce::File getReferencePlugin(const juce::String& name)
+{
+    return juce::File(PLUGINLAB_REFERENCE_PLUGIN_DIR).getChildFile("PluginLabReference" + name + ".vst3");
+}
+}

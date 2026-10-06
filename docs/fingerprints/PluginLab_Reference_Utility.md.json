@@ -1,0 +1,133 @@
+{
+  "plugin": "PluginLab Reference Utility",
+  "identifier": "VST3-PluginLab Reference Utility-f09a5ce4-808e6ef4",
+  "measured": "2026-10-06 18:10",
+  "summary": [
+    {
+      "key": "loads",
+      "test": "loads and runs with mono or stereo",
+      "result": "yes",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "layouts",
+      "test": "main-bus layouts accepted",
+      "result": "mono, stereo",
+      "detail": "measured with 2 channel(s)",
+      "good": true
+    },
+    {
+      "key": "sideChain",
+      "test": "side-chain input (more than one input bus)",
+      "result": "no",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "midi",
+      "test": "MIDI",
+      "result": "none",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "coupling",
+      "test": "channels independent (one input driven, the other silent)",
+      "result": "no",
+      "detail": "L to R: -0.3 dB re the driven channel (-12.0 dBFS), R to L: -0.3 dB re the driven channel (-12.0 dBFS)",
+      "good": true
+    },
+    {
+      "key": "parameters",
+      "test": "parameters / changing the audio",
+      "result": "10 / 9",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "latency",
+      "test": "latency at 48 kHz, reported / measured (samples)",
+      "result": "0 / 0",
+      "detail": "44.1 kHz: 0 / 0, 48.0 kHz: 0 / 0, 96.0 kHz: 0 / 0",
+      "good": true
+    },
+    {
+      "key": "latencyAgrees",
+      "test": "reported latency = measured at all rates",
+      "result": "yes",
+      "detail": "44.1 kHz: 0 / 0, 48.0 kHz: 0 / 0, 96.0 kHz: 0 / 0",
+      "good": true
+    },
+    {
+      "key": "outputBeforePeak",
+      "test": "output before the peak of the impulse response",
+      "result": "no",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "ownSignal",
+      "test": "output before the impulse (signal of its own)",
+      "result": "no",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "delivery",
+      "test": "delivery of parameters (A, A, B, A): ways that work",
+      "result": "4 of 4 ways",
+      "detail": "time-varying: the repeatability of A cannot be judged",
+      "good": true
+    },
+    {
+      "key": "timeInvariant",
+      "test": "time-invariant (the same noise twice through one instance)",
+      "result": "no (time-varying)",
+      "detail": "-14.5 dB / -26.2 dBFS (channel 2)",
+      "good": true
+    },
+    {
+      "key": "settles",
+      "test": "settles within 0.25 s after a parameter change",
+      "result": "no",
+      "detail": "-15.2 dB / -26.9 dBFS",
+      "good": true
+    },
+    {
+      "key": "blockSizes",
+      "test": "block size independent (steady state)",
+      "result": "yes",
+      "detail": "largest at 32: identical",
+      "good": true
+    },
+    {
+      "key": "deterministic",
+      "test": "deterministic (two instances, bit exact)",
+      "result": "yes",
+      "detail": "expected for a time-varying plugin",
+      "good": true
+    },
+    {
+      "key": "finite",
+      "test": "output stays finite after parameter jumps",
+      "result": "yes",
+      "detail": "",
+      "good": true
+    },
+    {
+      "key": "recovers",
+      "test": "recovers from parameter jumps",
+      "result": "no",
+      "detail": "continuous parameters: no, switches and choices: no; expected for a time-varying plugin",
+      "good": true
+    },
+    {
+      "key": "silence",
+      "test": "digital silence in gives digital silence out",
+      "result": "no",
+      "detail": "peak -12.0 dBFS; expected for a time-varying plugin",
+      "good": true
+    }
+  ]
+}

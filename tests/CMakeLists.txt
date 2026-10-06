@@ -19,6 +19,7 @@ target_sources(PluginLabTests
         FingerprintTests.cpp
         ProbeTests.cpp
         RealWorldTests.cpp
+        ReferencePluginTests.cpp
         ReferenceTests.cpp
         SignalsTests.cpp)
 
@@ -28,6 +29,7 @@ target_compile_definitions(PluginLabTests
         JUCE_USE_CURL=0
         JUCE_MODAL_LOOPS_PERMITTED=1
         PLUGINLAB_TEST_PLUGIN_DIR="${PLUGINLAB_TEST_PLUGIN_DIR}"
+        PLUGINLAB_REFERENCE_PLUGIN_DIR="${PLUGINLAB_REFERENCE_PLUGIN_DIR}"
         PLUGINLAB_SCANNER_EXECUTABLE="$<TARGET_FILE:PluginLabScanner>"
         JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_PRODUCT_NAME>"
         JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_VERSION>")
@@ -47,7 +49,7 @@ target_link_libraries(PluginLabTests
         juce::juce_recommended_warning_flags)
 
 # the tests need the scanner and the test plugins built first
-add_dependencies(PluginLabTests PluginLabScanner PluginLabSignals PluginLabTestGain_VST3 PluginLabTestCrash_VST3 PluginLabTestCrashProcess_VST3 PluginLabHost PluginLabLoaderBundle)
+add_dependencies(PluginLabTests PluginLabScanner PluginLabSignals PluginLabTestGain_VST3 PluginLabTestCrash_VST3 PluginLabTestCrashProcess_VST3 PluginLabHost PluginLabLoaderBundle PluginLabReferenceEq_VST3 PluginLabReferenceNonlinear_VST3 PluginLabReferenceUtility_VST3)
 if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()

@@ -182,6 +182,29 @@ with the theoretical RMS of its raw output, so that a noise adder can be scaled 
   0.01 dB and correlation below 0.003; pink within 0.3 dB and correlation -0.06 (the slowest Voss row changes only every 2^15 samples, so 10 s of pink
   noise holds few independent low-frequency values; the tolerances for pink are wider).
 
+### W6.4 reference plugins (0.22.0, done on Linux)
+Author's decisions (2026-10-06): both, test plugins and real plugins; the real ones made with the AdvancedAudioTemplate in the simple form.
+`plugins/reference/` (details, controls and the changes to the template code in `plugins/reference/README.md`):
+- **PluginLab Reference EQ**: one band, algorithm (RBJ, Orfanidis, Zoelzer, state variable, Butterworth, Linkwitz-Riley) x type; combinations an
+  algorithm does not offer pass the audio unchanged and the GUI says so; the GUI draws the exact magnitude response (library, 48 kHz).
+- **PluginLab Reference Nonlinear**: drive -> curve (polynomial, hard clip, tanh) -> output -> hum -> noise -> quantizer (optional TPDF dither).
+- **PluginLab Reference Utility**: gain/polarity -> delay (integer, Thiran or Lagrange order 3) -> channel matrix (width, crosstalk) -> tremolo -> DC.
+All: latency 0 (the template's `SynchronBlockProcessor` with block size 0 processes the host blocks directly), no smoothing, mono or stereo.
+Compromise: a parameter change rebuilds the stage it belongs to (memory allocation on the audio thread at a change, none in the steady state).
+Not in this step: the linear-phase FIR as an EQ algorithm (its latency would have to change with the algorithm at run time; later if needed).
+
+Tests and results:
+- `tests/ReferencePluginTests.cpp` (end to end: the host scans and loads the VST3, sets the parameters by their text, processes): RBJ peak 1 kHz +6 dB
+  Q 2 at 48 kHz, SVF high shelf at 44.1 kHz and the not offered Orfanidis shelf identical to the library response (0.000000 dB); Butterworth LP order 5
+  at 96 kHz within 0.00001 dB; the polynomial harmonics within 0.001 dB of the closed form; 8 bits: SNR 49.74 dB against 49.65 dB; Utility -6 dB,
+  inverted, Thiran 37.5 samples identical; width 0 gives L = R; reported latency 0.
+- pluginval (strictness 5 on the Debug build, 1 on the Release build): all runs SUCCESS, no assertions; no compiler warnings (template glue included).
+- Fingerprint (`docs/fingerprints/PluginLab_Reference_*.md`): the EQ is clean (latency 0 = measured at all rates, all 4 delivery ways, block size
+  independent, deterministic, no findings). Nonlinear and Utility are reported time-varying, channel-coupled and not silent for silence: correct, because
+  the fingerprint's setting B (every parameter at 0.75) switches on noise, hum and dither, resp. tremolo, DC, width and crosstalk; the fingerprint
+  found exactly what was switched on.
+- Installed (Release) into `~/.vst3` for the author's review in a DAW. Not tested: Windows, macOS, a DAW session.
+
 ## 5. The questions and the author's answers (kept for the record)
 1. **Filter families:** RBJ, Orfanidis, Zölzer, analog prototypes, Butterworth/Linkwitz-Riley, linear-phase FIR and delays: enough, too much, something missing (e.g. Vicanek's matched
    biquads, state-variable filter / TPT/ZDF designs as many modern plugins use them)?
