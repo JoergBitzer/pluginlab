@@ -129,6 +129,9 @@ Set written for the author: `~/Music/TestSignals/` (5 s and 10 s, 48 kHz).
 fade-out of `fadeSeconds` (default 10 ms, 0 = hard switches): | fade-in | latency + settling | measurement window | fade-out |. The fades lie outside
 the settling time and the window. For one 97 Hz step the energy at 1234.5 Hz fell from -57.4 dB (hard switches) to -118.1 dB re the tone.
 
+0.20.0 (author: missing for resampling tests): the linear sweep `makeLinearSweep` (0 Hz ... Nyquist by default, 5 ms Hann fades, silence around it);
+in a spectrogram an alias of a resampler shows as a line running the other way. `PluginLabSignals` writes it at -6 and -1 dBFS (25 files per length).
+
 ### W6.2 linear references (0.18.0, done)
 `src/reference/` builds the static library `pluginlab_reference` (namespace `pluginlab::reference`, only `juce_audio_basics`). Every processor derives from
 `LinearProcessor`: `processSample` / `process(buffer)` in double precision with a state per channel, and `getResponse(f)`, its exact H(e^jw).

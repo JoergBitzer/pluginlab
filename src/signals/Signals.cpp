@@ -351,6 +351,63 @@ juce::AudioBuffer<float> makeNoise(const NoiseSettings& settings, int channels, 
     return buffer;
 }
 
+namespace
+{
+double getLinearSweepStopHz(const LinearSweepSettings& settings)
+{
+    if (settings.stopHz <= 0.0)
+    {
+        return settings.sampleRate / 2.0;
+    }
+    return settings.stopHz;
+}
+
+int getLinearSweepStart(const LinearSweepSettings& settings)
+{
+    return static_cast<int>(std::round(settings.preSilenceSeconds * settings.sampleRate));
+}
+
+int getLinearSweepLength(const LinearSweepSettings& settings)
+{
+    const int post = static_cast<int>(std::round(settings.postSilenceSeconds * settings.sampleRate));
+    return std::max(0, settings.length - getLinearSweepStart(settings) - post);
+}
+}
+
+juce::AudioBuffer<float> makeLinearSweep(const LinearSweepSettings& settings, int channels)
+{
+    juce::AudioBuffer<float> buffer = makeSilence(settings.length, channels);
+    const int start = getLinearSweepStart(settings);
+    const int sweepLength = getLinearSweepLength(settings);
+    if (sweepLength <= 0)
+    {
+        return buffer;
+    }
+    const double duration = sweepLength / settings.sampleRate;
+    const double rise = getLinearSweepStopHz(settings) - settings.startHz;
+    const double amplitude = dbToGain(settings.levelDbfsPeak);
+    juce::AudioBuffer<float> sweep(1, sweepLength);
+    for (int index = 0; index < sweepLength; ++index)
+    {
+        const double time = index / settings.sampleRate;
+        const double phase = kTwoPi * (settings.startHz * time + rise * time * time / (2.0 * duration));
+        sweep.setSample(0, index, static_cast<float>(amplitude * std::sin(phase)));
+    }
+    applyFades(sweep, static_cast<int>(std::round(settings.fadeSeconds * settings.sampleRate)));
+    for (int channel = 0; channel < channels; ++channel)
+    {
+        buffer.copyFrom(channel, start, sweep, 0, 0, sweepLength);
+    }
+    return buffer;
+}
+
+double getLinearSweepFrequency(const LinearSweepSettings& settings, int sample)
+{
+    const int sweepLength = getLinearSweepLength(settings);
+    const double position = juce::jlimit(0.0, 1.0, static_cast<double>(sample - getLinearSweepStart(settings)) / std::max(1, sweepLength));
+    return settings.startHz + (getLinearSweepStopHz(settings) - settings.startHz) * position;
+}
+
 juce::AudioBuffer<float> makeBursts(const BurstSettings& settings, int channels)
 {
     const int burst = static_cast<int>(settings.burstSeconds * settings.sampleRate);

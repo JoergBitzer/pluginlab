@@ -97,6 +97,26 @@ struct BurstSettings
 };
 juce::AudioBuffer<float> makeBursts(const BurstSettings& settings, int channels);
 
+// A linear sweep x(t) = A sin(2 pi (f1 t + (f2 - f1) t^2 / (2 T))): the frequency rises at a constant rate, by default from 0 Hz to Nyquist.
+// For resampling and aliasing tests (in a spectrogram an alias shows as a line that runs the other way). Silence before and after the sweep,
+// Hann fades at both ends of the sweep; the same samples on every channel.
+struct LinearSweepSettings
+{
+    double sampleRate = 48000.0;
+    double startHz = 0.0;
+    double stopHz = 0.0;              // 0: Nyquist (sampleRate / 2)
+    double levelDbfsPeak = -6.0;
+    int length = 48000;               // of the whole signal, silence included
+    double preSilenceSeconds = 0.1;
+    double postSilenceSeconds = 0.1;
+    double fadeSeconds = 0.005;
+};
+
+juce::AudioBuffer<float> makeLinearSweep(const LinearSweepSettings& settings, int channels);
+
+// The frequency of the linear sweep at a sample of the signal (startHz before the sweep, stopHz after it)
+double getLinearSweepFrequency(const LinearSweepSettings& settings, int sample);
+
 // Writes the buffer as a 32-bit float WAV file. Returns false if the file cannot be written.
 bool writeWav(const juce::File& file, const juce::AudioBuffer<float>& buffer, double sampleRate);
 }

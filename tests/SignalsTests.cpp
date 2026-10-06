@@ -118,6 +118,7 @@ public:
         testSweptSine();
         testSteppedSine();
         testSteppedSineFades();
+        testLinearSweep();
         testWav();
     }
 
@@ -331,6 +332,35 @@ private:
                    + juce::String(pluginlab::signals::gainToDb(hardFar / hardTone), 1) + " dB with hard switches");
         expect(pluginlab::signals::gainToDb(far / tone) < -80.0);
         expect(pluginlab::signals::gainToDb(far / tone) < pluginlab::signals::gainToDb(hardFar / hardTone) - 40.0);
+    }
+
+    void testLinearSweep()
+    {
+        beginTest("linear sweep 0 Hz ... Nyquist: level, silence around it, fades, the frequency rises linearly");
+        pluginlab::signals::LinearSweepSettings settings;
+        settings.length = 5 * 48000;
+        const juce::AudioBuffer<float> sweep = pluginlab::signals::makeLinearSweep(settings, 2);
+        expectEquals(sweep.getNumSamples(), settings.length);
+        expectWithinAbsoluteError(pluginlab::signals::gainToDb(pluginlab::signals::getPeak(sweep, 1)), -6.0, 0.01);
+        const int start = static_cast<int>(settings.preSilenceSeconds * kSampleRate);
+        const int end = settings.length - static_cast<int>(settings.postSilenceSeconds * kSampleRate);
+        expectEquals(sweep.getMagnitude(0, 0, start), 0.0f);
+        expectEquals(sweep.getMagnitude(0, end, settings.length - end), 0.0f);
+        expectEquals(sweep.getSample(0, start), 0.0f);
+        // in short windows the strongest frequency is the expected one: 20 dB above the frequencies 1 kHz away
+        constexpr int kWindow = 2048;
+        for (const double fraction : {0.1, 0.3, 0.5, 0.7, 0.9})
+        {
+            const int centre = start + static_cast<int>(fraction * (end - start));
+            const double expected = pluginlab::signals::getLinearSweepFrequency(settings, centre);
+            expectWithinAbsoluteError(expected, fraction * kSampleRate / 2.0, 10.0);
+            const double atExpected = amplitudeAt(sweep.getReadPointer(0), centre - kWindow / 2, kWindow, expected, kSampleRate);
+            for (const double offset : {-1000.0, 1000.0})
+            {
+                const double beside = amplitudeAt(sweep.getReadPointer(0), centre - kWindow / 2, kWindow, expected + offset, kSampleRate);
+                expect(pluginlab::signals::gainToDb(beside / atExpected) < -20.0, "linear sweep at " + juce::String(expected, 0) + " Hz");
+            }
+        }
     }
 
     void testWav()

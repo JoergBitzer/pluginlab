@@ -19,6 +19,7 @@ constexpr double kDefaultSampleRate = 48000.0;
 constexpr double kHighLevelDbfs = -6.0;        // the agreed standard levels (docs/design/W6-plan.md section 2)
 constexpr double kLowLevelDbfs = -20.0;
 constexpr double kNoiseLevelDbfsRms = -20.0;
+constexpr double kNearFullScaleDbfs = -1.0;    // the linear sweep for resamplers also near full scale
 constexpr double kOnsetSeconds = 0.1;          // impulse and step come after this time
 constexpr double kFadeSeconds = 0.01;          // raised-cosine fades of the sines and two-tones
 constexpr double kMinimumPostSilenceSeconds = 0.5;
@@ -219,6 +220,24 @@ void addSteppedSines(std::vector<SignalFile>& files, double sampleRate, int leng
     }
 }
 
+// The linear sweep 0 Hz ... Nyquist for resampling tests, at -6 dBFS and near full scale (-1 dBFS: headroom of a resampler)
+void addLinearSweeps(std::vector<SignalFile>& files, double sampleRate, int length)
+{
+    for (const double level : {kHighLevelDbfs, kNearFullScaleDbfs})
+    {
+        sig::LinearSweepSettings settings;
+        settings.sampleRate = sampleRate;
+        settings.levelDbfsPeak = level;
+        settings.length = length;
+        settings.preSilenceSeconds = kOnsetSeconds;
+        settings.postSilenceSeconds = kOnsetSeconds;
+        files.push_back({"sweep_linear_0Hz_Nyquist_" + describeLevel(level),
+                         "linear sweep 0 Hz ... Nyquist (" + juce::String(sampleRate / 2.0, 0) + " Hz), " + juce::String(level)
+                             + " dBFS peak, L = R; 0.1 s silence before and after, 5 ms Hann fades; for resampling and aliasing tests (spectrogram)",
+                         sig::makeLinearSweep(settings, kChannels), {}});
+    }
+}
+
 void addBursts(std::vector<SignalFile>& files, double sampleRate, double seconds, int length)
 {
     sig::BurstSettings settings;
@@ -257,6 +276,7 @@ std::vector<SignalFile> makeSignals(double sampleRate, double seconds)
     addNoises(files, length);
     addSweeps(files, sampleRate, seconds, length);
     addSteppedSines(files, sampleRate, length);
+    addLinearSweeps(files, sampleRate, length);
     addBursts(files, sampleRate, seconds, length);
     return files;
 }
