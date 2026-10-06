@@ -82,7 +82,7 @@ Proposal:
 ## 4. Sub-work-packages (agreed order: W6.1 and W6.2 first, W6.3 before THD/noise, W6.4 and W6.5 in parallel)
 | Step | Content | Done when |
 |---|---|---|
-| **W6.1** signals | `pluginlab_signals`: generators of section 2 (with the synchronized swept sine and its analytic inverse filter, and the stepped sine with its step list), metadata, WAV export | each signal checked against its definition: RMS/peak level, frequency by FFT, zero phase at start and end of the sweep, sweep deconvolved with the analytic inverse = band-limited impulse, the harmonic impulse responses of a known polynomial at -L ln(n) with the right levels, stepped-sine frequencies and windows, Schroeder crest factor, noise statistics, the same samples on every platform (hash in the test) |
+| **W6.1** signals | `pluginlab_signals`: generators of section 2 (with the synchronized swept sine and its analytic inverse filter, and the stepped sine with its step list), metadata, WAV export | each signal checked against its definition: RMS/peak level, frequency by FFT, zero phase at start and end of the sweep, sweep deconvolved with the analytic inverse = band-limited impulse, the harmonic impulse responses of a known polynomial at -L ln(n) with the right levels, stepped-sine frequencies and windows, Schroeder crest factor, noise statistics (the hash test "same samples on every platform" dropped by the author, 2026-10-06: the oracle comparison uses tolerances) |
 | **W6.2** linear references | RBJ, Orfanidis, Zölzer, state-variable (TPT), analog prototypes, Butterworth/LR, linear-phase FIR, delays, each with H(e^jw) | impulse response through the processor, FFT, against H(e^jw): < 0.001 dB and < 0.01 degree; stable; correct at 44.1/48/96 kHz; RBJ against the published cookbook formulas |
 | **W6.3** nonlinear and noise references | polynomial, clippers, quantizer, noise and hum adders, channel matrix, tremolo, with their analytic answers | a sine through each: harmonic levels against the closed form; SNR against 6.02 N + 1.76; noise level against the setting |
 | **W6.4** reference plugins | Reference EQ, Reference Nonlinear, Reference Utility as VST3 test plugins | the fingerprint of each is clean; their parameter text gives the physical values; their output equals the library processor bit for bit |
@@ -112,8 +112,35 @@ Proposal:
 - Pink noise: the octave bands 63 Hz ... 8 kHz lie within 0.8 dB; white noise rises by 2.99 dB per octave.
 
 Not done in W6.1 (open): the metadata struct per signal (each generator has its settings struct instead; a common description comes with the oracle in W6.5);
-the hash test "the same samples on every platform" (the noise uses `juce::Random`, an integer generator, but `std::sin`/`std::log` may differ in the last bit
-between platforms: the oracle comparison in W6.5 will use tolerances, the hash is dropped unless the author wants it); the music excerpts (download script, later).
+the music excerpts (download script, later). Dropped (author, 2026-10-06): the hash test "the same samples on every platform" (`std::sin`/`std::log`
+may differ in the last bit between platforms; the oracle comparison in W6.5 uses tolerances).
+
+### W6.2 linear references (0.18.0, done)
+`src/reference/` builds the static library `pluginlab_reference` (namespace `pluginlab::reference`, only `juce_audio_basics`). Every processor derives from
+`LinearProcessor`: `processSample` / `process(buffer)` in double precision with a state per channel, and `getResponse(f)`, its exact H(e^jw).
+- `Analog.h`: the RBJ filter types and their analog prototypes (s-domain, no discretisation); `getWarpedFrequency` (bilinear transform with pre-warping).
+- `Biquad.h`: coefficients, response, stability, `BiquadCascade` (transposed direct form II).
+- `Designs.h`: RBJ (all 9 types, Q from bandwidth or shelf slope), Orfanidis peak (prescribed Nyquist gain, after his `peq.m`), Zoelzer (1st-order shelves
+  in the all-pass form, 2nd-order shelves, peak; cut = inverse of boost), Butterworth 1-8 and Linkwitz-Riley 2/4/8 with their analog responses.
+- `StateVariableFilter.h`: the TPT state-variable filter (Simper's form), all 9 types from one structure, parameters can change every sample.
+- `DirectFormFilter.h`, `LinearPhaseFir.h`, `Delays.h`: a filter of any order with an integer pre-delay; the linear-phase FIR from a target magnitude
+  (frequency sampling, Blackman window, symmetric taps); integer, Thiran and Lagrange delays.
+
+`tests/ReferenceTests.cpp`, at 44.1, 48 and 96 kHz. What the tests showed (largest errors over 40 frequencies from 20 Hz to 0.98 Nyquist):
+- Processing against H(e^jw) (impulse response of 2^17 samples, DTFT): below 3e-9 dB and 1e-8 degrees for all filters (the plan asked for 0.001 dB / 0.01 degree).
+- RBJ, Zoelzer, Butterworth and Linkwitz-Riley against their analog prototypes at the pre-warped frequency: below 3e-9 dB, i.e. the cookbook formulas are the
+  bilinear transform of the published prototypes (an independent check of the formulas; the numeric comparison with the Python prototype follows in W6.5).
+  Butterworth |H|^2 = 1/(1 + W^2N) within 1e-12; Linkwitz-Riley LP + (-1)^(N/2) HP is an all-pass within 1e-12; Zoelzer cut = -boost in dB within 1e-9.
+- The state-variable filter realises exactly the RBJ transfer function of every type (below 1e-9 dB); modulated every sample (100 Hz ... 10 kHz at 200 Hz,
+  Q 10) it stays bounded (peak 4.9 for noise of peak 1).
+- RBJ bandwidth in octaves is an approximation: 1 octave asked gives 0.9997 octaves at 1 kHz but 0.988 at 10 kHz (44.1/48 kHz). Teaching point.
+- Orfanidis hits G at f0, 1 at DC and the analog gain at Nyquist; its largest deviation from the analog peak is 0.6 dB where RBJ has 3.3 dB (10 kHz, +12 dB,
+  Q 1, 48 kHz). Limit: the band must lie below Nyquist; for 15 kHz with Q 0.707 at 44.1 kHz Orfanidis was worse than RBJ (5.3 dB against 4.6 dB).
+- Linear-phase FIR with 2047 taps for the RBJ peak magnitude (1 kHz, +6 dB, Q 1): within 0.011 dB from 100 Hz to 20 kHz, phase exactly linear, latency 1023.
+- Thiran (order 1-4) |H| = 1 within 1e-12 and the delay at DC within 1e-6 samples; Lagrange (order 1-4) the delay and gain 1 at DC.
+
+Open: a leak report of the test program at exit ("4 instances of AudioPluginFormat", JUCE assertion), already there before W6.2 and not part of it; to be looked at
+separately.
 
 ## 5. The questions and the author's answers (kept for the record)
 1. **Filter families:** RBJ, Orfanidis, Zölzer, analog prototypes, Butterworth/Linkwitz-Riley, linear-phase FIR and delays: enough, too much, something missing (e.g. Vicanek's matched

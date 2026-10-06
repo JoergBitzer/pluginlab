@@ -18,6 +18,7 @@ target_sources(PluginLabTests
         FingerprintTests.cpp
         ProbeTests.cpp
         RealWorldTests.cpp
+        ReferenceTests.cpp
         SignalsTests.cpp)
 
 target_compile_definitions(PluginLabTests
@@ -35,6 +36,7 @@ target_link_libraries(PluginLabTests
         pluginlab_core
         pluginlab_engine
         pluginlab_signals
+        pluginlab_reference
         pluginlab_loader_core
         juce::juce_core
         juce::juce_dsp
