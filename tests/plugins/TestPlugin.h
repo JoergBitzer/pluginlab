@@ -17,6 +17,7 @@
 // block size, the steady state does not); =2 a one-pole low-pass whose state is reset at every block (a fault: depends on the block size).
 // PLUGINLAB_TEST_PLUGIN_STEREO_MODE=1 cross feed (R += L / 2); =2 the gain is a width control (acts on L - R only).
 // PLUGINLAB_TEST_PLUGIN_SIDECHAIN=1 has a stereo side-chain input bus that is on by default.
+// PLUGINLAB_TEST_PLUGIN_LFO=1 a tremolo with a free-running LFO (2 Hz): time-varying.
 class TestPluginProcessor : public juce::AudioProcessor
 {
 public:
@@ -56,6 +57,8 @@ private:
     std::vector<std::vector<float>> m_delayLines;
     int m_delayPosition = 0;
     float m_smoothedGain = 1.0f;
+    double m_lfoPhase = 0.0;
+    double m_sampleRate = 48000.0;
     std::vector<float> m_firCoefficients;
     std::vector<std::vector<float>> m_firHistory;
     int m_firPosition = 0;

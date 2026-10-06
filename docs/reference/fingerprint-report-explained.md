@@ -1,6 +1,6 @@
 # The fingerprint report: what is measured, how, and how to read it
 
-Version 0.15.0 (2026-10-06, after the revision steps R1 to R5 of `docs/design/W5b-fingerprint-revision.md`). Code: `src/engine/Fingerprint.cpp`,
+Version 0.16.0 (2026-10-06, after all revision steps R1 to R7 of `docs/design/W5b-fingerprint-revision.md`). Code: `src/engine/Fingerprint.cpp`,
 `src/engine/LatencyMeasurer.cpp`, settings `src/engine/FingerprintSettings.{h,cpp}`. Report text: `createReport()`.
 Purpose: say exactly what every line of the report means, so that a result can be judged as "the plugin does this" or "our test does this", and list the
 places where the test itself is still weak (section 6; the open ones are planned as R4 to R7). Section 7 is a checklist for a surprising result.
@@ -118,7 +118,8 @@ page reads it and shows the results as columns, one row per plugin, orange where
 - **Channel coupling** (only with two channels, at the setting B): render with noise on L and silence on R, and the other way round; the level of the silent output relative
   to the driven output (dB re the driven channel, and its level in dBFS, "silent" for exact zeros). Below `couplingBelowDb` (-100 dB) in both directions = channels independent.
   Coupling is a property, not a fault (a widener, a cross feed, a stereo reverb couple on purpose): it is never bold in the summary.
-Summary keys of R4: `layouts` (the accepted ones), `sideChain` (with the names of the extra input buses), `midi`, `coupling`.
+Summary keys of R4: `layouts` (the accepted ones), `sideChain` (with the names of the extra input buses), `midi`, `coupling`. Of R6: `timeInvariant` (never bold),
+`settles`.
 
 ### 3.1 Header
 `file`, `format`, `manufacturer`, `version`, `measured` (date), a settings warning if any, `channels: mono yes/no, stereo yes/no`. "no" for both: another layout
@@ -131,7 +132,10 @@ Fixed rules, each only when its condition holds, with the numbers:
 2. "No parameter changed the audio" (possible reasons named: instrument, analyser, parameters that act only together, parameters not read after prepare).
 3. "Delivery '<way>' fails: <reason with the differences>" for each failing way (only if some parameter reacts).
 4. "The output depends on the block size also after 1.00 s (largest at block size N: <difference>)".
-5. non-determinism, NaN or infinity, "does not come back after parameter jumps", "digital silence in does not give digital silence out (peak x dBFS)".
+5. "The plugin is time-varying ..." (R6), "needs longer than 0.25 s to settle ..." (R6), "In the stream way the setting B did not change the output: the plugin
+   ignores parameter changes while it runs ..." (R6, then the references of the other ways mean nothing).
+6. non-determinism, NaN or infinity, "after jumps of <the continuous parameters / the switches and choices> ... does not come back", "digital silence in does not give digital
+   silence out (peak x dBFS)", each with "(expected for a time-varying plugin)" or "(possibly because of the slow settling)" where that applies.
 
 ### 3.3 Parameters
 One row per examined parameter: `no.`, `name`, `min`, `default`, `max` (the plugin's text for normalised 0, default, 1), `steps` (**continuous**, **switch** for two
@@ -142,13 +146,20 @@ Sequence (step 2):
 2. **Pass 1**: every parameter at 0.25 and at 0.75 (the others at their defaults); difference against the baseline over the last 8192 samples; the larger counts;
    above -80 dB = changes the audio; "measured with: defaults".
 3. Every parameter that reacted in pass 1, **except switches** (two steps or "bypass" in the name), is set to 0.75 → base of pass 2.
-4. **Pass 2**: the parameters that did not react are tried again against this base; "measured with: the others at 0.75".
+4. **Pass 2**: the parameters that did not react are tried again against this base; "measured with: defaults, the others at 0.75".
+5. **If nothing reacted** (parameters that act only together, R6b): passes 1 and 2 again from a base with every switch away from its default and every choice one
+   step on (a bypass stays); "measured with: switches flipped". If still nothing: each switch flipped together with each continuous parameter at 0.25 and 0.75
+   (at most `maximumPairs` = 64 pairs); "measured with: with <switch> flipped". The line above the table says which base the scan used ("The scan started from ...").
 A switch that reacts only in pass 2 (a bypass) changes the audio only because the base of pass 2 has changed the audio: the gain plugin's Bypass reads
 -2.5 dB "with the others at 0.75" = exactly the removal of +12 dB (|1 - 3.98| / 3.98 = 0.75).
 "no" does not mean useless: a parameter can act on other signals, only together with another one (a band switch and its gain: Venn Audio Free EQ), on MIDI, at other
 levels, or on L - R (R4, R6).
-The **setting B** (step 3): the defaults; then, in the order of the list, each reacting non-switch parameter is set to 0.75 and kept if the output still differs
+The **setting B** (step 3): the base the scan used (normally the defaults); then, in the order of the list, each reacting non-switch parameter is set to 0.75 and kept if the output still differs
 from A by more than -60 dB.
+
+### 3.3b The settings A and B (R7)
+A table of the parameters where B differs from A: number, name, A normalised, A in the plugin's own text, B normalised, B in the plugin's text. So "0.75 of the knob" can be
+read in the plugin's units (Free EQ: "Band 1 Gain 0.00 -> 17.50", the band switches "Off -> On").
 
 ### 3.4 Latency at three sample rates
 Per rate 44.1, 48, 96 kHz, block 512, a new instance **at its default parameters, without poke or settle**:
@@ -185,11 +196,19 @@ The poke block is 512 samples for every block size. (Before 0.13.0 it was one bl
 differences of the BL gain plugins, which are now identical.)
 
 ### 3.7 Other
+- **time-invariant** (R6): one instance: poke, setting B, **settled for `longSettleSeconds` (2 s)**, noise → first output; `timeInvarianceGapSeconds` (0.5 s) of silence;
+  the same noise again → second output; the two the same (< -80 dB). If not: "time-varying" (an LFO, a random element, dither, a noise generator). For a time-varying plugin
+  determinism, repeatability (delivery), recovery and silence are printed with "expected for a time-varying plugin" and are not bold in the summary.
+- **settles within `settleSeconds`** (R6): render(B) with the normal 0.25 s settle against the first output of the time invariance test (2 s settle). If they differ the plugin
+  smooths its parameters (or has an envelope) longer than 0.25 s: the tests that follow a change (delivery, recovery) can fail because of that, they are marked "possibly
+  because of the slow settling", and a larger `settleSeconds` shows whether they then pass. (Found with BL-StereoWidth: with 0.25 s it looked time-varying, delivery none,
+  no recovery; with a 1 s settle it is time-invariant, recovers and passes 3 of 4 ways.)
 - **deterministic**: render(B, noise) twice with two instances, bit exact.
 - **output stays finite**: no NaN or infinity in the jump test.
-- **recovers from parameter jumps**: one instance: prepare, apply(B) (no poke), settle, process noise; each reacting parameter (at most 16, **switches included**) to 0, one
-  block of noise, to 1, one block; apply(B), settle, process noise, process noise again: the last output against render(B) < -80 dB.
-- **digital silence in gives digital silence out**: prepare, apply(B), settle, 8192 zeros: every sample exactly 0; otherwise the peak in dBFS.
+- **recovers from parameter jumps**: one instance: prepare, apply(B) (no poke), settle, process noise; each reacting parameter (at most 16) to 0, one block of noise,
+  to 1, one block; apply(B), settle, process noise, process noise again: the last output against render(B) < -80 dB. **Two separate runs** (R6): the continuous parameters,
+  and the switches and choices; the report says which group did not come back.
+- **digital silence in gives digital silence out**: prepare, apply(B), settle, 8192 zeros: the peak below `silenceBelowDbfs` (default -200 = exactly 0); the peak in dBFS.
 
 ### 3.8 Settings used
 The JSON of the settings the report was made with (2.5).
@@ -206,6 +225,8 @@ The JSON of the settings the report was made with (2.5).
 | Cross Feed (R += L / 2) | coupling L to R -6.0 dB, R to L silent: channels not independent |
 | Width (gain acts on L - R) | the gain changes the audio with L != R only |
 | Side Chain (stereo side-chain input, on by default) | the side chain is listed and switched off; measured normally |
+| Tremolo (free-running LFO) | time-varying; determinism, recovery, delivery not counted as faults |
+| EQ Switch (band off by default) | nothing reacts at the defaults; the scan flips the switch and finds gain, frequency, Q; every way ok |
 | EQ Prepare (resets in `prepareToPlay`) | stream: A again differs; before/after prepare: "the first delivery was lost"; only the poked way passes |
 
 ## 5. Example: the own PeakEQ and the BL gain plugins
@@ -213,19 +234,16 @@ PeakEQ: latency reported 0 (after prepare and after audio), measured 88 / 96 / 1
 added the synchronous block). Its 44.1 kHz design fault (W5) is no longer in the fingerprint: it is a statement about the frequency response and comes back with the analyzer.
 BL-Gain12 and BL-Gain24: nothing unusual; every way ok; all block sizes identical.
 
-## 6. Where the test is still weak (open; the planned step in brackets)
-1. **Parameters that act only together** (R6): all bands of an EQ off by default (Venn Audio Free EQ): nothing reacts.
-2. **Time-varying plugins** (R6): an LFO, a random element, dither or a noise generator gives "not deterministic", "repeatable: no", "does not come back",
-   "not silent". They are not yet labelled "time-varying".
-3. **The recovery test moves switches and choices together with the rest** (R6); a mode change that resets the plugin can read "does not come back".
-4. **Silence is exact** (R6): any output above zero fails (-149 dBFS of a denormal guard as well); a threshold will come into the settings.
-5. **The stream way defines "correct"** (R6): a plugin that ignores parameter changes in the stream way makes all references wrong in the same way.
-6. **The setting B is not printed** (R7): "0.75 of the knob" cannot be read in the plugin's units yet.
-7. **Latency is the largest peak at the default parameters** (by design): for a plugin with a long tail or a later peak (reverb, delay, a first reflection below a
-   later one) it is not a "block latency"; for a plugin that is silent at its defaults (mix 0, a gate) nothing comes out.
-8. **Parameters are moved to 0.25 and 0.75 with noise at -20 dBFS** (settings): a threshold at -10 dB, a slow LFO, an attack of seconds or an effect only at 0 or 1 reads "no".
-9. **Instruments and plugins without audio input**: "no parameter changed the audio" and "nothing came out" (no MIDI is sent).
-10. **Wrapper effects**: the VST3 hosting adds a hidden Bypass parameter to plugins that do not declare one; parameter texts come from the hosting layer.
+## 6. Where the test is still weak
+1. **Latency is the largest peak at the default parameters** (by design): for a plugin with a long tail or a later peak (reverb, delay, a first reflection below a later one)
+   it is not a "block latency"; for a plugin that is silent at its defaults (mix 0, a gate) nothing comes out.
+2. **Parameters are moved to 0.25 and 0.75 with noise at -20 dBFS** (settings): a threshold at -10 dB, a slow LFO, an attack of seconds or an effect only at 0 or 1 reads "no".
+3. **Time-varying versus slow**: the time invariance test settles for 2 s; a plugin whose smoothing or envelope is slower than that, or a very slow LFO, can still be
+   classified wrongly. `longSettleSeconds` and `timeInvarianceGapSeconds` are in the settings.
+4. **The pair search is capped** (`maximumPairs`) and only tries one switch with one continuous parameter.
+5. **Instruments and plugins without audio input**: "no parameter changed the audio" and "nothing came out" (no MIDI is sent).
+6. **Wrapper effects**: the VST3 hosting adds a hidden Bypass parameter to plugins that do not declare one; parameter texts come from the hosting layer.
+7. **A side chain that cannot be switched off** gets silence in the fingerprint; the engine and the loader refuse such a plugin.
 
 ## 7. Checklist: is this result right?
 1. **Does it run at all?** "channels" yes, parameters listed. No report: the plugin crashed in the measurement process.

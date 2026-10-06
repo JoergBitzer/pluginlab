@@ -221,6 +221,55 @@ bool isSwitch(const ParameterFingerprint& parameter)
     return parameter.numSteps == kSwitchSteps || parameter.name.containsIgnoreCase("bypass");
 }
 
+// a switch or a choice (a parameter with a number of steps), not a continuous one
+bool isDiscrete(const ParameterFingerprint& parameter)
+{
+    return parameter.numSteps < kContinuousSteps;
+}
+
+bool isBypass(const ParameterFingerprint& parameter)
+{
+    return parameter.name.containsIgnoreCase("bypass");
+}
+
+// The base for parameters that act only together (all bands of an EQ off by default): every switch away from its default, every choice one step
+// on. A bypass stays as it is.
+std::vector<float> makeFlippedSetting(const std::vector<float>& defaults, const std::vector<ParameterFingerprint>& parameters)
+{
+    std::vector<float> flipped = defaults;
+    const float middle = 0.5f;
+    for (const ParameterFingerprint& parameter : parameters)
+    {
+        float& value = flipped[static_cast<size_t>(parameter.index)];
+        if (isBypass(parameter) || ! isDiscrete(parameter) || parameter.numSteps < kSwitchSteps)
+        {
+            continue;
+        }
+        if (parameter.numSteps == kSwitchSteps)
+        {
+            if (value < middle)
+            {
+                value = 1.0f;
+            }
+            else
+            {
+                value = 0.0f;
+            }
+            continue;
+        }
+        const float step = 1.0f / static_cast<float>(parameter.numSteps - 1);
+        if (value + step <= 1.0f)
+        {
+            value += step;
+        }
+        else
+        {
+            value -= step;
+        }
+    }
+    return flipped;
+}
+
 // The values a setting is first set to before it is set itself: another value for every parameter (a plugin that reads a parameter
 // only when it changes cannot miss the setting)
 std::vector<float> makePokeValues(const std::vector<float>& setting, const FingerprintSettings& settings)
@@ -349,6 +398,11 @@ public:
     bool sawNonFinite() const
     {
         return m_sawNonFinite;
+    }
+
+    void settleFor(double seconds)
+    {
+        process(makeSilence(static_cast<int>(m_sampleRate * seconds)));
     }
 
     void settle()
@@ -672,18 +726,92 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
             entry.changesTheAudio = isAbove(entry.change, settings.reactsAboveDb);
         }
     };
-    scan(defaults, false, "defaults");
-    std::vector<float> withReacting = defaults;
-    for (const ParameterFingerprint& entry : fingerprint.parameters)
+    const auto anyReacts = [&fingerprint]
     {
-        if (entry.changesTheAudio && ! isSwitch(entry))
+        for (const ParameterFingerprint& entry : fingerprint.parameters)
         {
-            withReacting[static_cast<size_t>(entry.index)] = high;
+            if (entry.changesTheAudio)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+    // pass 1 from a base, pass 2 with the parameters that reacted moved to the high position
+    const auto runPasses = [&](const std::vector<float>& base, const juce::String& baseText)
+    {
+        scan(base, false, baseText);
+        std::vector<float> moved = base;
+        for (const ParameterFingerprint& entry : fingerprint.parameters)
+        {
+            if (entry.changesTheAudio && ! isSwitch(entry))
+            {
+                moved[static_cast<size_t>(entry.index)] = high;
+            }
+        }
+        if (moved != base)
+        {
+            scan(moved, true, baseText + ", the others at " + juce::String(settings.highSetting, 2));
+        }
+    };
+    std::vector<float> scanBase = defaults;
+    fingerprint.scanBase = "the defaults";
+    runPasses(defaults, "defaults");
+    // nothing at the defaults: parameters that act only together (a band switch and its gain): the switches flipped
+    if (! anyReacts())
+    {
+        const std::vector<float> flipped = makeFlippedSetting(defaults, fingerprint.parameters);
+        if (flipped != defaults)
+        {
+            runPasses(flipped, "switches flipped");
+            if (anyReacts())
+            {
+                scanBase = flipped;
+                fingerprint.scanBase = "every switch away from its default and every choice one step on (nothing changed the audio at the defaults)";
+            }
         }
     }
-    if (withReacting != defaults)
+    // still nothing: one switch together with one continuous parameter
+    if (! anyReacts())
     {
-        scan(withReacting, true, "the others at " + juce::String(settings.highSetting, 2));
+        int pairs = 0;
+        for (const ParameterFingerprint& switchEntry : fingerprint.parameters)
+        {
+            if (! isSwitch(switchEntry) || isBypass(switchEntry))
+            {
+                continue;
+            }
+            std::vector<float> base = defaults;
+            base[static_cast<size_t>(switchEntry.index)] = 1.0f - base[static_cast<size_t>(switchEntry.index)];
+            const Signal reference = bench.render(kReferenceRate, kReferenceBlock, base, noise);
+            for (ParameterFingerprint& entry : fingerprint.parameters)
+            {
+                if (isDiscrete(entry) || pairs >= settings.maximumPairs)
+                {
+                    continue;
+                }
+                ++pairs;
+                for (const float value : {low, high})
+                {
+                    std::vector<float> setting = base;
+                    setting[static_cast<size_t>(entry.index)] = value;
+                    const Difference change = compare(bench.render(kReferenceRate, kReferenceBlock, setting, noise), reference, compareFrom, settings);
+                    if (isAbove(change, settings.reactsAboveDb) && decisionValue(change) > decisionValue(entry.change))
+                    {
+                        entry.change = change;
+                        entry.changeDifferent = change;
+                        entry.changesTheAudio = true;
+                        entry.measuredWith = "with " + switchEntry.name + " flipped";
+                    }
+                }
+            }
+            if (anyReacts())
+            {
+                scanBase = base;
+                fingerprint.scanBase = switchEntry.name + " flipped (no single parameter changed the audio, a switch together with a parameter did)";
+                break;
+            }
+        }
     }
     for (const ParameterFingerprint& entry : fingerprint.parameters)
     {
@@ -695,7 +823,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
 
     // The setting B: the parameters that change the audio, moved to the high position one after the other. One that would undo the others
     // (a bypass switch) is left out: B must differ from A.
-    std::vector<float> settingB = defaults;
+    std::vector<float> settingB = scanBase;
     for (const int index : fingerprint.reactingParameters)
     {
         if (isSwitch(fingerprint.parameters[static_cast<size_t>(index)]))
@@ -709,6 +837,23 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         {
             settingB = candidate;
         }
+    }
+
+    for (const ParameterFingerprint& entry : fingerprint.parameters)
+    {
+        const size_t index = static_cast<size_t>(entry.index);
+        if (settingB[index] == defaults[index])
+        {
+            continue;
+        }
+        SettingEntry setting;
+        setting.index = entry.index;
+        setting.name = entry.name;
+        setting.valueA = defaults[index];
+        setting.textA = parameters[entry.index]->getText(defaults[index], kMaximumTextLength);
+        setting.valueB = settingB[index];
+        setting.textB = parameters[entry.index]->getText(settingB[index], kMaximumTextLength);
+        fingerprint.settingB.push_back(setting);
     }
 
     // ---- latency at the three sample rates (default parameters, delayed impulse) ----
@@ -770,6 +915,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     fingerprint.delivery.push_back(judgeDelivery("new instance per render, after prepare every parameter first set to another value, then the target",
                                                  freshPoked(defaults), freshPoked(defaults), freshPoked(settingB), freshPoked(defaults), referenceA,
                                                  referenceB, settings));
+    fingerprint.streamReacts = fingerprint.delivery.front().reacts;
     for (auto delivery = fingerprint.delivery.rbegin(); delivery != fingerprint.delivery.rend(); ++delivery)
     {
         if (delivery->passed)
@@ -806,34 +952,73 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         fingerprint.deterministic = ! one.empty() && difference.absoluteDbfs <= kFloorDb;
     }
 
-    // ---- robustness: every reacting parameter to both ends and back, then B again ----
+    // ---- time invariance: the same noise twice through one instance, with silence between; settled for a long time first, so that a slow
+    // parameter smoothing does not count as time-varying. The first output is also the reference for "settles in time". ----
     {
-        const Signal reachedB = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
         const std::unique_ptr<Rig> rig = bench.make(kReferenceRate, kReferenceBlock);
         rig->prepare();
+        rig->apply(makePokeValues(settingB, settings));
+        rig->process(makeDifferentNoise(kReferenceBlock, settings.noiseLevel));
         rig->apply(settingB);
-        rig->settle();
-        rig->process(noise);
+        rig->settleFor(settings.longSettleSeconds);
+        const Signal first = rig->process(noise);
+        const Signal afterShortSettle = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
+        fingerprint.settleDifference = compare(afterShortSettle, first, compareFrom, settings);
+        fingerprint.settlesInTime = isBelow(fingerprint.settleDifference, settings.sameBelowDb);
+        rig->process(makeSilence(static_cast<int>(kReferenceRate * settings.timeInvarianceGapSeconds)));
+        const Signal second = rig->process(noise);
+        fingerprint.timeInvarianceDifference = compare(second, first, compareFrom, settings);
+        fingerprint.timeInvariant = isBelow(fingerprint.timeInvarianceDifference, settings.sameBelowDb);
+    }
+
+    // ---- robustness: the reacting parameters to both ends and back, then B again; continuous ones and switches/choices separately ----
+    {
+        const Signal reachedB = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
         const Signal oneBlock = makeDifferentNoise(kReferenceBlock, settings.noiseLevel);
-        int jumped = 0;
+        // returns false if the output did not come back; finite is false after a NaN or infinity
+        const auto jumpTest = [&](bool discrete, bool& finite)
+        {
+            const std::unique_ptr<Rig> rig = bench.make(kReferenceRate, kReferenceBlock);
+            rig->prepare();
+            rig->apply(settingB);
+            rig->settle();
+            rig->process(noise);
+            int jumped = 0;
+            for (const int index : fingerprint.reactingParameters)
+            {
+                if (isDiscrete(fingerprint.parameters[static_cast<size_t>(index)]) != discrete)
+                {
+                    continue;
+                }
+                if (jumped++ >= settings.maximumJumpedParameters)
+                {
+                    break;
+                }
+                rig->set(index, 0.0f);
+                rig->process(oneBlock);
+                rig->set(index, 1.0f);
+                rig->process(oneBlock);
+            }
+            rig->apply(settingB);
+            rig->settle();
+            rig->process(noise); // time to come back
+            const Signal afterwards = rig->process(noise);
+            finite = ! rig->sawNonFinite();
+            return finite && ! reachedB.empty() && isBelow(compare(afterwards, reachedB, compareFrom, settings), settings.sameBelowDb);
+        };
+        bool continuousFinite = true;
+        bool discreteFinite = true;
+        fingerprint.recoversContinuous = jumpTest(false, continuousFinite);
         for (const int index : fingerprint.reactingParameters)
         {
-            if (jumped++ >= settings.maximumJumpedParameters)
-            {
-                break;
-            }
-            rig->set(index, 0.0f);
-            rig->process(oneBlock);
-            rig->set(index, 1.0f);
-            rig->process(oneBlock);
+            fingerprint.discreteJumped = fingerprint.discreteJumped || isDiscrete(fingerprint.parameters[static_cast<size_t>(index)]);
         }
-        rig->apply(settingB);
-        rig->settle();
-        rig->process(noise); // time to come back
-        const Signal afterwards = rig->process(noise);
-        fingerprint.outputStaysFinite = ! rig->sawNonFinite();
-        fingerprint.recoversFromJumps = fingerprint.outputStaysFinite && ! reachedB.empty()
-                                     && isBelow(compare(afterwards, reachedB, compareFrom, settings), settings.sameBelowDb);
+        if (fingerprint.discreteJumped)
+        {
+            fingerprint.recoversDiscrete = jumpTest(true, discreteFinite);
+        }
+        fingerprint.outputStaysFinite = continuousFinite && discreteFinite;
+        fingerprint.recoversFromJumps = fingerprint.recoversContinuous && fingerprint.recoversDiscrete;
     }
 
     // ---- silence ----
@@ -851,7 +1036,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
                 peak = std::max(peak, std::abs(sample));
             }
         }
-        fingerprint.silenceStaysSilent = peak == 0.0f;
+        fingerprint.silenceStaysSilent = peak == 0.0f || toDb(peak) < settings.silenceBelowDbfs;
         fingerprint.idleLevelDb = toDb(peak);
     }
 
@@ -911,11 +1096,33 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         fingerprint.findings.push_back("No parameter changed the audio (an instrument, a pure analyser, parameters that act only together, or parameters "
                                        "that are not read after prepare)");
     }
+    juce::String expected;
+    if (! fingerprint.timeInvariant)
+    {
+        expected = " (expected for a time-varying plugin)";
+        fingerprint.findings.push_back("The plugin is time-varying: the same noise twice through one instance, with " + juce::String(settings.timeInvarianceGapSeconds, 2)
+                                       + " s of silence between, gives different output (" + formatDifference(fingerprint.timeInvarianceDifference)
+                                       + "): an LFO, a random element, dither, a noise generator or a slow envelope. Repeatability, determinism, recovery and "
+                                         "silence cannot be judged as for a time-invariant plugin.");
+    }
+    if (fingerprint.timeInvariant && ! fingerprint.settlesInTime)
+    {
+        expected = " (possibly because of the slow settling)";
+        fingerprint.findings.push_back("After a parameter change the plugin needs longer than " + juce::String(settings.settleSeconds, 2) + " s to settle: the output "
+                                       "then differs from the output after " + juce::String(settings.longSettleSeconds, 2) + " s ("
+                                       + formatDifference(fingerprint.settleDifference) + "), a slow parameter smoothing or envelope. Tests that follow a change "
+                                         "(delivery, recovery) can fail because of it; a larger settleSeconds in the settings shows whether they then pass.");
+    }
+    if (! fingerprint.streamReacts && ! fingerprint.reactingParameters.empty())
+    {
+        fingerprint.findings.push_back("In the stream way the setting B did not change the output: the plugin ignores parameter changes while it runs; the "
+                                       "references of the other ways of delivery are therefore not meaningful");
+    }
     for (const DeliveryResult& delivery : fingerprint.delivery)
     {
         if (! delivery.passed && ! fingerprint.reactingParameters.empty())
         {
-            fingerprint.findings.push_back("Delivery '" + delivery.name + "' fails: " + delivery.comment);
+            fingerprint.findings.push_back("Delivery '" + delivery.name + "' fails: " + delivery.comment + expected);
         }
     }
     if (! fingerprint.blockSizeIndependent)
@@ -933,7 +1140,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     }
     if (! fingerprint.deterministic)
     {
-        fingerprint.findings.push_back("Two instances with the same input give different output");
+        fingerprint.findings.push_back("Two instances with the same input give different output" + expected);
     }
     if (! fingerprint.outputStaysFinite)
     {
@@ -941,11 +1148,20 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     }
     else if (! fingerprint.recoversFromJumps)
     {
-        fingerprint.findings.push_back("After parameter jumps to both ends the output does not come back to what it was");
+        juce::String group = "the continuous parameters";
+        if (fingerprint.recoversContinuous)
+        {
+            group = "the switches and choices";
+        }
+        else if (! fingerprint.recoversDiscrete)
+        {
+            group = "the continuous parameters and the switches and choices";
+        }
+        fingerprint.findings.push_back("After jumps of " + group + " to both ends the output does not come back to what it was" + expected);
     }
     if (! fingerprint.silenceStaysSilent)
     {
-        fingerprint.findings.push_back("Digital silence in does not give digital silence out (peak " + juce::String(fingerprint.idleLevelDb, 1) + " dBFS)");
+        fingerprint.findings.push_back("Digital silence in does not give digital silence out (peak " + juce::String(fingerprint.idleLevelDb, 1) + " dBFS)" + expected);
     }
     return fingerprint;
 }
@@ -1087,8 +1303,13 @@ std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
     {
         deliveryCell = juce::String(passedWays) + " of " + juce::String(static_cast<int>(fingerprint.delivery.size())) + " ways";
     }
-    add("delivery", "delivery of parameters (A, A, B, A): ways that work", deliveryCell, fingerprint.recommendedDelivery,
-        passedWays == static_cast<int>(fingerprint.delivery.size()));
+    juce::String deliveryDetail = fingerprint.recommendedDelivery;
+    if (! fingerprint.timeInvariant)
+    {
+        deliveryDetail = "time-varying: the repeatability of A cannot be judged";
+    }
+    add("delivery", "delivery of parameters (A, A, B, A): ways that work", deliveryCell, deliveryDetail,
+        passedWays == static_cast<int>(fingerprint.delivery.size()) || ! fingerprint.timeInvariant);
 
     juce::String worstBlock;
     double worstValue = kFloorDb;
@@ -1100,16 +1321,43 @@ std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
             worstBlock = "largest at " + juce::String(block.blockSize) + ": " + formatDifference(block.steadyState);
         }
     }
+    const bool timeVarying = ! fingerprint.timeInvariant;
+    juce::String expectedNote;
+    if (timeVarying)
+    {
+        expectedNote = "expected for a time-varying plugin";
+    }
+    juce::String invariance = "yes";
+    if (timeVarying)
+    {
+        invariance = "no (time-varying)";
+    }
+    add("timeInvariant", "time-invariant (the same noise twice through one instance)", invariance, formatDifference(fingerprint.timeInvarianceDifference), true);
+    add("settles", "settles within " + juce::String(fingerprint.settings.settleSeconds, 2) + " s after a parameter change", yesNo(fingerprint.settlesInTime),
+        formatDifference(fingerprint.settleDifference), fingerprint.settlesInTime || timeVarying);
     add("blockSizes", "block size independent (steady state)", yesNo(fingerprint.blockSizeIndependent), worstBlock, fingerprint.blockSizeIndependent);
-    add("deterministic", "deterministic (two instances, bit exact)", yesNo(fingerprint.deterministic), {}, fingerprint.deterministic);
+    add("deterministic", "deterministic (two instances, bit exact)", yesNo(fingerprint.deterministic), expectedNote, fingerprint.deterministic || timeVarying);
     add("finite", "output stays finite after parameter jumps", yesNo(fingerprint.outputStaysFinite), {}, fingerprint.outputStaysFinite);
-    add("recovers", "recovers from parameter jumps", yesNo(fingerprint.recoversFromJumps), {}, fingerprint.recoversFromJumps);
+    juce::String recoveryDetail = "continuous parameters: " + yesNo(fingerprint.recoversContinuous);
+    if (fingerprint.discreteJumped)
+    {
+        recoveryDetail += ", switches and choices: " + yesNo(fingerprint.recoversDiscrete);
+    }
+    if (timeVarying)
+    {
+        recoveryDetail += "; " + expectedNote;
+    }
+    add("recovers", "recovers from parameter jumps", yesNo(fingerprint.recoversFromJumps), recoveryDetail, fingerprint.recoversFromJumps || timeVarying);
     juce::String idle;
     if (! fingerprint.silenceStaysSilent)
     {
         idle = "peak " + juce::String(fingerprint.idleLevelDb, 1) + " dBFS";
     }
-    add("silence", "digital silence in gives digital silence out", yesNo(fingerprint.silenceStaysSilent), idle, fingerprint.silenceStaysSilent);
+    if (timeVarying && ! fingerprint.silenceStaysSilent)
+    {
+        idle += "; " + expectedNote;
+    }
+    add("silence", "digital silence in gives digital silence out", yesNo(fingerprint.silenceStaysSilent), idle, fingerprint.silenceStaysSilent || timeVarying);
     return items;
 }
 
@@ -1249,7 +1497,7 @@ juce::String createReport(const PluginFingerprint& fingerprint)
         text << ", the first " << static_cast<int>(fingerprint.parameters.size()) << " examined";
     }
     text << ". Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a "
-            "width or mid/side control reacts only to this one).\n\n| no. | name | min | default | max | steps | automatable | changes (L = R) | changes (L != R) | measured with |\n"
+            "width or mid/side control reacts only to this one). The scan started from " << fingerprint.scanBase << ".\n\n| no. | name | min | default | max | steps | automatable | changes (L = R) | changes (L != R) | measured with |\n"
             "|---|---|---|---|---|---|---|---|---|---|\n";
     for (const ParameterFingerprint& parameter : fingerprint.parameters)
     {
@@ -1273,6 +1521,24 @@ juce::String createReport(const PluginFingerprint& fingerprint)
             text << "no | no | ";
         }
         text << " |\n";
+    }
+
+    text << "\n## The settings A and B\n";
+    text << "A = the defaults. B = the parameters that change the audio at " << juce::String(settings.highSetting, 2) << " of their range (switches left out, starting from "
+         << fingerprint.scanBase << "); B is used by the delivery, block size, determinism, time invariance, jump, silence and coupling tests. Only the parameters "
+         << "where B differs from A are listed.\n\n";
+    if (fingerprint.settingB.empty())
+    {
+        text << "B equals A (no parameter changes the audio).\n";
+    }
+    else
+    {
+        text << "| no. | name | A (normalised) | A | B (normalised) | B |\n|---|---|---|---|---|---|\n";
+        for (const SettingEntry& entry : fingerprint.settingB)
+        {
+            text << "| " << entry.index << " | " << entry.name << " | " << juce::String(entry.valueA, 3) << " | " << entry.textA << " | "
+                 << juce::String(entry.valueB, 3) << " | " << entry.textB << " |\n";
+        }
     }
 
     text << "\n## Latency at three sample rates\n";
@@ -1345,10 +1611,19 @@ juce::String createReport(const PluginFingerprint& fingerprint)
     }
 
     text << "\n## Other\n";
+    text << "- time-invariant (one instance: settled for " << juce::String(settings.longSettleSeconds, 2) << " s, noise, " << juce::String(settings.timeInvarianceGapSeconds, 2) << " s silence, the same noise again; the two outputs the same): "
+         << yesNo(fingerprint.timeInvariant) << " (" << formatDifference(fingerprint.timeInvarianceDifference) << ")\n";
+    text << "- settles within " << juce::String(settings.settleSeconds, 2) << " s after a parameter change (the output then against the output after "
+         << juce::String(settings.longSettleSeconds, 2) << " s): " << yesNo(fingerprint.settlesInTime) << " (" << formatDifference(fingerprint.settleDifference) << ")\n";
     text << "- deterministic (two instances, the same noise, bit exact): " << yesNo(fingerprint.deterministic) << "\n";
     text << "- output stays finite (no NaN or infinity in the jump test): " << yesNo(fingerprint.outputStaysFinite) << "\n";
-    text << "- recovers from parameter jumps (every parameter that changes the audio to 0 and 1 and back, then the output of setting B again): "
-         << yesNo(fingerprint.recoversFromJumps) << "\n";
+    text << "- recovers from parameter jumps (the parameters that change the audio to 0 and 1 and back, then the output of setting B again; continuous parameters "
+            "and switches/choices in separate runs): continuous " << yesNo(fingerprint.recoversContinuous);
+    if (fingerprint.discreteJumped)
+    {
+        text << ", switches and choices " << yesNo(fingerprint.recoversDiscrete);
+    }
+    text << "\n";
     text << "- digital silence in gives digital silence out: " << yesNo(fingerprint.silenceStaysSilent);
     if (! fingerprint.silenceStaysSilent)
     {

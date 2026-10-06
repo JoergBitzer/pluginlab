@@ -1,7 +1,7 @@
 {
   "plugin": "4K EQ",
   "identifier": "VST3-4K EQ-f0d5ad8d-533e1add",
-  "measured": "2026-10-05 23:23",
+  "measured": "2026-10-06 10:07",
   "summary": [
     {
       "key": "loads",
@@ -76,15 +76,29 @@
     {
       "key": "delivery",
       "test": "delivery of parameters (A, A, B, A): ways that work",
-      "result": "1 of 4 ways",
-      "detail": "one instance, parameters set after prepare (stream)",
+      "result": "2 of 4 ways",
+      "detail": "new instance per render, after prepare every parameter first set to another value, then the target",
       "good": false
+    },
+    {
+      "key": "timeInvariant",
+      "test": "time-invariant (the same noise twice through one instance)",
+      "result": "yes",
+      "detail": "-85.5 dB / -103.8 dBFS (channel 2)",
+      "good": true
+    },
+    {
+      "key": "settles",
+      "test": "settles within 0.25 s after a parameter change",
+      "result": "yes",
+      "detail": "-80.3 dB / -98.6 dBFS",
+      "good": true
     },
     {
       "key": "blockSizes",
       "test": "block size independent (steady state)",
       "result": "no",
-      "detail": "largest at 509: -65.4 dB / -83.6 dBFS",
+      "detail": "largest at 32: -66.5 dB / -84.7 dBFS",
       "good": false
     },
     {
@@ -105,14 +119,14 @@
       "key": "recovers",
       "test": "recovers from parameter jumps",
       "result": "no",
-      "detail": "",
+      "detail": "continuous parameters: no, switches and choices: no",
       "good": false
     },
     {
       "key": "silence",
       "test": "digital silence in gives digital silence out",
       "result": "no",
-      "detail": "peak -97.2 dBFS",
+      "detail": "peak -96.2 dBFS",
       "good": false
     }
   ]

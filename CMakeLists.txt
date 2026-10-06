@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.22)
 
 # The version of the whole project: a new feature raises the second number and sets the third to zero,
 # a fix or other change raises the third (see CLAUDE.md).
-project(pluginlab VERSION 0.15.0)
+project(pluginlab VERSION 0.16.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

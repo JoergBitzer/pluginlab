@@ -85,6 +85,17 @@ struct BlockSizeResult
     Difference whole;         // the whole render, for information (smoothing of parameters per block shows here)
 };
 
+// One parameter of the settings A (defaults) and B, in normalised units and in the plugin's own text (only those that differ are listed)
+struct SettingEntry
+{
+    int index = 0;
+    juce::String name;
+    float valueA = 0.0f;
+    juce::String textA;
+    float valueB = 0.0f;
+    juce::String textB;
+};
+
 struct PluginFingerprint
 {
     juce::PluginDescription description;
@@ -110,14 +121,24 @@ struct PluginFingerprint
     std::vector<ParameterFingerprint> parameters;
     int numberOfParameters = 0;               // all of the plugin (only the first settings.maximumParameters are examined)
     std::vector<int> reactingParameters;      // indices of the parameters that change the audio
+    juce::String scanBase;                    // what the parameter scan started from (the defaults, or the switches flipped, or a pair)
+    std::vector<SettingEntry> settingB;       // the parameters where B differs from A
     std::vector<RateFingerprint> rates;       // 44.1, 48 and 96 kHz
     std::vector<DeliveryResult> delivery;
     juce::String recommendedDelivery;         // the most careful way that works (empty if none does)
     std::vector<BlockSizeResult> blockSizes;
     bool blockSizeIndependent = true;
     bool deterministic = false;
+    bool timeInvariant = true;                // the same noise twice through one instance (with silence between) gives the same output
+    Difference timeInvarianceDifference;
+    bool settlesInTime = true;                // after settleSeconds the output equals the output after longSettleSeconds (no slow smoothing)
+    Difference settleDifference;
+    bool streamReacts = true;                 // the stream way of the delivery test changes its output when the parameters change
     bool outputStaysFinite = true;
     bool recoversFromJumps = true;
+    bool recoversContinuous = true;           // after jumps of the continuous parameters
+    bool recoversDiscrete = true;             // after jumps of the switches and choices
+    bool discreteJumped = false;              // there were switches or choices to jump
     bool silenceStaysSilent = true;
     double idleLevelDb = -200.0;
     std::vector<juce::String> findings;       // what is noteworthy, in words, with the numbers

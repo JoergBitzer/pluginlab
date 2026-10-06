@@ -6,6 +6,7 @@
 //   PLUGINLAB_TEST_EQ_FS_BUG=1       designs the filter for 44.1 kHz whatever sample rate the host runs at (the fault of the own PeakEQ)
 //   PLUGINLAB_TEST_EQ_PREPARE_BUG=1  prepareToPlay resets the filter to hard-coded values and a parameter is read again only when its
 //                                    value changes (the fault of the PeakEqualizer template)
+//   PLUGINLAB_TEST_EQ_ENABLE_SWITCH=1  the band has a switch "Enabled" that is off by default (like the bands of Venn Audio Free EQ)
 namespace
 {
 constexpr int kParameterVersion = 1;
@@ -41,6 +42,11 @@ public:
         addParameter(m_gain);
         addParameter(m_frequency);
         addParameter(m_q);
+        if (PLUGINLAB_TEST_EQ_ENABLE_SWITCH)
+        {
+            m_enabled = new juce::AudioParameterBool(juce::ParameterID{"enabled", kParameterVersion}, "Enabled", false);
+            addParameter(m_enabled);
+        }
     }
 
     const juce::String getName() const override
@@ -87,6 +93,10 @@ public:
         juce::ignoreUnused(midi);
         juce::ScopedNoDenormals noDenormals;
         updateDesign();
+        if (m_enabled != nullptr && ! m_enabled->get())
+        {
+            return; // the band is off: the audio passes unchanged
+        }
         const int channels = juce::jmin(buffer.getNumChannels(), kMaximumChannels);
         for (int channel = 0; channel < channels; ++channel)
         {
@@ -197,6 +207,7 @@ private:
     juce::AudioParameterFloat* m_gain = nullptr;
     juce::AudioParameterFloat* m_frequency = nullptr;
     juce::AudioParameterFloat* m_q = nullptr;
+    juce::AudioParameterBool* m_enabled = nullptr;
     double m_sampleRate = kBuggySampleRate;
     double m_b0 = 1.0;
     double m_b1 = 0.0;

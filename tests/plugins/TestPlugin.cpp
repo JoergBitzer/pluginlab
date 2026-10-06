@@ -78,6 +78,8 @@ void TestPluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     m_delayLines.assign(static_cast<size_t>(getTotalNumOutputChannels()), std::vector<float>(PLUGINLAB_TEST_PLUGIN_DELAY_SAMPLES, 0.0f));
     m_delayPosition = 0;
     m_smoothedGain = juce::Decibels::decibelsToGain(m_gain->get());
+    m_lfoPhase = 0.0;
+    m_sampleRate = sampleRate;
 
     // a windowed-sinc low-pass at a quarter of the sample rate, symmetric (linear phase): the peak is in the middle
     constexpr int kTaps = PLUGINLAB_TEST_PLUGIN_FIR_TAPS;
@@ -161,6 +163,21 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         {
             buffer.applyGain(channel, 0, buffer.getNumSamples(), gain);
         }
+    }
+#endif
+#if PLUGINLAB_TEST_PLUGIN_LFO
+    // a tremolo: the level goes between 0.5 and 1 with a free-running 2 Hz LFO (the phase only starts again in prepareToPlay)
+    constexpr double kLfoHz = 2.0;
+    constexpr double kTwoPi = 6.283185307179586;
+    constexpr float kDepth = 0.5f;
+    for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+    {
+        const float level = 1.0f - kDepth * 0.5f * (1.0f + static_cast<float>(std::sin(m_lfoPhase)));
+        for (int channel = 0; channel < mainChannels; ++channel)
+        {
+            buffer.setSample(channel, sample, buffer.getSample(channel, sample) * level);
+        }
+        m_lfoPhase += kTwoPi * kLfoHz / m_sampleRate;
     }
 #endif
 #if PLUGINLAB_TEST_PLUGIN_STEREO_MODE == 1

@@ -1,7 +1,7 @@
 {
   "plugin": "BL-StereoWidth",
   "identifier": "VST3-BL-StereoWidth-7ccf7ca6-fa9ffd3",
-  "measured": "2026-10-05 23:22",
+  "measured": "2026-10-06 10:06",
   "summary": [
     {
       "key": "loads",
@@ -81,6 +81,20 @@
       "good": false
     },
     {
+      "key": "timeInvariant",
+      "test": "time-invariant (the same noise twice through one instance)",
+      "result": "yes",
+      "detail": "identical",
+      "good": true
+    },
+    {
+      "key": "settles",
+      "test": "settles within 0.25 s after a parameter change",
+      "result": "no",
+      "detail": "-77.7 dB / -99.9 dBFS",
+      "good": false
+    },
+    {
       "key": "blockSizes",
       "test": "block size independent (steady state)",
       "result": "yes",
@@ -105,7 +119,7 @@
       "key": "recovers",
       "test": "recovers from parameter jumps",
       "result": "no",
-      "detail": "",
+      "detail": "continuous parameters: no, switches and choices: no",
       "good": false
     },
     {

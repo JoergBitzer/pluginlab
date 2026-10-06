@@ -144,3 +144,9 @@ Yes
   several channels: noise L != R for all measurements, noise L = R as second signal of the parameter scan (two columns), all output channels compared (the worst channel is
   named); channel coupling at the setting B. New test plugins Cross Feed, Width, Side Chain. Checked on real plugins: ZL Equalizer 2 is measurable now (side chain "Aux"
   switched off); BL-StereoWidth: Width, WidthLimit, BassToMono and MonoOut change the audio only with L != R, the coupling is L to R -6.7 dB, R to L -22 dB.
+- **R6 with R6b and R7 done (0.16.0, 2026-10-06).** Time invariance (2 s settle, noise, 0.5 s silence, the same noise: equal?) with "time-varying" as a property and the
+  other results marked "expected for a time-varying plugin"; a new result "settles within settleSeconds" (render with 0.25 s settle against the output after 2 s): found because
+  BL-StereoWidth first looked time-varying (-77.7 dB) but is a slow smoothing (with a 1 s settle it is time-invariant, recovers, and 3 of 4 delivery ways pass); recovery in
+  two runs (continuous / switches and choices); `silenceBelowDbfs`; a finding when the stream way does not react; R6b: if nothing reacts, the scan from a base with the switches
+  flipped, then switch / parameter pairs (Venn Audio Free EQ: 25 parameters found, clean); R7: the table "The settings A and B" in the plugin's own units. Test plugins
+  Tremolo and EQ Switch. All steps of W5b are done.

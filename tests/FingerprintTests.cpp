@@ -36,7 +36,11 @@ public:
         expectEquals(gain.numberOfParameters, 4);
         expect(! gain.reactingParameters.empty() && gain.reactingParameters[0] == 0, "the gain must change the audio");
         expectEquals(gain.parameters[0].measuredWith, juce::String("defaults"));
-        expect(gain.parameters[3].measuredWith.startsWith("the others at"), "the bypass reacts only with the gain moved: " + gain.parameters[3].measuredWith);
+        expect(gain.parameters[3].measuredWith.contains("the others at"), "the bypass reacts only with the gain moved: " + gain.parameters[3].measuredWith);
+        expect(gain.timeInvariant);
+        expect(gain.recoversContinuous && gain.recoversDiscrete);
+        expectEquals(gain.scanBase, juce::String("the defaults"));
+        expect(! gain.settingB.empty() && gain.settingB[0].name == "Gain" && gain.settingB[0].textB.contains("12"), "B: gain at +12 dB");
         expectEquals(static_cast<int>(gain.rates.size()), 3);
         for (const pluginlab::engine::RateFingerprint& rate : gain.rates)
         {
@@ -111,6 +115,30 @@ public:
         const pluginlab::engine::PluginFingerprint mono = measure(testpaths::getMonoPlugin());
         expectEquals(mono.measuredChannels, 1);
         expect(! mono.couplingMeasured);
+
+        beginTest("time-varying: the tremolo is found, and determinism, recovery and delivery are not counted as faults");
+        const pluginlab::engine::PluginFingerprint tremolo = measure(testpaths::getTremoloPlugin());
+        expect(! tremolo.timeInvariant, "the tremolo must be time-varying");
+        bool timeVaryingMentioned = false;
+        for (const juce::String& finding : tremolo.findings)
+        {
+            timeVaryingMentioned = timeVaryingMentioned || finding.contains("time-varying");
+        }
+        expect(timeVaryingMentioned);
+        for (const pluginlab::engine::SummaryItem& item : pluginlab::engine::summarize(tremolo))
+        {
+            expect(item.good || item.key == "parameters", "time-varying, so not a fault: " + item.key + " = " + item.result);
+        }
+
+        beginTest("parameters that act only together: the EQ band is off by default, the scan flips the switch and finds gain, frequency and Q");
+        const pluginlab::engine::PluginFingerprint eqSwitch = measure(testpaths::getEqSwitchPlugin());
+        expect(eqSwitch.reactingParameters.size() >= 3, "gain, frequency and Q: " + juce::String(static_cast<int>(eqSwitch.reactingParameters.size())));
+        expect(eqSwitch.scanBase.contains("switch"), eqSwitch.scanBase);
+        expect(! eqSwitch.settingB.empty());
+        for (const pluginlab::engine::DeliveryResult& delivery : eqSwitch.delivery)
+        {
+            expect(delivery.passed, delivery.name + ": " + delivery.comment);
+        }
 
         beginTest("the plugin that reports 0 samples latency but delays by 100: the report differs from the measurement at all rates");
         const pluginlab::engine::PluginFingerprint liar = measure(testpaths::getLatencyLiarPlugin());

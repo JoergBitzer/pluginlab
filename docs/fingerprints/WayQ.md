@@ -2,7 +2,7 @@
 
 - file: `/home/bitzer/AudioDev/measurement_tool/plugins/ext/WayQ-Linux-v1.0.0/linux/WayQ.vst3`
 - format: VST3, manufacturer: Way.Net, version: 1.0.0
-- measured: 2026-10-05 23:23
+- measured: 2026-10-06 10:07
 - channels: mono no, stereo yes
 
 ## Summary
@@ -19,10 +19,12 @@
 | output before the peak of the impulse response | yes |  |
 | output before the impulse (signal of its own) | no |  |
 | delivery of parameters (A, A, B, A): ways that work | **3 of 4 ways** | new instance per render, after prepare every parameter first set to another value, then the target |
+| time-invariant (the same noise twice through one instance) | yes | identical |
+| settles within 0.25 s after a parameter change | yes | -165.3 dB / -172.0 dBFS |
 | block size independent (steady state) | yes | largest at 32: identical |
 | deterministic (two instances, bit exact) | yes |  |
 | output stays finite after parameter jumps | yes |  |
-| recovers from parameter jumps | yes |  |
+| recovers from parameter jumps | yes | continuous parameters: yes, switches and choices: yes |
 | digital silence in gives digital silence out | yes |  |
 
 Bold: worth a look (see the findings and the details below).
@@ -56,15 +58,15 @@ The buses of the plugin as it is created, the main-bus layouts it accepts (other
 - coupling L to R: silent, R to L: -186.0 dB re the driven channel (-192.8 dBFS): channels independent yes
 
 ## Parameters
-Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 29 parameters. Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a width or mid/side control reacts only to this one).
+Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 29 parameters. Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a width or mid/side control reacts only to this one). The scan started from the defaults.
 
 | no. | name | min | default | max | steps | automatable | changes (L = R) | changes (L != R) | measured with |
 |---|---|---|---|---|---|---|---|---|---|
 | 0 | HP Freq A | 20.0000000 | 20.0000000 | 20000.0000000 | continuous | yes | -2.2 dB / -27.9 dBFS | -2.2 dB / -27.9 dBFS | defaults |
 | 1 | HP Q A | 0.3000000 | 0.7070000 | 10.0000000 | continuous | yes | -23.6 dB / -49.3 dBFS | -23.6 dB / -49.3 dBFS | defaults |
-| 2 | Mid Freq A | 20.0000000 | 632.4559937 | 20000.0000000 | continuous | yes | -14.9 dB / -21.5 dBFS | -14.9 dB / -21.5 dBFS | the others at 0.75 |
+| 2 | Mid Freq A | 20.0000000 | 632.4559937 | 20000.0000000 | continuous | yes | -14.9 dB / -21.5 dBFS | -14.9 dB / -21.5 dBFS | defaults, the others at 0.75 |
 | 3 | Mid Gain A | -12.0000000 | 0.0000000 | 12.0000000 | continuous | yes | -13.0 dB / -38.7 dBFS | -13.0 dB / -38.7 dBFS | defaults |
-| 4 | Mid Q A | 0.3000000 | 0.7000000 | 17.3099995 | continuous | yes | -32.7 dB / -39.4 dBFS | -32.7 dB / -39.4 dBFS | the others at 0.75 |
+| 4 | Mid Q A | 0.3000000 | 0.7000000 | 17.3099995 | continuous | yes | -32.7 dB / -39.4 dBFS | -32.7 dB / -39.4 dBFS | defaults, the others at 0.75 |
 | 5 | LP Freq A | 20.0000000 | 20000.0000000 | 20000.0000000 | continuous | yes | 0.1 dB / -25.6 dBFS | 0.1 dB / -25.6 dBFS | defaults |
 | 6 | LP Q A | 0.3000000 | 0.7070000 | 10.0000000 | continuous | yes | 2.8 dB / -22.9 dBFS | 2.8 dB / -22.9 dBFS | defaults |
 | 7 | Delta A | 0 | 0 | 2 | continuous | yes | 6.0 dB / -19.7 dBFS | 6.0 dB / -19.7 dBFS | defaults |
@@ -75,9 +77,9 @@ Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its
 | 12 | EQ Mode X A | Off | Off | On | switch | yes | -2.6 dB / -28.3 dBFS | -2.6 dB / -28.3 dBFS | defaults |
 | 13 | HP Freq B | 20.0000000 | 20.0000000 | 20000.0000000 | continuous | yes | -2.2 dB / -27.9 dBFS (channel 2) | -2.3 dB / -27.9 dBFS (channel 2) | defaults |
 | 14 | HP Q B | 0.3000000 | 0.7070000 | 10.0000000 | continuous | yes | -21.5 dB / -47.2 dBFS (channel 2) | -17.3 dB / -42.9 dBFS (channel 2) | defaults |
-| 15 | Mid Freq B | 20.0000000 | 632.4559937 | 20000.0000000 | continuous | yes | -14.9 dB / -21.5 dBFS (channel 2) | -15.1 dB / -21.7 dBFS (channel 2) | the others at 0.75 |
+| 15 | Mid Freq B | 20.0000000 | 632.4559937 | 20000.0000000 | continuous | yes | -14.9 dB / -21.5 dBFS (channel 2) | -15.1 dB / -21.7 dBFS (channel 2) | defaults, the others at 0.75 |
 | 16 | Mid Gain B | -12.0000000 | 0.0000000 | 12.0000000 | continuous | yes | -13.0 dB / -38.7 dBFS (channel 2) | -13.0 dB / -38.6 dBFS (channel 2) | defaults |
-| 17 | Mid Q B | 0.3000000 | 0.7000000 | 17.3099995 | continuous | yes | -32.7 dB / -39.4 dBFS (channel 2) | -32.9 dB / -39.5 dBFS (channel 2) | the others at 0.75 |
+| 17 | Mid Q B | 0.3000000 | 0.7000000 | 17.3099995 | continuous | yes | -32.7 dB / -39.4 dBFS (channel 2) | -32.9 dB / -39.5 dBFS (channel 2) | defaults, the others at 0.75 |
 | 18 | LP Freq B | 20.0000000 | 20000.0000000 | 20000.0000000 | continuous | yes | 0.1 dB / -25.6 dBFS (channel 2) | 0.1 dB / -25.5 dBFS (channel 2) | defaults |
 | 19 | LP Q B | 0.3000000 | 0.7070000 | 10.0000000 | continuous | yes | 2.8 dB / -22.9 dBFS (channel 2) | 2.7 dB / -23.0 dBFS (channel 2) | defaults |
 | 20 | Delta B | 0 | 0 | 2 | continuous | yes | 6.0 dB / -19.7 dBFS (channel 2) | 6.0 dB / -19.6 dBFS (channel 2) | defaults |
@@ -89,6 +91,29 @@ Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its
 | 26 | Bypass | Off | Off | On | switch | yes | -2.6 dB / -28.3 dBFS (channel 2) | -2.6 dB / -28.3 dBFS | defaults |
 | 27 | M/S Mode | Off | Off | On | switch | yes | 0.0 dB / -25.7 dBFS (channel 2) | -3.0 dB / -28.7 dBFS | defaults |
 | 28 | Mix | 0.0000000 | 1.0000000 | 1.0000000 | continuous | yes | -1.9 dB / -27.6 dBFS | -1.9 dB / -27.6 dBFS | defaults |
+
+## The settings A and B
+A = the defaults. B = the parameters that change the audio at 0.75 of their range (switches left out, starting from the defaults); B is used by the delivery, block size, determinism, time invariance, jump, silence and coupling tests. Only the parameters where B differs from A are listed.
+
+| no. | name | A (normalised) | A | B (normalised) | B |
+|---|---|---|---|---|---|
+| 0 | HP Freq A | 0.000 | 20.0000000 | 0.750 | 4723.5708008 |
+| 1 | HP Q A | 0.042 | 0.7070000 | 0.750 | 7.5749998 |
+| 2 | Mid Freq A | 0.500 | 632.4559937 | 0.750 | 4723.5708008 |
+| 3 | Mid Gain A | 0.500 | 0.0000000 | 0.750 | 6.0000000 |
+| 4 | Mid Q A | 0.024 | 0.7000000 | 0.750 | 13.0574999 |
+| 5 | LP Freq A | 1.000 | 20000.0000000 | 0.750 | 4723.5708008 |
+| 6 | LP Q A | 0.042 | 0.7070000 | 0.750 | 7.5749998 |
+| 7 | Delta A | 0.000 | 0 | 0.750 | 2 |
+| 13 | HP Freq B | 0.000 | 20.0000000 | 0.750 | 4723.5708008 |
+| 14 | HP Q B | 0.042 | 0.7070000 | 0.750 | 7.5749998 |
+| 15 | Mid Freq B | 0.500 | 632.4559937 | 0.750 | 4723.5708008 |
+| 16 | Mid Gain B | 0.500 | 0.0000000 | 0.750 | 6.0000000 |
+| 17 | Mid Q B | 0.024 | 0.7000000 | 0.750 | 13.0574999 |
+| 18 | LP Freq B | 1.000 | 20000.0000000 | 0.750 | 4723.5708008 |
+| 19 | LP Q B | 0.042 | 0.7070000 | 0.750 | 7.5749998 |
+| 20 | Delta B | 0.000 | 0 | 0.750 | 2 |
+| 28 | Mix | 1.000 | 1.0000000 | 0.750 | 0.7500000 |
 
 ## Latency at three sample rates
 An impulse (1.0 on all channels) after 4096 samples of silence, the plugin at its default parameters, 1.00 s watched. Measured = position of the largest output sample after the impulse. Reported = getLatencySamples() right after prepareToPlay and after the audio. Output before the peak: the largest output between the impulse and the peak, relative to the peak (a filter with pre-ringing, a look-ahead). Output before the impulse: signal the plugin makes of its own.
@@ -125,9 +150,11 @@ Most careful way that works: new instance per render, after prepare every parame
 | 509 | identical | -184.7 dB / -191.2 dBFS (channel 2) |
 
 ## Other
+- time-invariant (one instance: settled for 2.00 s, noise, 0.50 s silence, the same noise again; the two outputs the same): yes (identical)
+- settles within 0.25 s after a parameter change (the output then against the output after 2.00 s): yes (-165.3 dB / -172.0 dBFS)
 - deterministic (two instances, the same noise, bit exact): yes
 - output stays finite (no NaN or infinity in the jump test): yes
-- recovers from parameter jumps (every parameter that changes the audio to 0 and 1 and back, then the output of setting B again): yes
+- recovers from parameter jumps (the parameters that change the audio to 0 and 1 and back, then the output of setting B again; continuous parameters and switches/choices in separate runs): continuous yes, switches and choices yes
 - digital silence in gives digital silence out: yes
 
 ## Settings used
@@ -139,6 +166,10 @@ Most careful way that works: new instance per render, after prepare every parame
   "blockIndependentBelowDb": -100.0,
   "silentReferenceDbfs": -150.0,
   "couplingBelowDb": -100.0,
+  "silenceBelowDbfs": -200.0,
+  "timeInvarianceGapSeconds": 0.5,
+  "maximumPairs": 64,
+  "longSettleSeconds": 2.0,
   "noiseLevel": 0.1,
   "settleSeconds": 0.25,
   "impulsePreDelaySamples": 4096,

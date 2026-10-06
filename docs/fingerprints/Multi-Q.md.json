@@ -1,7 +1,7 @@
 {
   "plugin": "Multi-Q",
   "identifier": "VST3-Multi-Q-cfb5dc60-fc4fef77",
-  "measured": "2026-10-05 23:23",
+  "measured": "2026-10-06 10:07",
   "summary": [
     {
       "key": "loads",
@@ -81,6 +81,20 @@
       "good": false
     },
     {
+      "key": "timeInvariant",
+      "test": "time-invariant (the same noise twice through one instance)",
+      "result": "yes",
+      "detail": "-120.3 dB / -147.6 dBFS (channel 2)",
+      "good": true
+    },
+    {
+      "key": "settles",
+      "test": "settles within 0.25 s after a parameter change",
+      "result": "yes",
+      "detail": "-137.8 dB / -165.1 dBFS (channel 2)",
+      "good": true
+    },
+    {
       "key": "blockSizes",
       "test": "block size independent (steady state)",
       "result": "yes",
@@ -105,7 +119,7 @@
       "key": "recovers",
       "test": "recovers from parameter jumps",
       "result": "no",
-      "detail": "",
+      "detail": "continuous parameters: no, switches and choices: no",
       "good": false
     },
     {

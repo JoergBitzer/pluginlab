@@ -2,7 +2,7 @@
 
 - file: `/home/bitzer/.vst3/BL-Gain24.vst3`
 - format: VST3, manufacturer: BlueLab, version: 6.2.4
-- measured: 2026-10-05 23:22
+- measured: 2026-10-06 10:06
 - channels: mono yes, stereo yes
 
 ## Summary
@@ -19,10 +19,12 @@
 | output before the peak of the impulse response | no |  |
 | output before the impulse (signal of its own) | no |  |
 | delivery of parameters (A, A, B, A): ways that work | 4 of 4 ways | new instance per render, after prepare every parameter first set to another value, then the target |
+| time-invariant (the same noise twice through one instance) | yes | identical |
+| settles within 0.25 s after a parameter change | yes | -143.8 dB / -156.6 dBFS (channel 2) |
 | block size independent (steady state) | yes | largest at 32: identical |
 | deterministic (two instances, bit exact) | yes |  |
 | output stays finite after parameter jumps | yes |  |
-| recovers from parameter jumps | yes |  |
+| recovers from parameter jumps | yes | continuous parameters: yes, switches and choices: yes |
 | digital silence in gives digital silence out | yes |  |
 
 Bold: worth a look (see the findings and the details below).
@@ -55,12 +57,19 @@ The buses of the plugin as it is created, the main-bus layouts it accepts (other
 - coupling L to R: silent, R to L: silent: channels independent yes
 
 ## Parameters
-Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 2 parameters. Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a width or mid/side control reacts only to this one).
+Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 2 parameters. Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a width or mid/side control reacts only to this one). The scan started from the defaults.
 
 | no. | name | min | default | max | steps | automatable | changes (L = R) | changes (L != R) | measured with |
 |---|---|---|---|---|---|---|---|---|---|
-| 0 | Bypass | off | off | on | switch | yes | -2.5 dB / -15.3 dBFS | -2.5 dB / -15.3 dBFS | the others at 0.75 |
+| 0 | Bypass | off | off | on | switch | yes | -2.5 dB / -15.3 dBFS | -2.5 dB / -15.3 dBFS | defaults, the others at 0.75 |
 | 1 | Gain | -24.0 | 0.0 | 24.0 | continuous | yes | 9.5 dB / -15.3 dBFS | 9.5 dB / -15.3 dBFS | defaults |
+
+## The settings A and B
+A = the defaults. B = the parameters that change the audio at 0.75 of their range (switches left out, starting from the defaults); B is used by the delivery, block size, determinism, time invariance, jump, silence and coupling tests. Only the parameters where B differs from A are listed.
+
+| no. | name | A (normalised) | A | B (normalised) | B |
+|---|---|---|---|---|---|
+| 1 | Gain | 0.500 | 0.0 | 0.750 | 12.0 |
 
 ## Latency at three sample rates
 An impulse (1.0 on all channels) after 4096 samples of silence, the plugin at its default parameters, 1.00 s watched. Measured = position of the largest output sample after the impulse. Reported = getLatencySamples() right after prepareToPlay and after the audio. Output before the peak: the largest output between the impulse and the peak, relative to the peak (a filter with pre-ringing, a look-ahead). Output before the impulse: signal the plugin makes of its own.
@@ -97,9 +106,11 @@ Most careful way that works: new instance per render, after prepare every parame
 | 509 | identical | identical |
 
 ## Other
+- time-invariant (one instance: settled for 2.00 s, noise, 0.50 s silence, the same noise again; the two outputs the same): yes (identical)
+- settles within 0.25 s after a parameter change (the output then against the output after 2.00 s): yes (-143.8 dB / -156.6 dBFS (channel 2))
 - deterministic (two instances, the same noise, bit exact): yes
 - output stays finite (no NaN or infinity in the jump test): yes
-- recovers from parameter jumps (every parameter that changes the audio to 0 and 1 and back, then the output of setting B again): yes
+- recovers from parameter jumps (the parameters that change the audio to 0 and 1 and back, then the output of setting B again; continuous parameters and switches/choices in separate runs): continuous yes, switches and choices yes
 - digital silence in gives digital silence out: yes
 
 ## Settings used
@@ -111,6 +122,10 @@ Most careful way that works: new instance per render, after prepare every parame
   "blockIndependentBelowDb": -100.0,
   "silentReferenceDbfs": -150.0,
   "couplingBelowDb": -100.0,
+  "silenceBelowDbfs": -200.0,
+  "timeInvarianceGapSeconds": 0.5,
+  "maximumPairs": 64,
+  "longSettleSeconds": 2.0,
   "noiseLevel": 0.1,
   "settleSeconds": 0.25,
   "impulsePreDelaySamples": 4096,

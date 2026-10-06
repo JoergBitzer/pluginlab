@@ -95,6 +95,16 @@ inline juce::File getSideChainPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestSideChain.vst3");
 }
 
+inline juce::File getTremoloPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestTremolo.vst3");
+}
+
+inline juce::File getEqSwitchPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestEqSwitch.vst3");
+}
+
 inline juce::File getCrashPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestCrash.vst3");
