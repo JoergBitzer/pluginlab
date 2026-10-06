@@ -115,6 +115,16 @@ Not done in W6.1 (open): the metadata struct per signal (each generator has its 
 the music excerpts (download script, later). Dropped (author, 2026-10-06): the hash test "the same samples on every platform" (`std::sin`/`std::log`
 may differ in the last bit between platforms; the oracle comparison in W6.5 uses tolerances).
 
+### The signals as files (0.19.0)
+`apps/signals/` builds `PluginLabSignals <folder> [--seconds 5,10] [--rate 48000]`: the standard set as stereo 32-bit float WAV files, one per length
+(23 per length): silence; impulse and step (-6 dBFS at 0.1 s); sines 1 kHz (-6 and -20 dBFS), 100 Hz and 10 kHz (-6 dBFS, 10 ms fades); two-tone SMPTE and
+CCIF; multitone (31 tones, Schroeder, -20 dBFS RMS); noise at -20 dBFS RMS (white Gaussian L = R, uncorrelated, L only, R only, L = -R; white uniform;
+pink L = R and uncorrelated); synchronized sweeps 30 Hz ... 20 kHz (-6 and -20 dBFS; the sweep as long as the integer k allows, at least 0.5 s silence after it);
+stepped sines 20 kHz -> 20 Hz (-6 and -20 dBFS; 3 steps per octave, the measurement time as long as fits, at least 4 periods; the steps as CSV); sine bursts
+1 kHz with rising levels up to -5 dBFS. `signals.txt` describes every file (for the sweep: L, k, start sample, length). The levels were checked with the
+Python prototype's soundfile: all as intended (CCIF shows -6.34 dBFS sample peak: the true peak is -6 dBFS, the samples miss it). CTest `PluginLabSignalsWrites`.
+Set written for the author: `~/Music/TestSignals/` (5 s and 10 s, 48 kHz).
+
 ### W6.2 linear references (0.18.0, done)
 `src/reference/` builds the static library `pluginlab_reference` (namespace `pluginlab::reference`, only `juce_audio_basics`). Every processor derives from
 `LinearProcessor`: `processSample` / `process(buffer)` in double precision with a state per channel, and `getResponse(f)`, its exact H(e^jw).

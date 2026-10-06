@@ -46,7 +46,7 @@ target_link_libraries(PluginLabTests
         juce::juce_recommended_warning_flags)
 
 # the tests need the scanner and the test plugins built first
-add_dependencies(PluginLabTests PluginLabScanner PluginLabTestGain_VST3 PluginLabTestCrash_VST3 PluginLabTestCrashProcess_VST3 PluginLabHost PluginLabLoaderBundle)
+add_dependencies(PluginLabTests PluginLabScanner PluginLabSignals PluginLabTestGain_VST3 PluginLabTestCrash_VST3 PluginLabTestCrashProcess_VST3 PluginLabHost PluginLabLoaderBundle)
 if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
@@ -88,3 +88,10 @@ add_test(NAME PluginLabLoaderBundleHasScanner
         -DBUNDLE_FOLDER=${PLUGINLAB_LOADER_PLUGIN_DIR}/PluginLabLoader.vst3
         -DSCANNER_NAME=$<TARGET_FILE_NAME:PluginLabScanner>
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckLoaderBundle.cmake)
+
+# Smoke test of PluginLabSignals (the standard test signals as WAV files)
+add_test(NAME PluginLabSignalsWrites
+    COMMAND ${CMAKE_COMMAND}
+        -DSIGNALS_APPLICATION=$<TARGET_FILE:PluginLabSignals>
+        -DOUTPUT_FOLDER=${CMAKE_CURRENT_BINARY_DIR}/signals_smoke
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckSignals.cmake)
