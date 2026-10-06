@@ -89,6 +89,32 @@ Proposal:
 | **W6.5** oracle | JSON format, `export_oracle.py` in the Python repo, C++ reader, the first cases of section 3 | the C++ references agree with the oracle files within the tolerance stated in each file |
 | **W6.6** documentation | one page per reference (formula, parameters, analytic answer, plot) for the teaching material (CC BY-SA) | written |
 
+## Progress
+
+### W6.1 signals (0.17.0, done)
+`src/signals/` builds the static library `pluginlab_signals` (namespace `pluginlab::signals`; uses `juce_audio_basics`, `juce_audio_formats`, privately `juce_dsp`):
+- `Signals.h`: impulse, step, silence, sine (optionally on an FFT bin, fades), two-tone (SMPTE, CCIF, free), multitone, noise (uniform, Gaussian, pink after
+  Voss-McCartney with 16 rows), bursts, the channel relations (L = R, uncorrelated, L only, R only, L = -R), level helpers, `writeWav` (32-bit float).
+- `SweptSine.h`: the synchronized swept sine (Novak et al.) with L = k/f1 for integer k, its analytic inverse filter (eq. 43), the deconvolution
+  h = IFFT(Y X~) / (fs A) and the position of the n-th harmonic impulse response (-L ln n).
+- `SteppedSine.h`: the stepped sine 20 kHz down to 20 Hz, log-spaced (3 steps per octave by default), each step with its measurement window after
+  latency + settling time, a whole number of periods long.
+
+`tests/SignalsTests.cpp` checks every signal against its definition. What the tests showed:
+- The deconvolved sweep is flat within 0.1 dB from 100 Hz to 10 kHz; its peak is not 1 but the share of the band in 0 ... fs/2 (2 (f2 - f1) / fs = 0.83
+  for 30 Hz ... 20 kHz at 48 kHz), as it must be for a band-limited impulse. A delay of 37 samples moves the peak by 37 samples.
+- For y = x + 0.1 x^2 + 0.05 x^3 at -6 dBFS the 2nd and 3rd harmonic impulse responses lie at N - L ln(n) fs (within 2 samples), with -32.05 dB
+  (closed form -32.02 dB) and -50.37 dB (closed form -50.06 dB) relative to the fundamental at 1 kHz.
+- Schroeder's formula -pi k (k-1) / N is meant for linearly spaced tones; for 31 log-spaced tones it did *not* lower the crest factor (12.9 dB against
+  11.7 dB for zero sine phases). The library now uses the general form (the group delay of tone k is k/N of the period, phase_k = phase_k-1 - 2 pi tau_k
+  (f_k - f_k-1); for linear spacing this is Schroeder's formula): 12.5 dB against 17.9 dB with all tones in phase. Lower values for sparse log-spaced tones
+  need an iterative method (clipping and restoring the spectrum); not done, noted for W7 if the fast frequency response needs it.
+- Pink noise: the octave bands 63 Hz ... 8 kHz lie within 0.8 dB; white noise rises by 2.99 dB per octave.
+
+Not done in W6.1 (open): the metadata struct per signal (each generator has its settings struct instead; a common description comes with the oracle in W6.5);
+the hash test "the same samples on every platform" (the noise uses `juce::Random`, an integer generator, but `std::sin`/`std::log` may differ in the last bit
+between platforms: the oracle comparison in W6.5 will use tolerances, the hash is dropped unless the author wants it); the music excerpts (download script, later).
+
 ## 5. The questions and the author's answers (kept for the record)
 1. **Filter families:** RBJ, Orfanidis, Zölzer, analog prototypes, Butterworth/Linkwitz-Riley, linear-phase FIR and delays: enough, too much, something missing (e.g. Vicanek's matched
    biquads, state-variable filter / TPT/ZDF designs as many modern plugins use them)?

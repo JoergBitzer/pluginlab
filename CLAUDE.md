@@ -9,6 +9,8 @@ pluginlab (mission: divide the myth from reality) measures, compares and matches
 (Python is only the oracle for the measurements, in the separate repository `measurement_tool`).
 - `src/core/`: static library `pluginlab_core` (no GUI code): plugin scanning (`PluginScanner`, one scanner process per file), `HostedPlugin`, `PluginValidator`
   (pluginval in a child process, cached), `LoaderState`, VST2/VST3 formats. `src/ui/`: `pluginlab_hosting_ui` (browser, parameter table, editor factory), used by host and loader.
+- `src/signals/`: `pluginlab_signals` (test signals: sine, two-tone, multitone, noise, bursts, the synchronized swept sine after Novak et al. with its
+  analytic inverse, the stepped sine; WAV export). `src/engine/`: audio engine and the fingerprint.
 - `cmake/Vst2Sdk.cmake` + `vst2_shim/` + `external/FST`: the free VST2 headers (GPL) with five patches; read the comments before touching them.
 - `apps/host/`: stand-alone host application `PluginLabHost` (GUI; command line: `--write-version <file>`, `--report <folder> <file>`,
   `--scan <folder> --load <plugin name>`). `apps/scanner/`: `PluginLabScanner`, scans one plugin file in its own process

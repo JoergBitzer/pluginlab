@@ -17,7 +17,8 @@ target_sources(PluginLabTests
         EngineTests.cpp
         FingerprintTests.cpp
         ProbeTests.cpp
-        RealWorldTests.cpp)
+        RealWorldTests.cpp
+        SignalsTests.cpp)
 
 target_compile_definitions(PluginLabTests
     PRIVATE
@@ -33,8 +34,10 @@ target_link_libraries(PluginLabTests
     PRIVATE
         pluginlab_core
         pluginlab_engine
+        pluginlab_signals
         pluginlab_loader_core
         juce::juce_core
+        juce::juce_dsp
         juce::juce_events
     PUBLIC
         juce::juce_recommended_config_flags
