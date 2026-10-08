@@ -24,6 +24,7 @@ struct SteppedSineSettings
     double measureSeconds = 0.1;       // at least; rounded up to whole periods
     int minimumPeriods = 10;           // at low frequencies the window holds at least this many periods
     double fadeSeconds = 0.01;         // Hann fade-in at the start and fade-out at the end of every step (0: hard switches)
+    std::vector<double> frequencies;   // the steps in this order; empty: log-spaced from startHz to stopHz with stepsPerOctave
 };
 
 struct SineStep
@@ -44,6 +45,6 @@ struct SteppedSine
 
 SteppedSine makeSteppedSine(const SteppedSineSettings& settings, int channels);
 
-// The log-spaced frequencies of the steps (from startHz towards stopHz, both included)
+// The frequencies of the steps: the given list, or log-spaced from startHz towards stopHz (both included)
 std::vector<double> getSteppedSineFrequencies(const SteppedSineSettings& settings);
 }

@@ -63,3 +63,14 @@ dithered quantizer; oracle case `gain_rbj_peak_997_48k` (export script 1.1.0): t
 Two expectations were corrected on the way: the reported input level is the level as generated (the filter ripple of 0.0009 dB at 997 Hz showed at 96 kHz);
 an undithered quantizer moves even the selective gain (0.03 dB at 8 bits: the error is correlated with the sine), so the known answer uses TPDF dither.
 
+### W7.2 frequency response (0.27.0, done)
+`measureSteppedResponse` (AES17 6.2.3, the standard third-octave frequencies with 997 Hz), `measureMultitoneResponse` (annex A.3, synchronous),
+`measureSweptResponse` (annex A.4, synchronized sweep after Novak et al., window around the linear peak, **reference channel**); `pluginlab_signals`:
+the stepped sine takes an explicit frequency list. Document `docs/measurements/frequency-response.md`. Tests `tests/MeasureResponseTests.cpp` against the
+exact responses of RBJ peak and shelf, Butterworth 8, linear-phase FIR (latency 1023), integer delay (100), at 44.1/48/96 kHz: stepped sine within
+1e-3 dB, multitone within 4e-6 dB, sweep within 3e-3 dB (phase within 0.02 degrees); floors -132 / -132 / -120 dB. The sweep needed three steps:
+a longer window before the peak (0.37 -> 0.13 dB at 20 Hz), the start at 5 Hz, and the reference channel (0.002 dB).
+On the author's request (2026-10-08) the Python prototype also uses the synchronized sweep now (Farina removed, measurement_tool 0.10.0); its oracle case
+`prototype_sweep_rbj_peak_48k` agrees with the exact response and with the C++ measurement to 0.0002 dB.
+Also: tests run offscreen (`tools/ctest_offscreen.sh`, Xvfb + openbox; 0.26.2), `PluginLabTests --only <name>`.
+

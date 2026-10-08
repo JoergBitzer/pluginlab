@@ -21,6 +21,10 @@ double getFadeGain(int sample, int fadeLength)
 
 std::vector<double> getSteppedSineFrequencies(const SteppedSineSettings& settings)
 {
+    if (!settings.frequencies.empty())
+    {
+        return settings.frequencies;
+    }
     std::vector<double> frequencies;
     const double octaves = std::log2(settings.startHz / settings.stopHz);
     const int steps = std::max(1, static_cast<int>(std::round(octaves * settings.stepsPerOctave)));

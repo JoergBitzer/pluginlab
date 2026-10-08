@@ -3,6 +3,7 @@
 add_library(pluginlab_measure STATIC
     Analyzer.cpp
     Device.cpp
+    FrequencyResponse.cpp
     Gain.cpp)
 
 target_include_directories(pluginlab_measure

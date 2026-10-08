@@ -4,6 +4,7 @@
 
 #include <juce_core/juce_core.h>
 
+#include "pluginlab/measure/FrequencyResponse.h"
 #include "pluginlab/measure/Gain.h"
 #include "pluginlab/reference/Delays.h"
 #include "pluginlab/reference/Designs.h"
@@ -234,6 +235,23 @@ private:
         logMessage(caseName + ": the prototype's measurement against the exact C++ response: " + juce::String(largest, 4) + " dB (tolerance "
                    + juce::String(tolerance) + " dB)");
         expect(largest < tolerance, caseName);
+
+        // the C++ measurement (W7.2) against the prototype's measurement (both synchronized sweeps, two implementations): two measurements of the same filter
+        pluginlab::measure::SweepResponseSettings sweep;
+        sweep.sampleRate = sampleRate;
+        sweep.frequencies = frequencies;
+        sweep.channels = 1;
+        const pluginlab::measure::FrequencyResponse response = pluginlab::measure::measureSweptResponse(
+            pluginlab::measure::makeProcessorDevice([section](double rate)
+                                                    { return std::make_unique<ref::BiquadCascade>(std::vector<ref::BiquadCoefficients>{section}, rate); }),
+            sweep);
+        double betweenMeasurements = 0.0;
+        for (size_t index = 0; index < frequencies.size(); ++index)
+        {
+            betweenMeasurements = std::max(betweenMeasurements, std::abs(response.channels[0].magnitudeDb[index] - measured[index]));
+        }
+        logMessage(caseName + ": the C++ sweep measurement against the prototype's measurement: " + juce::String(betweenMeasurements, 4) + " dB");
+        expect(betweenMeasurements < tolerance, caseName + ": C++ measurement");
     }
 
     void checkHarmonics(const juce::var& oracle, const juce::String& caseName)
