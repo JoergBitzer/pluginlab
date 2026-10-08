@@ -6,10 +6,9 @@ latency, THD, THD+N, noise, SNR, crosstalk, null test with alignment), easy to a
 oracle files within a stated tolerance; band of validity documented."
 
 ## 1. The basis: AES17-2015
-**AES17-2015, "AES standard method for digital audio engineering - Measurement of digital audio equipment"** (the author's copy:
-`~/Lehre/AMT/Standard Audio unit MEasurement aes17-2015-f.pdf`) describes nearly every unit of W7 for digital-to-digital equipment, which is what a plugin is.
-Its normative references are ITU-R BS.468-4 (noise weighting) and IEC 61260-1 (fractional-octave filters; a copy of the older IEC 1260 is in
-`~/Downloads/iec1260_nur_engl.pdf`). What AES17 fixes and pluginlab adopts:
+**AES17-2015, "AES standard method for digital audio engineering - Measurement of digital audio equipment"** (the author, an AES member, provided the
+text) describes nearly every unit of W7 for digital-to-digital equipment, which is what a plugin is.
+Its normative references are ITU-R BS.468-4 (noise weighting) and IEC 61260-1 (fractional-octave filters). What AES17 fixes and pluginlab adopts:
 - **Levels** (3.12): dBFS is an **rms** level relative to a full-scale **997 Hz** sine (a full-scale sine is 0 dBFS, a full-scale square wave +3.01 dBFS).
   Our signal generators give sine levels as peak dBFS; for a sine both numbers are equal.
 - **Passband** (3.4, 4.3): 20 Hz to the upper band-edge frequency, 20 kHz at 44.1 and 48 kHz.
