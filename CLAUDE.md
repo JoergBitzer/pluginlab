@@ -39,12 +39,13 @@ pluginlab (mission: divide the myth from reality) measures, compares and matches
 git submodule update --init                       # JUCE (pinned submodule), once
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --parallel
-ctest --test-dir build -C Debug --output-on-failure
+tools/ctest_offscreen.sh                          # CTest in Xvfb + openbox (no windows on the desktop)
 tools/run_pluginval.sh build/plugins/loader/PluginLabLoader_artefacts/Debug/VST3/PluginLabLoader.vst3 1
 ```
-Develop with the Debug build (JUCE assertions are on). On Linux the tests that start the GUI app need a display (`xvfb-run -a`
-on a machine without one). CI (`.github/workflows/ci.yml`) builds, tests and runs pluginval on Windows and macOS, only for a version tag
-(see "CI and tags" below); Linux is tested locally.
+Develop with the Debug build (JUCE assertions are on). **Run the tests offscreen** (the author's rule: no test windows on the desktop):
+`tools/ctest_offscreen.sh` runs CTest in Xvfb with openbox (hosted VST2 editors need a window manager; without one they die with an X "BadAtom"
+error). Compared on 2026-10-08: offscreen and desktop give the same results. `PluginLabTests --only <part of a test name>` runs single tests.
+CI (`.github/workflows/ci.yml`) builds, tests and runs pluginval on Windows and macOS, only for a version tag (see "CI and tags" below).
 
 ## Workflow rules (from the author)
 - Development rules of `planning.md` section 7 apply: step by step; for each new feature design (a note in `docs/design/`),
