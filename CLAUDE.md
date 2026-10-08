@@ -19,6 +19,9 @@ pluginlab (mission: divide the myth from reality) measures, compares and matches
   (crash isolation); it is copied next to the host after the build.
 - `apps/signals/`: `PluginLabSignals <folder> [--seconds 5,10] [--rate 48000]` writes the standard test signals (stereo, 32-bit float WAV)
   with `signals.txt` (what every file is) and the step lists of the stepped sines (CSV). The author keeps a set in `~/Music/TestSignals/`.
+- `apps/teaching/`: `PluginLabTeachingFigures <folder>` writes the SVG figures of the teaching pages (`docs/teaching/references/`, CC BY-SA)
+  from `pluginlab_reference`; regenerate them after a change of a reference: `PluginLabTeachingFigures docs/teaching/references/figures`.
+- `tests/oracle/`: oracle files of the Python prototype (`measurement_tool/tools/export_oracle.py`), compared by `tests/OracleTests.cpp`.
 - `plugins/loader/`: `pluginlab_loader_core` (LoaderProcessor + LoaderEditor, also used by the tests) and the plugin `PluginLabLoader` (VST3).
 - `plugins/reference/`: the three reference plugins (PluginLab Reference EQ / Nonlinear / Utility), AdvancedAudioTemplate instances in the
   simple form around `pluginlab_reference`; see `plugins/reference/README.md` (template origin, changes to the template code, controls).

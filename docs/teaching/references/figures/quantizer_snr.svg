@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" role="img" aria-label="Quantizer: SNR of a full-scale sine against the word length">
+<rect width="100%" height="100%" fill="#fcfcfb"/>
+<text x="70.00" y="26.00" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#0b0b0b" text-anchor="start" font-weight="bold">Quantizer: SNR of a full-scale sine against the word length</text>
+<line x1="101.30" y1="70.00" x2="101.30" y2="366.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="101.30" y="382.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="middle">5</text>
+<line x1="257.80" y1="70.00" x2="257.80" y2="366.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="257.80" y="382.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="middle">10</text>
+<line x1="414.30" y1="70.00" x2="414.30" y2="366.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="414.30" y="382.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="middle">15</text>
+<line x1="570.80" y1="70.00" x2="570.80" y2="366.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="570.80" y="382.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="middle">20</text>
+<line x1="70.00" y1="366.00" x2="696.00" y2="366.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="64.00" y="370.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="end">0</text>
+<line x1="70.00" y1="329.00" x2="696.00" y2="329.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="64.00" y="333.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="end">20</text>
+<line x1="70.00" y1="292.00" x2="696.00" y2="292.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="64.00" y="296.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="end">40</text>
+<line x1="70.00" y1="255.00" x2="696.00" y2="255.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="64.00" y="259.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="end">60</text>
+<line x1="70.00" y1="218.00" x2="696.00" y2="218.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="64.00" y="222.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="end">80</text>
+<line x1="70.00" y1="181.00" x2="696.00" y2="181.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="64.00" y="185.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="end">100</text>
+<line x1="70.00" y1="144.00" x2="696.00" y2="144.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="64.00" y="148.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="end">120</text>
+<line x1="70.00" y1="107.00" x2="696.00" y2="107.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="64.00" y="111.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="end">140</text>
+<line x1="70.00" y1="70.00" x2="696.00" y2="70.00" stroke="#e1e0d9" stroke-width="1.00"/>
+<text x="64.00" y="74.00" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#898781" text-anchor="end">160</text>
+<line x1="70.00" y1="366.00" x2="696.00" y2="366.00" stroke="#c3c2b7" stroke-width="1.00"/>
+<line x1="70.00" y1="70.00" x2="70.00" y2="366.00" stroke="#c3c2b7" stroke-width="1.00"/>
+<text x="383.00" y="408.00" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#52514e" text-anchor="middle">bits</text>
+<text x="18.00" y="218.00" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#52514e" text-anchor="middle" transform="rotate(-90 18 218.00)">SNR in dB</text>
+<clipPath id="plot"><rect x="70.00" y="70.00" width="626.00" height="296.00"/></clipPath>
+<polyline clip-path="url(#plot)" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 4" points="70.00,318.19 101.30,307.05 132.60,295.91 163.90,284.78 195.20,273.64 226.50,262.50 257.80,251.36 289.10,240.22 320.40,229.09 351.70,217.95 383.00,206.81 414.30,195.67 445.60,184.53 476.90,173.39 508.20,162.26 539.50,151.12 570.80,139.98 602.10,128.84 633.40,117.70 664.70,106.57 696.00,95.43"/>
+<polyline clip-path="url(#plot)" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="70.00,328.32 101.30,311.11 132.60,297.69 163.90,285.56 195.20,273.97 226.50,262.63 257.80,251.40 289.10,240.22 320.40,229.10 351.70,217.94 383.00,206.74 414.30,195.54 445.60,184.62 476.90,173.42 508.20,162.29 539.50,151.12 570.80,140.00 602.10,128.88 633.40,117.92 664.70,107.25 696.00,97.97"/>
+<polyline clip-path="url(#plot)" fill="none" stroke="#1baf7a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="70.00,338.20 101.30,320.50 132.60,306.86 163.90,294.59 195.20,282.95 226.50,271.57 257.80,260.24 289.10,249.14 320.40,237.93 351.70,226.81 383.00,215.69 414.30,204.46 445.60,193.31 476.90,182.16 508.20,171.06 539.50,160.01 570.80,148.80 602.10,137.65 633.40,126.53 664.70,115.42 696.00,104.27"/>
+<line x1="70.00" y1="44.00" x2="92.00" y2="44.00" stroke="#2a78d6" stroke-width="2.00" stroke-dasharray="6 4"/>
+<text x="98.00" y="48.00" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#52514e" text-anchor="start">6.02 N + 1.76 dB</text>
+<line x1="221.60" y1="44.00" x2="243.60" y2="44.00" stroke="#eb6834" stroke-width="2.00"/>
+<text x="249.60" y="48.00" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#52514e" text-anchor="start">measured, no dither</text>
+<line x1="393.00" y1="44.00" x2="415.00" y2="44.00" stroke="#1baf7a" stroke-width="2.00"/>
+<text x="421.00" y="48.00" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#52514e" text-anchor="start">measured, TPDF dither</text>
+</svg>

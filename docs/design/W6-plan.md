@@ -228,6 +228,15 @@ Found with the teaching figure of W6.6: `makeLagrangeDelay` placed the fractiona
 10.5 samples: D = -0.5, an extrapolation), so the magnitude rose above 0 dB (order 3 by 0.8 dB). Now odd orders use [(N-1)/2, (N+1)/2); a new test checks
 that a Lagrange delay never has a gain above 1. The tests at DC (delay and gain) had passed before. The Reference Utility uses Lagrange order 3 from 1 sample on.
 
+### W6.6 teaching pages (0.25.0, done)
+`docs/teaching/references/` (CC BY-SA 4.0): an index and ten pages (RBJ cookbook, cramping and Orfanidis, Zoelzer, state-variable filter, Butterworth and
+Linkwitz-Riley, linear-phase FIR, fractional delays, waveshapers, quantizer and dither, utilities), each with the formulas, the parameters, the known
+answer with the numbers the tests found, things to try with the reference plugins, and figures. The 17 figures (SVG) come from
+`apps/teaching` (`PluginLabTeachingFigures docs/teaching/references/figures`), computed with `pluginlab_reference`; chart style after the dataviz
+method (palette order, 2 px lines, hairline grid, neutral ink, legend for two or more series, at most four series per chart), checked by eye
+(rendered with Inkscape). The figure of the fractional delays found the Lagrange bug fixed in 0.24.1. Not done: a page for the test signals
+(sweep, stepped sine); the formulas use GitHub's math syntax.
+
 ## 5. The questions and the author's answers (kept for the record)
 1. **Filter families:** RBJ, Orfanidis, Zölzer, analog prototypes, Butterworth/Linkwitz-Riley, linear-phase FIR and delays: enough, too much, something missing (e.g. Vicanek's matched
    biquads, state-variable filter / TPT/ZDF designs as many modern plugins use them)?
