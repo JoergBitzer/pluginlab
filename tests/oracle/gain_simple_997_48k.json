@@ -1,0 +1,29 @@
+{
+ "case": "gain_simple_997_48k",
+ "kind": "gain",
+ "description": "the prototype's measure_gain (sine 997.0 Hz, -20.0 dBFS, lock-in) of a plain gain of -6.0 dB at 48000.0 Hz",
+ "processor": {
+  "type": "gain",
+  "gain_db": -6.0,
+  "sample_rate": 48000.0
+ },
+ "signal": {
+  "type": "sine",
+  "frequency_hz": 997.0,
+  "level_dbfs": -20.0
+ },
+ "gain_db": -5.999999999333404,
+ "phase_deg": 0.0,
+ "tolerance": {
+  "gain_db": 0.0001,
+  "phase_deg": 0.0001
+ },
+ "generator": {
+  "script": "measurement_tool/tools/export_oracle.py",
+  "script_version": "1.2.0",
+  "date": "2026-10-08",
+  "python": "3.12.3",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1"
+ }
+}

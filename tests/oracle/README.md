@@ -13,6 +13,8 @@ change the script and run it again (the files record the script version, the dat
 | `farina_rbj_peak_48k` | the prototype's `measure_frequency_response` (Farina sweep) of its RBJ peak: a measurement | 0.05 dB against the exact response |
 | `polynomial_thd_48k` | the prototype's `measure_thdn` of y = x + 0.1 x^2 + 0.05 x^3 at -6 dBFS | 0.01 dB (harmonics, THD) |
 | `quantizer16_snr_48k` | numpy rounding of a float32 sine, 16 bits | 0.01 dB |
+| `gain_simple_997_48k` | the prototype's `measure_gain` (lock-in at 997 Hz, -20 dBFS) of a plain gain of -6 dB: the simplest case | 1e-4 dB, 1e-4 degrees |
+| `gain_rbj_peak_997_48k` | the prototype's `measure_gain` of its RBJ peak (1 kHz, +6 dB, Q 2) at 997 Hz | 0.001 dB, 0.01 degrees |
 | `sync_sweep_rbj_peak_48k` | the synchronized swept sine and its deconvolution (new numpy code), the first 8192 samples of the impulse response | 0.001 dB, 0.01 degrees |
 
 A file of a kind the C++ test does not know fails the test: a new kind of case needs its comparison in `OracleTests.cpp`.

@@ -8,6 +8,7 @@
 #include "pluginlab/reference/Delays.h"
 #include "pluginlab/reference/Designs.h"
 #include "pluginlab/reference/Nonlinear.h"
+#include "pluginlab/reference/Utility.h"
 #include "pluginlab/signals/SweptSine.h"
 
 namespace
@@ -81,7 +82,7 @@ public:
     {
         beginTest("every oracle file: the C++ answer within the tolerance of the file");
         const juce::Array<juce::File> files = juce::File(PLUGINLAB_ORACLE_DIR).findChildFiles(juce::File::findFiles, false, "*.json");
-        expect(files.size() >= 12, "oracle files found: " + juce::String(files.size()));
+        expect(files.size() >= 13, "oracle files found: " + juce::String(files.size()));
         for (const juce::File& file : files)
         {
             const juce::var oracle = juce::JSON::parse(file);
@@ -327,18 +328,27 @@ private:
                        });
     }
 
-    // The gain unit of W7.1 (selective gain and phase at the frequency) against the prototype's lock-in measurement
+    // The gain unit of W7.1 (selective gain and phase at the frequency) against the prototype's lock-in measurement, of a plain gain or an RBJ filter
     void checkGain(const juce::var& oracle, const juce::String& caseName)
     {
         const juce::var& processor = oracle["processor"];
-        const ref::BiquadCoefficients section = designFromProcessor(processor, caseName);
+        pluginlab::measure::Device device;
+        if (processor["type"].toString() == "gain")
+        {
+            const double gainDb = processor["gain_db"];
+            device = pluginlab::measure::makeProcessorDevice([gainDb](double) { return std::make_unique<ref::Gain>(gainDb, false); });
+        }
+        else
+        {
+            const ref::BiquadCoefficients section = designFromProcessor(processor, caseName);
+            device = pluginlab::measure::makeProcessorDevice([section](double sampleRate)
+                                                             { return std::make_unique<ref::BiquadCascade>(std::vector<ref::BiquadCoefficients>{section}, sampleRate); });
+        }
         pluginlab::measure::GainSettings settings;
         settings.sampleRate = processor["sample_rate"];
         settings.frequencyHz = oracle["signal"]["frequency_hz"];
         settings.levelDbfs = oracle["signal"]["level_dbfs"];
         settings.channels = 1;
-        const pluginlab::measure::Device device = pluginlab::measure::makeProcessorDevice([section](double sampleRate)
-                                                                                          { return std::make_unique<ref::BiquadCascade>(std::vector<ref::BiquadCoefficients>{section}, sampleRate); });
         const pluginlab::measure::GainResult result = pluginlab::measure::measureGain(device, settings);
         const double gain = result.channels[0].selectiveGainDb;
         const double phase = result.channels[0].phaseDegrees;

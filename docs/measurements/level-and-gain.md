@@ -58,7 +58,7 @@ $$\text{matching} = \max_c G_c - \min_c G_c\quad\text{(AES17 6.2.4)}$$
   (that is W7.5 THD+N and W7.9).
 
 ## Results for known test signals
-From `MeasureGainTests` (run 2026-10-08, 0.26.0), at 48 kHz unless stated; expected values from the exact answers of the reference processors.
+From `MeasureGainTests` (run 2026-10-08, 0.26.1), at 48 kHz unless stated; expected values from the exact answers of the reference processors.
 
 | Device | Expected | Measured (broadband gain, phase / selective gain) |
 |---|---|---|
@@ -67,6 +67,8 @@ From `MeasureGainTests` (run 2026-10-08, 0.26.0), at 48 kHz unless stated; expec
 | gain -6 dB, 96 kHz (standard low-pass active) | -6 dB, 0 degrees | -6.00000 dB, 0.0000 degrees |
 | gain -6 dB, polarity inverted | -6 dB, 180 degrees | -6.00000 dB, 180.0000 degrees |
 | RBJ peak 1 kHz +6 dB Q 2 | $|H(997\,\text{Hz})|$ = 5.99906 dB, 0.4865 degrees | 5.99906 dB, 0.4865 degrees |
+| RBJ low-pass 1 kHz Q 0.71 | $H(997\,\text{Hz})$: -2.94874 dB, -89.7549 degrees | -2.94874 dB, -89.7549 degrees |
+| Thiran delay 10.5 samples (order 3) | 0 dB, -78.5138 degrees ($-360° \cdot 997 \cdot 10.5 / 48000$, wrapped) | 0.00000 dB, -78.5138 degrees |
 | right channel 0.5 dB lower (gain matching) | 0.5 dB | 0.50000 dB |
 | $x + 0.1x^2 + 0.05x^3$ at -20 dBFS | broadband 0.00358 dB (tone, DC and harmonics), selective 0.00326 dB ($c_1 + \frac34 c_3 A^2$) | 0.00358 dB / 0.00326 dB |
 | 8-bit quantizer with TPDF dither | broadband +0.0132 dB (adds $q^2/4$), selective 0 dB | 0.01258 dB / -0.00065 dB |
@@ -74,14 +76,19 @@ From `MeasureGainTests` (run 2026-10-08, 0.26.0), at 48 kHz unless stated; expec
 
 Tolerances in the test: 1e-4 dB for the exact devices, 0.002 dB for the dithered quantizer (a random signal; one 1 s window).
 
-**Oracle** (`gain_rbj_peak_997_48k`): the prototype's lock-in measurement of its RBJ peak (1 kHz, +6 dB, Q 2) at 997 Hz, -20 dBFS gives 5.999058 dB and
-0.48647 degrees; the C++ selective gain and phase agree to the last printed digit (tolerance 0.001 dB, 0.01 degrees).
+**Oracle**, the prototype's lock-in measurement (`measure_gain`, 997 Hz, -20 dBFS) against the selective gain and phase of the C++ unit:
+- `gain_simple_997_48k`, a plain gain of -6 dB (the simplest case; it must never fail): -6.000000 dB, 0 degrees in both (tolerance 1e-4 dB, 1e-4 degrees);
+- `gain_rbj_peak_997_48k`, the prototype's RBJ peak (1 kHz, +6 dB, Q 2): 5.999058 dB, 0.48647 degrees in both (tolerance 0.001 dB, 0.01 degrees). The
+  peak is used because it is the only reference device of the prototype; at 997 Hz it is nearly a pure gain, so the phase is checked by the low-pass and
+  the delay above.
 
 **What the results teach**
 - For a linear device broadband and selective gain are the same; the difference of the two is a first sign of distortion or noise.
 - Undithered quantization is not noise: with a sine that repeats with the sample grid the error repeats too, contains a component at the fundamental and
   moves even the selective gain (0.03 dB at 8 bits, -20 dBFS). With TPDF dither the error is independent of the signal and the tone is untouched.
-- The phase at 997 Hz of a minimum-phase filter is small (0.49 degrees for the peak); a plugin's latency would add $-360° \cdot 997 \cdot d / f_s$.
+- A plain gain or a polarity inversion cannot show an error of the phase (0 or 180 degrees whatever the convention); the low-pass (-89.75 degrees) and the
+  delay (-78.51 degrees) can. The phase contains the latency: a delay of $d$ samples gives $-360° \cdot 997 \cdot d / f_s$ (wrapped to $\pm180°$), which is
+  why the unit of W7.3 measures the delay separately.
 
 ## Implementation
 ```cpp

@@ -21,7 +21,7 @@
  },
  "generator": {
   "script": "measurement_tool/tools/export_oracle.py",
-  "script_version": "1.1.0",
+  "script_version": "1.2.0",
   "date": "2026-10-08",
   "python": "3.12.3",
   "numpy": "2.5.3",

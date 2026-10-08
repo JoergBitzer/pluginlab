@@ -7,6 +7,7 @@
 
 #include "pluginlab/measure/Analyzer.h"
 #include "pluginlab/measure/Gain.h"
+#include "pluginlab/reference/Delays.h"
 #include "pluginlab/reference/Designs.h"
 #include "pluginlab/reference/Nonlinear.h"
 #include "pluginlab/reference/Utility.h"
@@ -128,7 +129,7 @@ private:
 
     void testGainOfKnownDevices()
     {
-        beginTest("gain of known devices: -6 dB, polarity inverted, at 44.1/48/96 kHz; an RBJ peak equals |H(997 Hz)| and its phase; a channel 0.5 dB lower");
+        beginTest("gain of known devices: -6 dB, polarity inverted, at 44.1/48/96 kHz; RBJ peak, RBJ low-pass and a fractional delay equal H(997 Hz); a channel 0.5 dB lower");
         for (const double sampleRate : {44100.0, 48000.0, 96000.0})
         {
             const measure::GainResult gain = measureProcessor([](double) { return std::make_unique<ref::Gain>(-6.0, false); }, sampleRate);
@@ -158,6 +159,27 @@ private:
         expectWithinAbsoluteError(filtered.channels[0].phaseDegrees, std::arg(exact) * 180.0 / kPi, 1.0e-3);
         m_lines.add("| RBJ peak 1 kHz +6 dB Q 2 | |H(997 Hz)| = " + juce::String(toDb(std::abs(exact)), 5) + " dB, " + juce::String(std::arg(exact) * 180.0 / kPi, 4)
                     + " degrees | " + juce::String(filtered.channels[0].gainDb, 5) + " dB, " + juce::String(filtered.channels[0].phaseDegrees, 4) + " degrees |");
+
+        // a clear phase: an RBJ low-pass at 1 kHz (about -3 dB, -90 degrees at 997 Hz) and a fractional delay of 10.5 samples (0 dB, -360 f d / fs)
+        const ref::BiquadCoefficients lowPass = ref::designRbj(ref::FilterType::LowPass, 48000.0, 1000.0, 0.0, 0.71);
+        const std::complex<double> lowPassExact = ref::getBiquadResponse(lowPass, measure::kStandardFrequencyHz, 48000.0);
+        const measure::GainResult lowPassed = measureProcessor([lowPass](double sampleRate)
+                                                               { return std::make_unique<ref::BiquadCascade>(std::vector<ref::BiquadCoefficients>{lowPass}, sampleRate); });
+        expectWithinAbsoluteError(lowPassed.channels[0].selectiveGainDb, toDb(std::abs(lowPassExact)), 1.0e-4);
+        expectWithinAbsoluteError(lowPassed.channels[0].phaseDegrees, std::arg(lowPassExact) * 180.0 / kPi, 1.0e-3);
+        m_lines.add("| RBJ low-pass 1 kHz Q 0.71 | " + juce::String(toDb(std::abs(lowPassExact)), 5) + " dB, " + juce::String(std::arg(lowPassExact) * 180.0 / kPi, 4)
+                    + " degrees | " + juce::String(lowPassed.channels[0].gainDb, 5) + " dB, " + juce::String(lowPassed.channels[0].phaseDegrees, 4) + " degrees |");
+
+        constexpr double kDelaySamples = 10.5;
+        const std::complex<double> delayExact = ref::makeThiranDelay(kDelaySamples, 3, 48000.0).getResponse(measure::kStandardFrequencyHz);
+        const measure::GainResult delayed = measureProcessor([](double sampleRate)
+                                                             { return std::make_unique<ref::DirectFormFilter>(ref::makeThiranDelay(kDelaySamples, 3, sampleRate)); });
+        const double pureDelayDegrees = std::remainder(-360.0 * measure::kStandardFrequencyHz * kDelaySamples / 48000.0, 360.0);
+        expectWithinAbsoluteError(delayed.channels[0].gainDb, 0.0, 1.0e-4);
+        expectWithinAbsoluteError(delayed.channels[0].phaseDegrees, std::arg(delayExact) * 180.0 / kPi, 1.0e-3);
+        expectWithinAbsoluteError(delayed.channels[0].phaseDegrees, pureDelayDegrees, 0.01); // the Thiran all-pass is a delay of 10.5 samples at 997 Hz
+        m_lines.add("| Thiran delay 10.5 samples (order 3) | 0 dB, " + juce::String(std::arg(delayExact) * 180.0 / kPi, 4) + " degrees (pure delay "
+                    + juce::String(pureDelayDegrees, 4) + ") | " + juce::String(delayed.channels[0].gainDb, 5) + " dB, " + juce::String(delayed.channels[0].phaseDegrees, 4) + " degrees |");
 
         const measure::GainResult offset = measureProcessor([](double) { return std::make_unique<ChannelOffset>(-0.5); });
         expectWithinAbsoluteError(offset.matchingDb, 0.5, 1.0e-4);
