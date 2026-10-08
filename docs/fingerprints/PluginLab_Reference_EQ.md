@@ -2,7 +2,7 @@
 
 - file: `/home/bitzer/AudioDev/pluginlab/build/reference_plugins/PluginLabReferenceEq.vst3`
 - format: VST3, manufacturer: Jade_Hochschule, version: 0.22.0
-- measured: 2026-10-06 18:10
+- measured: 2026-10-08 17:53
 - channels: mono yes, stereo yes
 
 ## Summary
@@ -26,6 +26,9 @@
 | output stays finite after parameter jumps | yes |  |
 | recovers from parameter jumps | yes | continuous parameters: yes, switches and choices: yes |
 | digital silence in gives digital silence out | yes |  |
+| the same when the host renders offline (offline flag) | yes | identical |
+| the same at real-time pace (message loop running) | yes | identical |
+| a parameter change reaches the audio, fast and at real-time pace | alike | fast: 53.3333 ms, real-time pace: 53.3333 ms |
 
 Bold (orange on the Developer page): worth a look (see the findings and the details below).
 
@@ -119,6 +122,13 @@ Most careful way that works: new instance per render, after prepare every parame
 - recovers from parameter jumps (the parameters that change the audio to 0 and 1 and back, then the output of setting B again; continuous parameters and switches/choices in separate runs): continuous yes, switches and choices yes
 - digital silence in gives digital silence out: yes
 
+## Real-time behaviour
+All other measurements render as fast as possible, in real-time mode (offline flag off) and without letting the message thread run. Here the setting B with 2.0 s of noise is rendered again (fresh instances, as above): with the offline flag, and at real-time pace (after every block the message loop runs until the wall clock has caught up with the audio, so that timers and asynchronous updates of the plugin run as in a DAW). Different = more than 10 dB above the difference of two fast renders (identical) and above -80 dB.
+
+- offline flag on against off: identical - the same: yes
+- real-time pace against fast: identical - the same: yes
+- a parameter change in the middle of the noise (all parameters A -> B), until every block equals the output of B rendered at real-time pace (below -60 dB): fast: 53.3333 ms, real-time pace: 53.3333 ms
+
 ## Settings used
 ```
 {
@@ -152,7 +162,10 @@ Most careful way that works: new instance per render, after prepare every parame
   "highSetting": 0.75,
   "pokeDistance": 0.4,
   "maximumParameters": 64,
-  "maximumJumpedParameters": 16
+  "maximumJumpedParameters": 16,
+  "realTimeTests": true,
+  "realTimeSeconds": 2.0,
+  "longRealTimeSeconds": 0.0
 }
 ```
 

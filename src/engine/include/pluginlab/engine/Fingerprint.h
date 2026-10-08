@@ -96,6 +96,25 @@ struct SettingEntry
     juce::String textB;
 };
 
+// Real-time behaviour (docs/design/W5c-real-time-behaviour.md): what a fast render with the message thread blocked can hide
+struct RealTimeFingerprint
+{
+    bool measured = false;
+    bool ownSettingB = false;               // the scan found no reacting parameter: B = every continuous parameter at the high position
+    Difference baseline;                    // two fast renders of B (fresh instances): the noise floor of the comparisons
+    Difference offlineDifference;           // offline flag on against off, setting B
+    bool sameOffline = true;
+    bool pacedMeasured = false;             // realTimeTests in the settings
+    Difference pacedDifference;             // real-time pace with the message loop running against fast, setting B
+    bool sameWhenPaced = true;
+    bool changeJudged = false;              // false for a plugin whose output differs between two renders
+    double changeReachedFastMs = -1.0;      // after A -> B in the middle of a render: until the output equals that of B; -1 = not in the render
+    double changeReachedPacedMs = -1.0;
+    bool changeTimingAlike = true;          // false: one of the two reaches B, the other not (or much later)
+    bool longMeasured = false;              // longRealTimeSeconds > 0
+    std::vector<double> longDifferentSeconds; // the starts of the 1 s segments of the long run that differ
+};
+
 struct PluginFingerprint
 {
     juce::PluginDescription description;
@@ -141,6 +160,7 @@ struct PluginFingerprint
     bool discreteJumped = false;              // there were switches or choices to jump
     bool silenceStaysSilent = true;
     double idleLevelDb = -200.0;
+    RealTimeFingerprint realTime;
     std::vector<juce::String> findings;       // what is noteworthy, in words, with the numbers
 };
 

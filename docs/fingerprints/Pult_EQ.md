@@ -2,7 +2,7 @@
 
 - file: `/home/bitzer/AudioDev/measurement_tool/plugins/Pult.EQ_1_0_0_Linux_vst3/Pult EQ_1_0_0_Linux_vst3/Pult EQ.vst3`
 - format: VST3, manufacturer: Consistent Interruption, version: 1.0.0
-- measured: 2026-10-06 10:07
+- measured: 2026-10-08 17:53
 - channels: mono no, stereo yes
 
 ## Summary
@@ -12,24 +12,27 @@
 | main-bus layouts accepted | stereo | measured with 2 channel(s) |
 | side-chain input (more than one input bus) | no |  |
 | MIDI | none |  |
-| channels independent (one input driven, the other silent) | yes | L to R: -137.2 dB re the driven channel (-138.5 dBFS), R to L: -137.2 dB re the driven channel (-138.5 dBFS) |
+| channels independent (one input driven, the other silent) | yes | L to R: -137.1 dB re the driven channel (-138.4 dBFS), R to L: -137.2 dB re the driven channel (-138.5 dBFS) |
 | parameters / changing the audio | 29 / 13 |  |
 | latency at 48 kHz, reported / measured (samples) | 1 / 1 | 44.1 kHz: 1 / 1, 48.0 kHz: 1 / 1, 96.0 kHz: 1 / 1 |
 | reported latency = measured at all rates | yes | 44.1 kHz: 1 / 1, 48.0 kHz: 1 / 1, 96.0 kHz: 1 / 1 |
 | output before the peak of the impulse response | no |  |
 | output before the impulse (signal of its own) | no |  |
 | delivery of parameters (A, A, B, A): ways that work | 4 of 4 ways | new instance per render, after prepare every parameter first set to another value, then the target |
-| time-invariant (the same noise twice through one instance) | yes | -142.4 dB / -143.6 dBFS (channel 2) |
-| settles within 0.25 s after a parameter change | yes | -142.6 dB / -143.8 dBFS |
-| block size independent (steady state) | yes | largest at 32: -142.2 dB / -143.3 dBFS |
+| time-invariant (the same noise twice through one instance) | yes | -142.5 dB / -143.8 dBFS |
+| settles within 0.25 s after a parameter change | yes | -142.5 dB / -143.8 dBFS |
+| block size independent (steady state) | yes | largest at 64: -142.3 dB / -143.5 dBFS (channel 2) |
 | deterministic (two instances, bit exact) | **no** |  |
 | output stays finite after parameter jumps | yes |  |
 | recovers from parameter jumps | yes | continuous parameters: yes, switches and choices: yes |
 | digital silence in gives digital silence out | **no** | peak -133.7 dBFS |
+| the same when the host renders offline (offline flag) | yes | -142.5 dB / -143.7 dBFS |
+| the same at real-time pace (message loop running) | yes | -142.5 dB / -143.6 dBFS |
+| a parameter change reaches the audio, fast and at real-time pace | alike | fast: 96 ms, real-time pace: 96 ms |
 
-Bold: worth a look (see the findings and the details below).
+Bold (orange on the Developer page): worth a look (see the findings and the details below).
 
-How to read the differences: every difference is given as **relative / absolute**: relative = RMS(output - reference) / RMS(reference) in dB (0 dB: the change is as large as the signal, -40 dB: 1 %, +6 dB: twice the signal, as for a polarity inversion); absolute = RMS(output - reference) in dBFS. "identical": bit exact. For a silent reference only the absolute value counts.
+How to read the differences: every difference is given as relative / absolute: relative = RMS(output - reference) / RMS(reference) in dB (0 dB: the change is as large as the signal, -40 dB: 1 %, +6 dB: twice the signal, as for a polarity inversion); absolute = RMS(output - reference) in dBFS. "identical": bit exact. For a silent reference only the absolute value counts.
 
 ## Findings
 - Two instances with the same input give different output
@@ -55,16 +58,16 @@ The buses of the plugin as it is created, the main-bus layouts it accepts (other
 | ambisonics 1st order | no |
 
 - side chain: no; MIDI in: no, out: no; instrument: no
-- coupling L to R: -137.2 dB re the driven channel (-138.5 dBFS), R to L: -137.2 dB re the driven channel (-138.5 dBFS): channels independent yes
+- coupling L to R: -137.1 dB re the driven channel (-138.4 dBFS), R to L: -137.2 dB re the driven channel (-138.5 dBFS): channels independent yes
 
 ## Parameters
 Noise (peak 0.10) through the plugin with each parameter at 0.25 and 0.75 of its range, against the plugin at the base setting named in the last column; the larger change is shown. "no": below -80 dB in both passes. 29 parameters. Two test signals: the same noise on all channels (L = R) and different noise on the channels (L != R, only with more than one channel; a width or mid/side control reacts only to this one). The scan started from the defaults.
 
 | no. | name | min | default | max | steps | automatable | changes (L = R) | changes (L != R) | measured with |
 |---|---|---|---|---|---|---|---|---|---|
-| 0 | In | -25.0 | 0.0 | 25.0 | continuous | yes | 9.1 dB / -15.6 dBFS | 9.1 dB / -15.6 dBFS | defaults |
+| 0 | In | -25.0 | 0.0 | 25.0 | continuous | yes | 9.1 dB / -15.6 dBFS (channel 2) | 9.1 dB / -15.6 dBFS | defaults |
 | 1 | Stereo/Mid/Side | 0.0 | 1.0 | 3.0 | continuous | yes | -2.9 dB / -6.1 dBFS | -2.9 dB / -6.1 dBFS | defaults, the others at 0.75 |
-| 2 | Drive | 0.0 | 3.0 | 10.0 | continuous | yes | -35.6 dB / -60.4 dBFS | -35.6 dB / -60.4 dBFS | defaults |
+| 2 | Drive | 0.0 | 3.0 | 10.0 | continuous | yes | -35.6 dB / -60.4 dBFS (channel 2) | -35.6 dB / -60.4 dBFS | defaults |
 | 3 | Out | -25.0 | 0.0 | 25.0 | continuous | yes | 9.3 dB / -15.4 dBFS | 9.3 dB / -15.4 dBFS (channel 2) | defaults |
 | 4 | Low Boost | 0.0 | 0.0 | 10.0 | continuous | yes | -18.4 dB / -43.1 dBFS | -18.4 dB / -43.1 dBFS | defaults |
 | 5 | Hight Adjust | 0.0 | 0.0 | 10.0 | continuous | yes | -16.0 dB / -19.2 dBFS | -16.0 dB / -19.2 dBFS | defaults, the others at 0.75 |
@@ -124,10 +127,10 @@ Four ways of giving the plugin its parameters, each with the settings A (default
 
 | way | repeatable | reacts | as after a change | result | A again (2nd / 3rd) | B against A | A, B against the references |
 |---|---|---|---|---|---|---|---|
-| one instance, parameters set after prepare (stream) | yes | yes | yes | ok | -141.9 dB / -166.7 dBFS ; -142.5 dB / -167.2 dBFS (channel 2) | 22.9 dB / -1.9 dBFS | -142.5 dB / -167.2 dBFS (channel 2) ; identical |
-| new instance per render, parameters set before prepare | yes | yes | yes | ok | -142.6 dB / -167.3 dBFS ; -142.6 dB / -167.3 dBFS | 22.9 dB / -1.9 dBFS | -142.5 dB / -167.2 dBFS (channel 2) ; -142.5 dB / -143.8 dBFS |
-| new instance per render, parameters set after prepare | yes | yes | yes | ok | -142.5 dB / -167.3 dBFS ; -142.5 dB / -167.2 dBFS (channel 2) | 22.9 dB / -1.9 dBFS | -142.5 dB / -167.3 dBFS ; -142.6 dB / -143.8 dBFS |
-| new instance per render, after prepare every parameter first set to another value, then the target | yes | yes | yes | ok | -142.7 dB / -167.4 dBFS (channel 2) ; -142.6 dB / -167.3 dBFS (channel 2) | 22.9 dB / -1.9 dBFS | -142.6 dB / -167.3 dBFS ; -142.5 dB / -143.8 dBFS |
+| one instance, parameters set after prepare (stream) | yes | yes | yes | ok | -142.0 dB / -166.7 dBFS ; -142.5 dB / -167.3 dBFS | 22.9 dB / -1.9 dBFS | -142.5 dB / -167.3 dBFS ; identical |
+| new instance per render, parameters set before prepare | yes | yes | yes | ok | -142.6 dB / -167.4 dBFS ; -142.4 dB / -167.1 dBFS | 22.9 dB / -1.9 dBFS | -142.5 dB / -167.3 dBFS ; -142.6 dB / -143.8 dBFS (channel 2) |
+| new instance per render, parameters set after prepare | yes | yes | yes | ok | -142.5 dB / -167.2 dBFS ; -142.6 dB / -167.3 dBFS | 22.9 dB / -1.9 dBFS | -142.4 dB / -167.1 dBFS ; -142.5 dB / -143.7 dBFS (channel 2) |
+| new instance per render, after prepare every parameter first set to another value, then the target | yes | yes | yes | ok | -142.6 dB / -167.3 dBFS (channel 2) ; -142.5 dB / -167.3 dBFS | 22.9 dB / -1.9 dBFS | -142.5 dB / -167.2 dBFS ; -142.5 dB / -143.8 dBFS (channel 2) |
 
 Most careful way that works: new instance per render, after prepare every parameter first set to another value, then the target.
 
@@ -136,21 +139,28 @@ Most careful way that works: new instance per render, after prepare every parame
 
 | block size | steady state | whole |
 |---|---|---|
-| 32 | -142.2 dB / -143.3 dBFS | -142.5 dB / -143.7 dBFS (channel 2) |
-| 64 | -142.3 dB / -143.4 dBFS | -142.5 dB / -143.7 dBFS (channel 2) |
+| 32 | -142.3 dB / -143.5 dBFS (channel 2) | -142.5 dB / -143.7 dBFS (channel 2) |
+| 64 | -142.3 dB / -143.5 dBFS (channel 2) | -142.5 dB / -143.7 dBFS (channel 2) |
 | 128 | -142.3 dB / -143.4 dBFS | -142.5 dB / -143.7 dBFS |
 | 256 | -142.4 dB / -143.7 dBFS (channel 2) | -142.5 dB / -143.7 dBFS (channel 2) |
-| 1024 | -142.4 dB / -143.5 dBFS | -142.5 dB / -143.7 dBFS |
-| 2048 | -142.5 dB / -143.6 dBFS | -142.5 dB / -143.7 dBFS |
-| 509 | -142.4 dB / -143.5 dBFS | -142.4 dB / -143.7 dBFS (channel 2) |
+| 1024 | -142.4 dB / -143.7 dBFS (channel 2) | -142.5 dB / -143.7 dBFS (channel 2) |
+| 2048 | -142.3 dB / -143.4 dBFS | -142.5 dB / -143.7 dBFS |
+| 509 | -142.5 dB / -143.6 dBFS | -142.5 dB / -143.7 dBFS |
 
 ## Other
-- time-invariant (one instance: settled for 2.00 s, noise, 0.50 s silence, the same noise again; the two outputs the same): yes (-142.4 dB / -143.6 dBFS (channel 2))
-- settles within 0.25 s after a parameter change (the output then against the output after 2.00 s): yes (-142.6 dB / -143.8 dBFS)
+- time-invariant (one instance: settled for 2.00 s, noise, 0.50 s silence, the same noise again; the two outputs the same): yes (-142.5 dB / -143.8 dBFS)
+- settles within 0.25 s after a parameter change (the output then against the output after 2.00 s): yes (-142.5 dB / -143.8 dBFS)
 - deterministic (two instances, the same noise, bit exact): no
 - output stays finite (no NaN or infinity in the jump test): yes
 - recovers from parameter jumps (the parameters that change the audio to 0 and 1 and back, then the output of setting B again; continuous parameters and switches/choices in separate runs): continuous yes, switches and choices yes
 - digital silence in gives digital silence out: no (peak -133.7 dBFS)
+
+## Real-time behaviour
+All other measurements render as fast as possible, in real-time mode (offline flag off) and without letting the message thread run. Here the setting B with 2.0 s of noise is rendered again (fresh instances, as above): with the offline flag, and at real-time pace (after every block the message loop runs until the wall clock has caught up with the audio, so that timers and asynchronous updates of the plugin run as in a DAW). Different = more than 10 dB above the difference of two fast renders (-142.5 dB / -143.7 dBFS (channel 2)) and above -80 dB.
+
+- offline flag on against off: -142.5 dB / -143.7 dBFS - the same: yes
+- real-time pace against fast: -142.5 dB / -143.6 dBFS - the same: yes
+- a parameter change in the middle of the noise (all parameters A -> B), until every block equals the output of B rendered at real-time pace (below -60 dB): fast: 96 ms, real-time pace: 96 ms
 
 ## Settings used
 ```
@@ -185,7 +195,10 @@ Most careful way that works: new instance per render, after prepare every parame
   "highSetting": 0.75,
   "pokeDistance": 0.4,
   "maximumParameters": 64,
-  "maximumJumpedParameters": 16
+  "maximumJumpedParameters": 16,
+  "realTimeTests": true,
+  "realTimeSeconds": 2.0,
+  "longRealTimeSeconds": 0.0
 }
 ```
 

@@ -1,7 +1,7 @@
 {
   "plugin": "PluginLab Reference Utility",
   "identifier": "VST3-PluginLab Reference Utility-f09a5ce4-808e6ef4",
-  "measured": "2026-10-06 18:10",
+  "measured": "2026-10-08 17:53",
   "summary": [
     {
       "key": "loads",
@@ -127,6 +127,27 @@
       "test": "digital silence in gives digital silence out",
       "result": "no",
       "detail": "peak -12.0 dBFS; expected for a time-varying plugin",
+      "good": true
+    },
+    {
+      "key": "offline",
+      "test": "the same when the host renders offline (offline flag)",
+      "result": "yes",
+      "detail": "identical",
+      "good": true
+    },
+    {
+      "key": "realTimePace",
+      "test": "the same at real-time pace (message loop running)",
+      "result": "yes",
+      "detail": "identical",
+      "good": true
+    },
+    {
+      "key": "changeTiming",
+      "test": "a parameter change reaches the audio, fast and at real-time pace",
+      "result": "alike",
+      "detail": "fast: not within the render, real-time pace: not within the render",
       "good": true
     }
   ]

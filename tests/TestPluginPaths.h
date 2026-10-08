@@ -100,6 +100,22 @@ inline juce::File getTremoloPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestTremolo.vst3");
 }
 
+// real-time behaviour (W5c): the gain reaches the audio through a 100 ms timer; +6 dB offline; a tremolo on the system clock
+inline juce::File getTimerGainPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestTimerGain.vst3");
+}
+
+inline juce::File getOfflineSwitchPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestOfflineSwitch.vst3");
+}
+
+inline juce::File getWallClockPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestWallClock.vst3");
+}
+
 inline juce::File getEqSwitchPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestEqSwitch.vst3");

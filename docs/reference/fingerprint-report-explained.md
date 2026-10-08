@@ -95,6 +95,9 @@ header. Every report ends with the values it used ("Settings used").
 | `lowSetting`, `highSetting` | 0.25, 0.75 | the two test positions of a parameter |
 | `pokeDistance` | 0.4 | see 2.3 |
 | `maximumParameters`, `maximumJumpedParameters` | 64, 16 | limits |
+| `realTimeTests` | true | the real-time pace and parameter-change tests of 3.7b (about 5 s of real time per report) |
+| `realTimeSeconds` | 2.0 | length of the renders of 3.7b |
+| `longRealTimeSeconds` | 0 (off) | a long run at real-time pace (demo noise and the like), compared in 1 s segments |
 Fixed in the code: block size 512 and 48 kHz as reference, 12288 noise samples of which the last 8192 are compared, "none" below -120 dB in the latency table,
 determinism = bit exact.
 
@@ -210,6 +213,21 @@ differences of the BL gain plugins, which are now identical.)
   and the switches and choices; the report says which group did not come back.
 - **digital silence in gives digital silence out**: prepare, apply(B), settle, 8192 zeros: the peak below `silenceBelowDbfs` (default -200 = exactly 0); the peak in dBFS.
 
+### 3.7b Real-time behaviour (W5c, 0.23.0)
+All other measurements render as fast as possible, in real-time mode (offline flag off), and the measurement process does not let its message thread run. What that
+can hide (design `docs/design/W5c-real-time-behaviour.md`): parameter changes that a plugin applies by a timer or a listener, work on background threads,
+a different algorithm for offline rendering, behaviour tied to the wall clock. With `realTimeSeconds` of noise and the setting B (fresh instances, poked):
+- **offline flag**: rendered with `setNonRealtime(true)` (VST3 `processMode = kOffline`, VST2 process level offline) against the normal render. Different: the
+  plugin switches its algorithm or quality when the host renders offline; a bounce is then not what is heard while playing.
+- **real-time pace**: after every block the message loop runs until the wall clock has caught up with the audio (one block per block duration). Different: the plugin
+  depends on the wall clock or on a thread of its own.
+- **parameter change**: noise with A, in the middle all parameters to B; the time until every block equals B rendered at real-time pace (below `differentAboveDb`), once
+  fast and once paced. "Not within the render" when fast but a few ms paced: the plugin applies changes by a timer or on its message thread (the fast measurements that
+  follow a change are then not meaningful). If the fast scan found no reacting parameter, this test makes its own B (every continuous parameter at 0.75).
+- "Different" means more than 10 dB above the difference of two fast renders (the noise floor of the comparison; it is printed) and above `sameBelowDb`.
+The pacing is a normal thread waiting (no audio device): good enough to detect time dependence, not to measure exact timing. On Linux a JUCE plugin runs its timers
+on a message thread of its own; on Windows and macOS it shares the host's message thread, which the paced render lets run.
+
 ### 3.8 Settings used
 The JSON of the settings the report was made with (2.5).
 
@@ -228,6 +246,9 @@ The JSON of the settings the report was made with (2.5).
 | Tremolo (free-running LFO) | time-varying; determinism, recovery, delivery not counted as faults |
 | EQ Switch (band off by default) | nothing reacts at the defaults; the scan flips the switch and finds gain, frequency, Q; every way ok |
 | EQ Prepare (resets in `prepareToPlay`) | stream: A again differs; before/after prepare: "the first delivery was lost"; only the poked way passes |
+| Timer Gain (the gain reaches the audio through a 100 ms timer) | the fast scan finds no reacting parameter; real-time pace differs; the change: fast "not within the render", paced about 40 ms |
+| Offline Switch (+6 dB when rendering offline) | offline flag: different (0 dB re reference, i.e. as large as the signal) |
+| Wall Clock (2 Hz tremolo on the system clock) | two fast renders already differ a little (-29 dB), real-time pace much more (-5 dB): different |
 
 ## 5. Example: the own PeakEQ and the BL gain plugins
 PeakEQ: latency reported 0 (after prepare and after audio), measured 88 / 96 / 192 samples at 44.1 / 48 / 96 kHz (the constructor reports before `prepareToPlay` has

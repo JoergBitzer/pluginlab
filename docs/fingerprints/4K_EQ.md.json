@@ -1,7 +1,7 @@
 {
   "plugin": "4K EQ",
   "identifier": "VST3-4K EQ-f0d5ad8d-533e1add",
-  "measured": "2026-10-06 10:07",
+  "measured": "2026-10-08 17:51",
   "summary": [
     {
       "key": "loads",
@@ -76,29 +76,29 @@
     {
       "key": "delivery",
       "test": "delivery of parameters (A, A, B, A): ways that work",
-      "result": "2 of 4 ways",
-      "detail": "new instance per render, after prepare every parameter first set to another value, then the target",
+      "result": "1 of 4 ways",
+      "detail": "one instance, parameters set after prepare (stream)",
       "good": false
     },
     {
       "key": "timeInvariant",
       "test": "time-invariant (the same noise twice through one instance)",
       "result": "yes",
-      "detail": "-85.5 dB / -103.8 dBFS (channel 2)",
+      "detail": "-85.5 dB / -103.9 dBFS",
       "good": true
     },
     {
       "key": "settles",
       "test": "settles within 0.25 s after a parameter change",
-      "result": "yes",
-      "detail": "-80.3 dB / -98.6 dBFS",
-      "good": true
+      "result": "no",
+      "detail": "-62.6 dB / -80.9 dBFS",
+      "good": false
     },
     {
       "key": "blockSizes",
       "test": "block size independent (steady state)",
       "result": "no",
-      "detail": "largest at 32: -66.5 dB / -84.7 dBFS",
+      "detail": "largest at 256: -64.9 dB / -83.1 dBFS",
       "good": false
     },
     {
@@ -126,8 +126,29 @@
       "key": "silence",
       "test": "digital silence in gives digital silence out",
       "result": "no",
-      "detail": "peak -96.2 dBFS",
+      "detail": "peak -96.9 dBFS",
       "good": false
+    },
+    {
+      "key": "offline",
+      "test": "the same when the host renders offline (offline flag)",
+      "result": "yes",
+      "detail": "-66.9 dB / -85.1 dBFS",
+      "good": true
+    },
+    {
+      "key": "realTimePace",
+      "test": "the same at real-time pace (message loop running)",
+      "result": "yes",
+      "detail": "-77.9 dB / -96.2 dBFS",
+      "good": true
+    },
+    {
+      "key": "changeTiming",
+      "test": "a parameter change reaches the audio, fast and at real-time pace",
+      "result": "alike",
+      "detail": "fast: 149.333 ms, real-time pace: 149.333 ms",
+      "good": true
     }
   ]
 }

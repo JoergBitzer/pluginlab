@@ -16,10 +16,10 @@ struct FingerprintSettings
     double sameBelowDb = -80.0;              // two outputs count as the same
     double blockIndependentBelowDb = -100.0; // block size independent (steady state)
     double silentReferenceDbfs = -150.0;     // a reference below this level counts as silent: the absolute difference decides
-    double couplingBelowDb = -100.0;
+    double couplingBelowDb = -100.0;         // the channels are independent if the silent one stays below this, relative to the driven one
     double silenceBelowDbfs = -200.0;        // the output for silence counts as silent below this (default: exactly zero)
     double timeInvarianceGapSeconds = 0.5;   // the silence between the two runs of the time invariance test
-    double longSettleSeconds = 2.0;          // the settle time of the time invariance test (also the reference for "settles in time")         // the channels are independent if the silent one stays below this, relative to the driven one
+    double longSettleSeconds = 2.0;          // the settle time of the time invariance test (also the reference for "settles in time")
 
     // signals and timing
     double noiseLevel = 0.1;                 // peak of the uniform white noise (linear)
@@ -38,6 +38,11 @@ struct FingerprintSettings
     int maximumParameters = 64;              // only the first ones are examined
     int maximumJumpedParameters = 16;        // in the jump test
     int maximumPairs = 64;                   // switch / parameter pairs tried when no single parameter changes the audio
+
+    // real-time behaviour (docs/design/W5c-real-time-behaviour.md)
+    bool realTimeTests = true;               // render at real-time pace with the message loop running (costs about 2.5 realTimeSeconds)
+    double realTimeSeconds = 2.0;            // length of the paced renders
+    double longRealTimeSeconds = 0.0;        // a long paced run (demo noise and the like); 0 = off
 
     // The default place of the file: the application data folder of the user, or the file named by the environment variable
     // PLUGINLAB_FINGERPRINT_SETTINGS (tests use it, so that they never touch the user's file).

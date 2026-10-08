@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <vector>
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -18,10 +19,11 @@
 // PLUGINLAB_TEST_PLUGIN_STEREO_MODE=1 cross feed (R += L / 2); =2 the gain is a width control (acts on L - R only).
 // PLUGINLAB_TEST_PLUGIN_SIDECHAIN=1 has a stereo side-chain input bus that is on by default.
 // PLUGINLAB_TEST_PLUGIN_LFO=1 a tremolo with a free-running LFO (2 Hz): time-varying.
-class TestPluginProcessor : public juce::AudioProcessor
+class TestPluginProcessor : public juce::AudioProcessor, private juce::Timer
 {
 public:
     TestPluginProcessor();
+    ~TestPluginProcessor() override;
 
     const juce::String getName() const override;
 
@@ -51,6 +53,9 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
 private:
+    // PLUGINLAB_TEST_PLUGIN_TIME_MODE 1: the gain parameter reaches the audio only through this timer (message thread)
+    void timerCallback() override;
+
     static BusesProperties makeBuses();
 
     // the delay line of the audio (only used if the plugin delays the audio)
@@ -59,6 +64,7 @@ private:
     float m_smoothedGain = 1.0f;
     double m_lfoPhase = 0.0;
     double m_sampleRate = 48000.0;
+    std::atomic<float> m_timerGain{1.0f};
     std::vector<float> m_firCoefficients;
     std::vector<std::vector<float>> m_firHistory;
     int m_firPosition = 0;

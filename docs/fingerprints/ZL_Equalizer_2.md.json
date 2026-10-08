@@ -1,7 +1,7 @@
 {
   "plugin": "ZL Equalizer 2",
   "identifier": "VST3-ZL Equalizer 2-173de323-86fa4be7",
-  "measured": "2026-10-06 10:07",
+  "measured": "2026-10-08 17:54",
   "summary": [
     {
       "key": "loads",
@@ -127,6 +127,27 @@
       "test": "digital silence in gives digital silence out",
       "result": "yes",
       "detail": "",
+      "good": true
+    },
+    {
+      "key": "offline",
+      "test": "the same when the host renders offline (offline flag)",
+      "result": "yes",
+      "detail": "identical",
+      "good": true
+    },
+    {
+      "key": "realTimePace",
+      "test": "the same at real-time pace (message loop running)",
+      "result": "yes",
+      "detail": "identical",
+      "good": true
+    },
+    {
+      "key": "changeTiming",
+      "test": "a parameter change reaches the audio, fast and at real-time pace",
+      "result": "alike",
+      "detail": "fast: not within the render, real-time pace: not within the render",
       "good": true
     }
   ]

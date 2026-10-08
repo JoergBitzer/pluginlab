@@ -32,12 +32,23 @@ const juce::Identifier kHighSetting("highSetting");
 const juce::Identifier kPokeDistance("pokeDistance");
 const juce::Identifier kMaximumParameters("maximumParameters");
 const juce::Identifier kMaximumJumpedParameters("maximumJumpedParameters");
+const juce::Identifier kRealTimeTests("realTimeTests");
+const juce::Identifier kRealTimeSeconds("realTimeSeconds");
+const juce::Identifier kLongRealTimeSeconds("longRealTimeSeconds");
 
 void readDouble(const juce::DynamicObject& object, const juce::Identifier& key, double& value)
 {
     if (object.hasProperty(key))
     {
         value = static_cast<double>(object.getProperty(key));
+    }
+}
+
+void readBool(const juce::DynamicObject& object, const juce::Identifier& key, bool& value)
+{
+    if (object.hasProperty(key))
+    {
+        value = static_cast<bool>(object.getProperty(key));
     }
 }
 
@@ -100,6 +111,9 @@ FingerprintSettings FingerprintSettings::loadOrCreate(const juce::File& file, ju
     readDouble(*object, kPokeDistance, settings.pokeDistance);
     readInt(*object, kMaximumParameters, settings.maximumParameters);
     readInt(*object, kMaximumJumpedParameters, settings.maximumJumpedParameters);
+    readBool(*object, kRealTimeTests, settings.realTimeTests);
+    readDouble(*object, kRealTimeSeconds, settings.realTimeSeconds);
+    readDouble(*object, kLongRealTimeSeconds, settings.longRealTimeSeconds);
     const juce::var blockSizes = object->getProperty(kBlockSizes);
     if (const juce::Array<juce::var>* sizes = blockSizes.getArray())
     {
@@ -143,6 +157,9 @@ juce::String FingerprintSettings::toJson() const
     object->setProperty(kPokeDistance, pokeDistance);
     object->setProperty(kMaximumParameters, maximumParameters);
     object->setProperty(kMaximumJumpedParameters, maximumJumpedParameters);
+    object->setProperty(kRealTimeTests, realTimeTests);
+    object->setProperty(kRealTimeSeconds, realTimeSeconds);
+    object->setProperty(kLongRealTimeSeconds, longRealTimeSeconds);
     return juce::JSON::toString(juce::var(object.release()));
 }
 

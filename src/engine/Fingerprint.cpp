@@ -24,6 +24,11 @@ constexpr int kContinuousSteps = 0x7fffffff; // JUCE's number of steps of a cont
 constexpr int kSwitchSteps = 2;
 constexpr double kNothingDb = -120.0;      // output before the peak / before the impulse below this is "none"
 constexpr int kLatencyDecimals = 1;
+constexpr double kMillisecondsPerSecond = 1000.0;
+constexpr double kNotReached = -1.0;
+constexpr double kBaselineMarginDb = 10.0;      // paced / offline count as different only this far above the difference of two fast renders
+constexpr double kTimingToleranceMs = 100.0;    // the parameter change reaches B fast and paced within this of each other
+constexpr double kLongSegmentSeconds = 1.0;     // the long run is compared in segments of this length
 
 double toDb(double value)
 {
@@ -334,6 +339,20 @@ public:
         m_instance->prepareToPlay(m_sampleRate, m_blockSize);
     }
 
+    // The offline flag (AudioProcessor::setNonRealtime, VST3 processMode kOffline): before prepare()
+    void setOffline(bool offline)
+    {
+        m_instance->setNonRealtime(offline);
+    }
+
+    // From now on every block is followed by the message loop running until the wall-clock time equals the audio time (real-time pace)
+    void startPacing()
+    {
+        m_paced = true;
+        m_pacingStartMs = juce::Time::getMillisecondCounterHiRes();
+        m_pacedSamples = 0;
+    }
+
     void apply(const std::vector<float>& setting)
     {
         const juce::Array<juce::AudioProcessorParameter*>& parameters = m_instance->getParameters();
@@ -391,6 +410,10 @@ public:
                     output[static_cast<size_t>(channel)].push_back(value);
                 }
             }
+            if (m_paced)
+            {
+                waitForAudioTime(count);
+            }
         }
         return output;
     }
@@ -411,13 +434,46 @@ public:
     }
 
 private:
+    // Lets the message loop run (timers, async updates of the plugin) until the wall clock has caught up with the audio processed since
+    // startPacing(); without a message thread (or without modal loops) the thread just waits
+    void waitForAudioTime(int samples)
+    {
+        m_pacedSamples += samples;
+        const double targetMs = m_pacingStartMs + kMillisecondsPerSecond * static_cast<double>(m_pacedSamples) / m_sampleRate;
+        juce::MessageManager* messages = juce::MessageManager::getInstanceWithoutCreating();
+        for (double now = juce::Time::getMillisecondCounterHiRes(); now < targetMs; now = juce::Time::getMillisecondCounterHiRes())
+        {
+            const int remainingMs = std::max(1, static_cast<int>(targetMs - now));
+#if JUCE_MODAL_LOOPS_PERMITTED
+            if (messages != nullptr && messages->isThisTheMessageThread())
+            {
+                messages->runDispatchLoopUntil(remainingMs);
+                continue;
+            }
+#endif
+            juce::ignoreUnused(messages);
+            juce::Thread::sleep(remainingMs);
+        }
+    }
+
     std::unique_ptr<juce::AudioPluginInstance> m_instance;
     double m_sampleRate;
     int m_blockSize;
     const FingerprintSettings& m_settings;
     int m_channels = 0;
     bool m_sawNonFinite = false;
+    bool m_paced = false;
+    double m_pacingStartMs = 0.0;
+    juce::int64 m_pacedSamples = 0;
     juce::String m_error;
+};
+
+// How a render runs: as fast as possible (all measurements), with the offline flag, or at real-time pace with the message loop running
+enum class RenderMode
+{
+    Fast,
+    Offline,
+    Paced
 };
 
 // Everything needed to make instances and to render with a setting.
@@ -437,14 +493,22 @@ public:
     // The careful way that all measurements use (most conservative first, LESSONS_LEARNED §2): a fresh instance, prepared; every parameter is
     // first set to another value and one block of noise of the reference length runs (the same input history for every block size), then
     // the setting is set; settled; then the input.
-    Signal render(double sampleRate, int blockSize, const std::vector<float>& setting, const Signal& input) const
+    Signal render(double sampleRate, int blockSize, const std::vector<float>& setting, const Signal& input, RenderMode mode = RenderMode::Fast) const
     {
         const std::unique_ptr<Rig> rig = make(sampleRate, blockSize);
         if (! rig->isValid())
         {
             return {};
         }
+        if (mode == RenderMode::Offline)
+        {
+            rig->setOffline(true);
+        }
         rig->prepare();
+        if (mode == RenderMode::Paced)
+        {
+            rig->startPacing();
+        }
         rig->apply(makePokeValues(setting, m_settings));
         rig->process(makeDifferentNoise(kReferenceBlock, m_settings.noiseLevel));
         rig->apply(setting);
@@ -471,6 +535,159 @@ private:
     juce::PluginDescription m_description;
     const FingerprintSettings& m_settings;
 };
+
+// "12 ms" or "not within the render"
+juce::String describeReach(double milliseconds)
+{
+    if (milliseconds < 0.0)
+    {
+        return "not within the render";
+    }
+    return juce::String(milliseconds, 0) + " ms";
+}
+
+// "fast: 0 ms, real-time pace: 21 ms"
+juce::String describeChangeTiming(const RealTimeFingerprint& realTime)
+{
+    return "fast: " + describeReach(realTime.changeReachedFastMs) + ", real-time pace: " + describeReach(realTime.changeReachedPacedMs);
+}
+
+// The samples [from, to) of a signal
+Signal slice(const Signal& signal, size_t from, size_t to)
+{
+    Signal part;
+    for (const std::vector<float>& channel : signal)
+    {
+        const size_t end = std::min(to, channel.size());
+        const size_t begin = std::min(from, end);
+        part.emplace_back(channel.begin() + static_cast<std::ptrdiff_t>(begin), channel.begin() + static_cast<std::ptrdiff_t>(end));
+    }
+    return part;
+}
+
+// Noise with the setting A, in the middle all parameters change to B; returns the time (ms after the change) from which on every block equals
+// the reference (the output of B from the start, rendered at real-time pace; below differentAboveDb), or kNotReached
+double measureChangeTime(const Bench& bench, const std::vector<float>& settingA, const std::vector<float>& settingB, const Signal& input,
+                         const Signal& referenceB, bool paced, const FingerprintSettings& settings)
+{
+    const std::unique_ptr<Rig> rig = bench.make(kReferenceRate, kReferenceBlock);
+    if (! rig->isValid())
+    {
+        return kNotReached;
+    }
+    rig->prepare();
+    if (paced)
+    {
+        rig->startPacing();
+    }
+    rig->apply(makePokeValues(settingA, settings));
+    rig->process(makeDifferentNoise(kReferenceBlock, settings.noiseLevel));
+    rig->apply(settingA);
+    rig->settle();
+    const size_t length = getLength(input);
+    const size_t half = length / 2 / kReferenceBlock * kReferenceBlock;
+    rig->process(slice(input, 0, half));
+    rig->apply(settingB);
+    const Signal after = rig->process(slice(input, half, length));
+    const Signal wanted = slice(referenceB, half, length);
+    // the last block that still differs; B is reached with the block after it
+    size_t reached = 0;
+    for (size_t start = 0; start < getLength(after); start += kReferenceBlock)
+    {
+        const size_t end = start + kReferenceBlock;
+        if (isAbove(compare(slice(after, start, end), slice(wanted, start, end), 0, settings), settings.differentAboveDb))
+        {
+            reached = end;
+        }
+    }
+    if (reached >= getLength(after))
+    {
+        return kNotReached;
+    }
+    return kMillisecondsPerSecond * static_cast<double>(reached) / kReferenceRate;
+}
+
+// The real-time behaviour (docs/design/W5c-real-time-behaviour.md): offline flag, real-time pace, a parameter change in real time, a long run
+RealTimeFingerprint measureRealTime(const Bench& bench, const std::vector<float>& settingA, const std::vector<float>& scannedB,
+                                    const std::vector<ParameterFingerprint>& parameters, int channels, const FingerprintSettings& settings)
+{
+    RealTimeFingerprint result;
+    // B as the scan found it; if no parameter changed the audio in the fast scan (a plugin that applies its parameters by a timer, for
+    // example), every continuous parameter at the high position
+    std::vector<float> settingB = scannedB;
+    if (settingB == settingA)
+    {
+        for (const ParameterFingerprint& parameter : parameters)
+        {
+            const size_t index = static_cast<size_t>(parameter.index);
+            if (index < settingB.size() && ! isDiscrete(parameter))
+            {
+                settingB[index] = static_cast<float>(settings.highSetting);
+            }
+        }
+        result.ownSettingB = true;
+    }
+    const int length = static_cast<int>(settings.realTimeSeconds * kReferenceRate);
+    Signal input = makeDifferentNoise(length, settings.noiseLevel);
+    if (channels < 2)
+    {
+        input = makeSameNoise(length, settings.noiseLevel);
+    }
+    const Signal fast = bench.render(kReferenceRate, kReferenceBlock, settingB, input);
+    if (fast.empty())
+    {
+        return result;
+    }
+    result.measured = true;
+    result.baseline = compare(bench.render(kReferenceRate, kReferenceBlock, settingB, input), fast, 0, settings);
+    const double limit = std::max(settings.sameBelowDb, decisionValue(result.baseline) + kBaselineMarginDb);
+
+    result.offlineDifference = compare(bench.render(kReferenceRate, kReferenceBlock, settingB, input, RenderMode::Offline), fast, 0, settings);
+    result.sameOffline = decisionValue(result.offlineDifference) <= limit;
+
+    if (! settings.realTimeTests)
+    {
+        return result;
+    }
+    result.pacedMeasured = true;
+    const Signal paced = bench.render(kReferenceRate, kReferenceBlock, settingB, input, RenderMode::Paced);
+    result.pacedDifference = compare(paced, fast, 0, settings);
+    result.sameWhenPaced = decisionValue(result.pacedDifference) <= limit;
+
+    // the change A -> B can only be timed if two renders of B agree (below differentAboveDb)
+    result.changeJudged = ! isAbove(result.baseline, settings.differentAboveDb);
+    if (result.changeJudged)
+    {
+        // the reference is B as it is heard: rendered at real-time pace
+        result.changeReachedFastMs = measureChangeTime(bench, settingA, settingB, input, paced, false, settings);
+        result.changeReachedPacedMs = measureChangeTime(bench, settingA, settingB, input, paced, true, settings);
+        const bool fastReached = result.changeReachedFastMs >= 0.0;
+        const bool pacedReached = result.changeReachedPacedMs >= 0.0;
+        result.changeTimingAlike = fastReached == pacedReached;
+        if (fastReached && pacedReached)
+        {
+            result.changeTimingAlike = std::abs(result.changeReachedFastMs - result.changeReachedPacedMs) <= kTimingToleranceMs;
+        }
+    }
+
+    if (settings.longRealTimeSeconds > 0.0)
+    {
+        result.longMeasured = true;
+        const Signal longInput = makeDifferentNoise(static_cast<int>(settings.longRealTimeSeconds * kReferenceRate), settings.noiseLevel);
+        const Signal longFast = bench.render(kReferenceRate, kReferenceBlock, settingA, longInput);
+        const Signal longPaced = bench.render(kReferenceRate, kReferenceBlock, settingA, longInput, RenderMode::Paced);
+        const size_t segment = static_cast<size_t>(kLongSegmentSeconds * kReferenceRate);
+        for (size_t start = 0; start < getLength(longFast); start += segment)
+        {
+            const Difference difference = compare(slice(longPaced, start, start + segment), slice(longFast, start, start + segment), 0, settings);
+            if (decisionValue(difference) > limit)
+            {
+                result.longDifferentSeconds.push_back(static_cast<double>(start) / kReferenceRate);
+            }
+        }
+    }
+    return result;
+}
 
 // refA, refB: the output of the settings A and B reached by a change of the parameters after prepare (what the plugin does when it is
 // used the way a DAW does)
@@ -1066,6 +1283,9 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         }
     }
 
+    // ---- real-time behaviour: offline flag, real-time pace, a parameter change in real time (W5c) ----
+    fingerprint.realTime = measureRealTime(bench, scanBase, settingB, fingerprint.parameters, fingerprint.measuredChannels, settings);
+
     // ---- what is noteworthy (with the numbers) ----
     for (const RateFingerprint& rate : fingerprint.rates)
     {
@@ -1162,6 +1382,35 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     if (! fingerprint.silenceStaysSilent)
     {
         fingerprint.findings.push_back("Digital silence in does not give digital silence out (peak " + juce::String(fingerprint.idleLevelDb, 1) + " dBFS)" + expected);
+    }
+    const RealTimeFingerprint& realTime = fingerprint.realTime;
+    if (realTime.measured && ! realTime.sameOffline)
+    {
+        fingerprint.findings.push_back("The output differs when the host renders offline (offline flag; " + formatDifference(realTime.offlineDifference)
+                                       + "): the plugin switches its algorithm or quality for offline rendering, so an offline render (bounce) is not what is "
+                                         "heard while playing. All other measurements use real-time mode.");
+    }
+    if (realTime.pacedMeasured && ! realTime.sameWhenPaced)
+    {
+        fingerprint.findings.push_back("The output at real-time pace (the message loop running between the blocks) differs from the fast render ("
+                                       + formatDifference(realTime.pacedDifference) + "): the plugin depends on wall-clock time or on its message "
+                                         "thread (timers, background work). The fast measurements may not show what is heard.");
+    }
+    if (realTime.changeJudged && ! realTime.changeTimingAlike)
+    {
+        fingerprint.findings.push_back("A parameter change reaches the audio differently fast and at real-time pace (" + describeChangeTiming(realTime)
+                                       + "): the plugin applies parameter changes on its message thread (a timer, a listener) or on a background thread; "
+                                         "the measurements that follow a change in a fast render are therefore not meaningful.");
+    }
+    if (! realTime.longDifferentSeconds.empty())
+    {
+        juce::StringArray seconds;
+        for (const double start : realTime.longDifferentSeconds)
+        {
+            seconds.add(juce::String(start, 0));
+        }
+        fingerprint.findings.push_back("In the long run at real-time pace the output differs from the fast render in the 1 s segments starting at "
+                                       + seconds.joinIntoString(", ") + " s (demo noise, a wall-clock event?)");
     }
     return fingerprint;
 }
@@ -1358,6 +1607,40 @@ std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
         idle += "; " + expectedNote;
     }
     add("silence", "digital silence in gives digital silence out", yesNo(fingerprint.silenceStaysSilent), idle, fingerprint.silenceStaysSilent || timeVarying);
+
+    const RealTimeFingerprint& realTime = fingerprint.realTime;
+    if (! realTime.measured)
+    {
+        return items;
+    }
+    add("offline", "the same when the host renders offline (offline flag)", yesNo(realTime.sameOffline), formatDifference(realTime.offlineDifference),
+        realTime.sameOffline);
+    if (! realTime.pacedMeasured)
+    {
+        add("realTimePace", "the same at real-time pace (message loop running)", "not measured", "realTimeTests is off in the settings", true);
+        return items;
+    }
+    add("realTimePace", "the same at real-time pace (message loop running)", yesNo(realTime.sameWhenPaced), formatDifference(realTime.pacedDifference),
+        realTime.sameWhenPaced);
+    if (realTime.changeJudged)
+    {
+        juce::String timing = "alike";
+        if (! realTime.changeTimingAlike)
+        {
+            timing = "different";
+        }
+        add("changeTiming", "a parameter change reaches the audio, fast and at real-time pace", timing, describeChangeTiming(realTime), realTime.changeTimingAlike);
+    }
+    else
+    {
+        add("changeTiming", "a parameter change reaches the audio, fast and at real-time pace", "not judged",
+            "two renders of B differ (" + formatDifference(realTime.baseline) + ")", true);
+    }
+    if (realTime.longMeasured)
+    {
+        add("longRun", "long run at real-time pace the same as fast", yesNo(realTime.longDifferentSeconds.empty()),
+            juce::String(static_cast<int>(realTime.longDifferentSeconds.size())) + " segment(s) differ", realTime.longDifferentSeconds.empty());
+    }
     return items;
 }
 
@@ -1630,6 +1913,46 @@ juce::String createReport(const PluginFingerprint& fingerprint)
         text << " (peak " << juce::String(fingerprint.idleLevelDb, 1) << " dBFS)";
     }
     text << "\n";
+
+    const RealTimeFingerprint& realTime = fingerprint.realTime;
+    if (realTime.measured)
+    {
+        text << "\n## Real-time behaviour\n";
+        text << "All other measurements render as fast as possible, in real-time mode (offline flag off) and without letting the message thread run. "
+                "Here the setting B with " << juce::String(settings.realTimeSeconds, 1) << " s of noise is rendered again (fresh instances, as above): "
+                "with the offline flag, and at real-time pace (after every block the message loop runs until the wall clock has caught up with the "
+                "audio, so that timers and asynchronous updates of the plugin run as in a DAW). Different = more than " << juce::String(kBaselineMarginDb, 0)
+             << " dB above the difference of two fast renders (" << formatDifference(realTime.baseline) << ") and above " << juce::String(settings.sameBelowDb, 0)
+             << " dB.\n\n";
+        if (realTime.ownSettingB)
+        {
+            text << "No parameter changed the audio in the (fast) scan: here B is every continuous parameter at the high position.\n\n";
+        }
+        text << "- offline flag on against off: " << formatDifference(realTime.offlineDifference) << " - the same: " << yesNo(realTime.sameOffline) << "\n";
+        if (realTime.pacedMeasured)
+        {
+            text << "- real-time pace against fast: " << formatDifference(realTime.pacedDifference) << " - the same: " << yesNo(realTime.sameWhenPaced) << "\n";
+            text << "- a parameter change in the middle of the noise (all parameters A -> B), until every block equals the output of B rendered at real-time pace (below "
+                 << juce::String(settings.differentAboveDb, 0) << " dB): ";
+            if (realTime.changeJudged)
+            {
+                text << describeChangeTiming(realTime) << "\n";
+            }
+            else
+            {
+                text << "not judged (two renders of B differ)\n";
+            }
+        }
+        else
+        {
+            text << "- real-time pace: not measured (realTimeTests is off in the settings)\n";
+        }
+        if (realTime.longMeasured)
+        {
+            text << "- long run (" << juce::String(settings.longRealTimeSeconds, 0) << " s, setting A, real-time pace against fast): "
+                 << static_cast<int>(realTime.longDifferentSeconds.size()) << " of the 1 s segments differ\n";
+        }
+    }
 
     text << "\n## Settings used\n```\n" << settings.toJson() << "\n```\n";
     return text;

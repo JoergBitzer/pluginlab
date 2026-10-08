@@ -16,6 +16,12 @@ target_include_directories(pluginlab_engine
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
+# the real-time tests of the fingerprint run the message loop between blocks (MessageManager::runDispatchLoopUntil); PUBLIC, so that every
+# target that uses the engine compiles JUCE with the same setting
+target_compile_definitions(pluginlab_engine
+    PUBLIC
+        JUCE_MODAL_LOOPS_PERMITTED=1)
+
 target_link_libraries(pluginlab_engine
     PUBLIC
         pluginlab_core

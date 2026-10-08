@@ -1,7 +1,7 @@
 {
   "plugin": "Multi-Q",
   "identifier": "VST3-Multi-Q-cfb5dc60-fc4fef77",
-  "measured": "2026-10-06 10:07",
+  "measured": "2026-10-08 17:52",
   "summary": [
     {
       "key": "loads",
@@ -128,6 +128,27 @@
       "result": "no",
       "detail": "peak -146.4 dBFS",
       "good": false
+    },
+    {
+      "key": "offline",
+      "test": "the same when the host renders offline (offline flag)",
+      "result": "yes",
+      "detail": "identical",
+      "good": true
+    },
+    {
+      "key": "realTimePace",
+      "test": "the same at real-time pace (message loop running)",
+      "result": "yes",
+      "detail": "identical",
+      "good": true
+    },
+    {
+      "key": "changeTiming",
+      "test": "a parameter change reaches the audio, fast and at real-time pace",
+      "result": "alike",
+      "detail": "fast: 21.3333 ms, real-time pace: 21.3333 ms",
+      "good": true
     }
   ]
 }

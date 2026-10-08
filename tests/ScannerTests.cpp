@@ -89,10 +89,10 @@ public:
                 ++numberOfCrashes;
             }
         }
-        int expectedGoodPlugins = 16; // the VST3 gain plugin, the mono plugin, the two latency plugins, the three EQs, the linear-phase, the two block, the two stereo, the side-chain, the tremolo and the EQ with a switch and the plugin that only crashes while processing (they scan fine)
+        int expectedGoodPlugins = 19; // the VST3 gain plugin, the mono plugin, the two latency plugins, the three EQs, the linear-phase, the two block, the two stereo, the side-chain, the tremolo, the EQ with a switch, the three real-time plugins (timer gain, offline switch, wall clock) and the plugin that only crashes while processing (they scan fine)
         if (pluginlab::hosting::isVst2Supported())
         {
-            expectedGoodPlugins = 17; // plus the VST2 version of the gain plugin
+            expectedGoodPlugins = 20; // plus the VST2 version of the gain plugin
         }
         expectEquals(numberOfGoodPlugins, expectedGoodPlugins);
         expectEquals(numberOfCrashes, 1); // the VST2 formats must not report parts of the VST3 bundles as plugins

@@ -64,6 +64,24 @@ TestPluginProcessor::TestPluginProcessor()
     addParameter(m_frequency);
     addParameter(m_mode);
     addParameter(m_bypass);
+
+#if PLUGINLAB_TEST_PLUGIN_TIME_MODE == 1
+    // like plugins that apply parameters on the message thread: a timer copies the gain for the audio every 100 ms (a fast render of a few
+    // seconds of audio takes about a millisecond, so the timer hardly ever fires inside it)
+    constexpr int kTimerIntervalMs = 100;
+    m_timerGain = juce::Decibels::decibelsToGain(m_gain->get());
+    startTimer(kTimerIntervalMs);
+#endif
+}
+
+TestPluginProcessor::~TestPluginProcessor()
+{
+    stopTimer();
+}
+
+void TestPluginProcessor::timerCallback()
+{
+    m_timerGain = juce::Decibels::decibelsToGain(m_gain->get());
 }
 
 const juce::String TestPluginProcessor::getName() const
@@ -136,6 +154,17 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 #endif
 
     float gain = juce::Decibels::decibelsToGain(m_gain->get());
+#if PLUGINLAB_TEST_PLUGIN_TIME_MODE == 1
+    gain = m_timerGain.load();
+#endif
+#if PLUGINLAB_TEST_PLUGIN_TIME_MODE == 2
+    // a plugin that renders differently offline ("better quality" when the host renders): +6 dB
+    constexpr float kOfflineGain = 2.0f;
+    if (isNonRealtime())
+    {
+        gain *= kOfflineGain;
+    }
+#endif
 #if PLUGINLAB_TEST_PLUGIN_BLOCK_MODE == 1
     constexpr float kSmoothingPerBlock = 0.5f;
     m_smoothedGain += (gain - m_smoothedGain) * kSmoothingPerBlock;
@@ -178,6 +207,23 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
             buffer.setSample(channel, sample, buffer.getSample(channel, sample) * level);
         }
         m_lfoPhase += kTwoPi * kLfoHz / m_sampleRate;
+    }
+#endif
+#if PLUGINLAB_TEST_PLUGIN_TIME_MODE == 3
+    // a tremolo on the system clock (2 Hz, level between 0.5 and 1): it depends on wall-clock time, not on the samples
+    constexpr double kWallClockHz = 2.0;
+    constexpr double kWallClockTwoPi = 6.283185307179586;
+    constexpr float kWallClockDepth = 0.5f;
+    constexpr double kMillisecondsPerSecond = 1000.0;
+    const double blockStart = juce::Time::getMillisecondCounterHiRes() / kMillisecondsPerSecond;
+    for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+    {
+        const double time = blockStart + sample / m_sampleRate;
+        const float level = 1.0f - kWallClockDepth * 0.5f * (1.0f + static_cast<float>(std::sin(kWallClockTwoPi * kWallClockHz * time)));
+        for (int channel = 0; channel < mainChannels; ++channel)
+        {
+            buffer.setSample(channel, sample, buffer.getSample(channel, sample) * level);
+        }
     }
 #endif
 #if PLUGINLAB_TEST_PLUGIN_STEREO_MODE == 1
