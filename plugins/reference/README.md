@@ -63,7 +63,7 @@ Linkwitz-Riley low-pass and high-pass. Any other combination passes the audio un
 | Gain | -60 ... 24 dB | all channels |
 | Polarity | Normal, Inverted | |
 | Delay | 0 ... 4800 samples (0.01 steps) | an effect: the reported latency stays 0 |
-| Interpolation | Thiran (all-pass), Lagrange (FIR) | for fractional delays, order 3 (order 1 below 2.5 resp. 0.5 samples) |
+| Interpolation | Thiran (all-pass), Lagrange (FIR) | for fractional delays, order 3 (Thiran: order 1 below 2.5 samples, Lagrange: order 1 below 1 sample; below 0.5 samples always Lagrange order 1) |
 | Width | 0 ... 2 | M/S: 0 mono, 1 unchanged |
 | Crosstalk | -120 ... 0 dB | each channel into the other; -120 dB = off |
 | DC offset | -0.5 ... 0.5 | |

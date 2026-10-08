@@ -15,7 +15,8 @@ constexpr int kInterpolationOrder = 3;
 constexpr float kCrosstalkOffDb = -120.0f;
 constexpr double kWholeSample = 1.0e-6;          // a delay this close to whole samples needs no interpolation
 constexpr double kShortestThiranOrder3 = 2.5;    // Thiran of order N needs a delay of at least N - 0.5 samples
-constexpr double kShortestOrder1 = 0.5;
+constexpr double kShortestOrder1 = 0.5;          // below this even Thiran order 1 is not possible: Lagrange order 1 (linear interpolation)
+constexpr double kShortestLagrangeOrder3 = 1.0;  // Lagrange of odd order N needs (N - 1) / 2 samples
 constexpr int kCaptionHeight = 18;
 
 // The delay line for a delay in samples: integer, or Thiran / Lagrange of order 3 (order 1 for very short delays); nullptr for no delay
@@ -32,7 +33,7 @@ std::unique_ptr<ref::DirectFormFilter> makeDelay(double samples, int interpolati
     if (interpolation == kInterpolationLagrange || samples < kShortestOrder1)
     {
         int order = kInterpolationOrder;
-        if (samples < kShortestOrder1)
+        if (samples < kShortestLagrangeOrder3)
         {
             order = 1;
         }

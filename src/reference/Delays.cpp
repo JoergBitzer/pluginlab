@@ -55,10 +55,15 @@ DirectFormFilter makeThiranDelay(double samples, int order, double sampleRate)
 
 DirectFormFilter makeLagrangeDelay(double samples, int order, double sampleRate)
 {
-    const int rounded = static_cast<int>(std::lround(samples));
-    const int integerDelay = rounded - order / 2;
+    // the fractional delay D of the interpolator in the middle interval of its taps (it interpolates there and extrapolates outside):
+    // odd orders [(N-1)/2, (N+1)/2), even orders [N/2 - 0.5, N/2 + 0.5); the integer delay takes the rest
+    int integerDelay = static_cast<int>(std::lround(samples)) - order / 2;
+    if (order % 2 == 1)
+    {
+        integerDelay = static_cast<int>(std::floor(samples)) - (order - 1) / 2;
+    }
     jassert(integerDelay >= 0);
-    const double delay = order / 2 + (samples - rounded);
+    const double delay = samples - integerDelay;
     std::vector<double> taps(static_cast<size_t>(order + 1));
     for (int k = 0; k <= order; ++k)
     {

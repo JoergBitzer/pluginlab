@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.22)
 
 # The version of the whole project: a new feature raises the second number and sets the third to zero,
 # a fix or other change raises the third (see CLAUDE.md).
-project(pluginlab VERSION 0.24.0)
+project(pluginlab VERSION 0.24.1)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,6 +30,7 @@ add_subdirectory(src/engine)
 add_subdirectory(src/ui)
 add_subdirectory(apps/scanner)
 add_subdirectory(apps/signals)
+add_subdirectory(apps/teaching)
 add_subdirectory(apps/host)
 add_subdirectory(plugins/loader)
 add_subdirectory(plugins/reference)

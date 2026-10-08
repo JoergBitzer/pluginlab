@@ -223,6 +223,11 @@ showed, but by a really independent route (scipy designs, not my formulas), chea
 deconvolution here, and in W7 the measurement units (windowing, THD+N bands, noise weighting), where the prototype's measurement code is the second opinion.
 Proposal: keep it, add cases with W7.
 
+### Fix 0.24.1: Lagrange fractional delays of odd order
+Found with the teaching figure of W6.6: `makeLagrangeDelay` placed the fractional delay of odd orders outside the middle interval of the taps (order 1 at
+10.5 samples: D = -0.5, an extrapolation), so the magnitude rose above 0 dB (order 3 by 0.8 dB). Now odd orders use [(N-1)/2, (N+1)/2); a new test checks
+that a Lagrange delay never has a gain above 1. The tests at DC (delay and gain) had passed before. The Reference Utility uses Lagrange order 3 from 1 sample on.
+
 ## 5. The questions and the author's answers (kept for the record)
 1. **Filter families:** RBJ, Orfanidis, Zölzer, analog prototypes, Butterworth/Linkwitz-Riley, linear-phase FIR and delays: enough, too much, something missing (e.g. Vicanek's matched
    biquads, state-variable filter / TPT/ZDF designs as many modern plugins use them)?

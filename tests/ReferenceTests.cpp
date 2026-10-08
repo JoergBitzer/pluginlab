@@ -538,6 +538,13 @@ private:
                     expectWithinAbsoluteError(-std::arg(thiran.getResponse(kLowFrequency)) / omega, delay, 1.0e-6, "Thiran" + suffix + ": delay at DC");
                     expectWithinAbsoluteError(-std::arg(lagrange.getResponse(kLowFrequency)) / omega, delay, 1.0e-6, "Lagrange" + suffix + ": delay at DC");
                     expectWithinAbsoluteError(std::abs(lagrange.getResponse(0.0)), 1.0, 1.0e-12, "Lagrange" + suffix + ": gain at DC");
+                    // an interpolator (D in the middle interval of the taps) never amplifies; an extrapolating one does
+                    double largestGain = 0.0;
+                    for (const double frequency : getTestFrequencies(sampleRate))
+                    {
+                        largestGain = std::max(largestGain, std::abs(lagrange.getResponse(frequency)));
+                    }
+                    expect(largestGain <= 1.0 + 1.0e-9, "Lagrange" + suffix + ": never above 1, largest " + juce::String(largestGain, 6));
                 }
             }
         }
