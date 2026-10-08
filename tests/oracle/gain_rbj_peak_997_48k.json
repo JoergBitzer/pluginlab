@@ -1,0 +1,32 @@
+{
+ "case": "gain_rbj_peak_997_48k",
+ "kind": "gain",
+ "description": "the prototype's measure_gain (sine 997.0 Hz, -20.0 dBFS, 0.5 s settle, lock-in over whole periods) of an RBJ peak 1000.0 Hz 6.0 dB Q 2.0 at 48000.0 Hz; compared with the selective gain and phase of the C++ unit (W7.1)",
+ "processor": {
+  "type": "rbj",
+  "filter": "peak",
+  "sample_rate": 48000.0,
+  "frequency_hz": 1000.0,
+  "gain_db": 6.0,
+  "q": 2.0
+ },
+ "signal": {
+  "type": "sine",
+  "frequency_hz": 997.0,
+  "level_dbfs": -20.0
+ },
+ "gain_db": 5.999057633849933,
+ "phase_deg": 0.486472260361709,
+ "tolerance": {
+  "gain_db": 0.001,
+  "phase_deg": 0.01
+ },
+ "generator": {
+  "script": "measurement_tool/tools/export_oracle.py",
+  "script_version": "1.1.0",
+  "date": "2026-10-08",
+  "python": "3.12.3",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1"
+ }
+}

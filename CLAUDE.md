@@ -13,6 +13,8 @@ pluginlab (mission: divide the myth from reality) measures, compares and matches
   analytic inverse, the stepped sine; WAV export). `src/reference/`: `pluginlab_reference` (linear reference filters with their exact H(e^jw):
   RBJ, Orfanidis, Zoelzer, state-variable, Butterworth/LR, linear-phase FIR, delays; analog prototypes; W6.3: waveshapers and quantizer with known
   harmonics/SNR, gain, channel matrix, DC, hum, noise adder, tremolo; all derive from `Processor`). `src/engine/`: audio engine and the fingerprint.
+- `src/measure/`: `pluginlab_measure`, the measurement units of W7 after AES17-2015 (`Device`, analyzer, units); one document per unit in
+  `docs/measurements/` (purpose, standard, routine, analysis, validity, results for known test signals). Plan `docs/design/W7-plan.md`.
 - `cmake/Vst2Sdk.cmake` + `vst2_shim/` + `external/FST`: the free VST2 headers (GPL) with five patches; read the comments before touching them.
 - `apps/host/`: stand-alone host application `PluginLabHost` (GUI; command line: `--write-version <file>`, `--report <folder> <file>`,
   `--scan <folder> --load <plugin name>`). `apps/scanner/`: `PluginLabScanner`, scans one plugin file in its own process

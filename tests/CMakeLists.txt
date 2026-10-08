@@ -12,6 +12,7 @@ target_sources(PluginLabTests
         HostedPluginTests.cpp
         ValidatorTests.cpp
         LoaderTests.cpp
+        MeasureGainTests.cpp
         NonlinearReferenceTests.cpp
         OracleTests.cpp
         BrowserTests.cpp
@@ -42,6 +43,7 @@ target_link_libraries(PluginLabTests
         pluginlab_engine
         pluginlab_signals
         pluginlab_reference
+        pluginlab_measure
         pluginlab_loader_core
         juce::juce_core
         juce::juce_dsp
