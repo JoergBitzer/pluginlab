@@ -13,6 +13,7 @@ target_sources(PluginLabTests
         ValidatorTests.cpp
         LoaderTests.cpp
         NonlinearReferenceTests.cpp
+        OracleTests.cpp
         BrowserTests.cpp
         CatalogTests.cpp
         EngineTests.cpp
@@ -30,6 +31,7 @@ target_compile_definitions(PluginLabTests
         JUCE_MODAL_LOOPS_PERMITTED=1
         PLUGINLAB_TEST_PLUGIN_DIR="${PLUGINLAB_TEST_PLUGIN_DIR}"
         PLUGINLAB_REFERENCE_PLUGIN_DIR="${PLUGINLAB_REFERENCE_PLUGIN_DIR}"
+        PLUGINLAB_ORACLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/oracle"
         PLUGINLAB_SCANNER_EXECUTABLE="$<TARGET_FILE:PluginLabScanner>"
         JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_PRODUCT_NAME>"
         JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_VERSION>")

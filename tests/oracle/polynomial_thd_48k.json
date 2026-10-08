@@ -1,0 +1,47 @@
+{
+ "case": "polynomial_thd_48k",
+ "kind": "harmonics",
+ "description": "the prototype's measure_thdn (coherent sine near 1 kHz, 2^16 samples, rectangular window) of y = sum c_n x^n, c = [0.0, 1.0, 0.1, 0.05], sine -6.0 dBFS peak, 48000.0 Hz",
+ "processor": {
+  "type": "polynomial",
+  "coefficients": [
+   0.0,
+   1.0,
+   0.1,
+   0.05
+  ],
+  "sample_rate": 48000.0
+ },
+ "signal": {
+  "type": "sine",
+  "frequency_hz": 999.755859375,
+  "level_dbfs_peak": -6.0
+ },
+ "harmonics_db_re_fundamental": {
+  "harmonic": [
+   2,
+   3,
+   4,
+   5
+  ],
+  "value": [
+   -32.102034398793506,
+   -50.143233636362645,
+   -190.58374654299772,
+   -188.03075616190554
+  ]
+ },
+ "thd_db": -32.0343829001571,
+ "tolerance": {
+  "harmonic_db": 0.01,
+  "thd_db": 0.01
+ },
+ "generator": {
+  "script": "measurement_tool/tools/export_oracle.py",
+  "script_version": "1.0.0",
+  "date": "2026-10-08",
+  "python": "3.12.3",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1"
+ }
+}

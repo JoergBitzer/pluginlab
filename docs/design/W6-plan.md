@@ -205,6 +205,24 @@ Tests and results:
   found exactly what was switched on.
 - Installed (Release) into `~/.vst3` for the author's review in a DAW. Not tested: Windows, macOS, a DAW session.
 
+### W6.5 oracle (0.24.0, done)
+`measurement_tool/tools/export_oracle.py` (Python repository, 0.7.0) writes `tests/oracle/*.json`; `tests/OracleTests.cpp` reads every file and compares
+(list of cases and where each answer comes from: `tests/oracle/README.md`). Results (C++ against the oracle):
+- RBJ peak, low shelf (44.1 kHz), high shelf, low-pass (96 kHz), notch: 1e-11 dB or better against **scipy's bilinear transform of the analog prototypes**;
+  Butterworth order 5 at 96 kHz against `scipy.signal.butter`: 3e-13 dB; Thiran 37.25 samples: coefficients within 1e-12, response 4e-14 dB, group delay
+  37.25 samples at 100 Hz and 1 kHz as scipy.
+- The prototype's own **Farina sweep measurement** of the RBJ peak deviates by 0.0029 dB at most from the exact C++ response (50 Hz ... 15 kHz).
+- The prototype's **THD measurement** of the polynomial equals the closed form of the C++ library (harmonics and THD -32.0344 dB, below 1e-5 dB apart).
+- 16-bit quantizer: SNR 98.0485 dB in both (the formula 6.02 N + 1.76 + 20 log A gives 98.089 dB: the error of a deterministic sine is not quite uniform).
+- Synchronized sweep and deconvolution, same procedure in numpy (double FFT) and C++ (float FFT): 9e-7 dB, 3e-6 degrees. Teaching point found on the way:
+  the first 8192 samples of the deconvolved impulse response give -0.66 dB at 100 Hz and 10 kHz for a filter that has about 0 dB there: the
+  band-limited (30 Hz ... 20 kHz) impulse rings before time 0 (wrapped to the end of the buffer) and is cut; the measurement units of W7 must window it.
+
+Review of the author's reservation ("a little unsure, but no better idea"): for the linear filters the oracle confirms what the analytic tests of W6.2 already
+showed, but by a really independent route (scipy designs, not my formulas), cheaply. Its real use is where only a numerical answer exists: the sweep
+deconvolution here, and in W7 the measurement units (windowing, THD+N bands, noise weighting), where the prototype's measurement code is the second opinion.
+Proposal: keep it, add cases with W7.
+
 ## 5. The questions and the author's answers (kept for the record)
 1. **Filter families:** RBJ, Orfanidis, Zölzer, analog prototypes, Butterworth/Linkwitz-Riley, linear-phase FIR and delays: enough, too much, something missing (e.g. Vicanek's matched
    biquads, state-variable filter / TPT/ZDF designs as many modern plugins use them)?

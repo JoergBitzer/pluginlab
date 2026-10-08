@@ -1,0 +1,30 @@
+{
+ "case": "quantizer16_snr_48k",
+ "kind": "snr",
+ "description": "16-bit mid-tread quantizer without dither, sine 997 Hz of amplitude 1 - 4 q (float32), 2^18 samples at 48000.0 Hz; SNR = signal power / mean squared error",
+ "processor": {
+  "type": "quantizer",
+  "bits": 16,
+  "dither": false,
+  "sample_rate": 48000.0
+ },
+ "signal": {
+  "type": "sine",
+  "frequency_hz": 997.0,
+  "amplitude": 0.9998779296875,
+  "length": 262144
+ },
+ "snr_db": 98.04845956224486,
+ "formula_snr_db": 98.08943964601735,
+ "tolerance": {
+  "snr_db": 0.01
+ },
+ "generator": {
+  "script": "measurement_tool/tools/export_oracle.py",
+  "script_version": "1.0.0",
+  "date": "2026-10-08",
+  "python": "3.12.3",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1"
+ }
+}
