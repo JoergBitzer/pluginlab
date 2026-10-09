@@ -1,9 +1,9 @@
 # W5d: GUI review aids on the Developer page (design and progress)
 
-Status: **W5d.1 ... W5d.3 done on Linux** (2026-10-09, 0.37.0 and 0.38.0; the author's idea of 2026-10-09 in planning §8, row W5d; "You can also start with 5d (the GUI fingerprint)").
+Status: **W5d.1 ... W5d.5 and W5d.7 done** (2026-10-09, 0.37.0 ... 0.41.0; the capture works on Linux, Windows and macOS; W5d.6 accessibility dropped; the author's idea of 2026-10-09 in planning §8, row W5d; "You can also start with 5d (the GUI fingerprint)").
 Goal (planning): the plugin's editor rendered offscreen and shown to the developer in variants that make GUI problems visible at once: (1) grayscale,
 (2) zoom (smallest and largest size, scale factors 1, 1.5, 2), proposed additions (3) colour-vision simulation, (4) a low-contrast map, (5) scale-factor
-honesty, (6) editor robustness, (7) GUI load, (8) accessibility. The risk named in the plan: on Linux a hosted plugin's editor is a native child window
+honesty, (6) editor robustness, (7) GUI load ((8) accessibility was dropped by the author on 2026-10-09: too complicated). The risk named in the plan: on Linux a hosted plugin's editor is a native child window
 (XEmbed for VST2, an X11 child for VST3); JUCE's component snapshot may not capture it; then the virtual display has to be grabbed instead. "Test this
 first."
 
@@ -23,7 +23,7 @@ first."
 | W5d.3 | **Scale-factor honesty and size limits** in the summary: does the editor follow the host's scale factor (size and content), is it resizable, its limits | Reported per plugin; checked with a JUCE plugin that supports scaling and one that does not. |
 | W5d.4 | **Editor robustness**: open and close ten times, open while audio runs (leaks, crashes, dropouts) in a child process | A crashing editor (test plugin) is reported, not fatal. |
 | W5d.5 | **GUI load**: repaints and CPU while nothing changes (idle editor) | Measured for the reference plugins and two real plugins. |
-| W5d.6 | **Accessibility** (JUCE plugins): titles, roles and focus order of the accessibility tree | Reported for the reference plugins. |
+| W5d.6 | ~~Accessibility~~ | **Dropped** by the author (2026-10-09): too complicated (JUCE has no accessibility backend on Linux; Windows and macOS would need UI Automation / NSAccessibility). |
 | W5d.7 | **Developer page**: a "GUI review" button per plugin (child process, like the report) and a view of the contact sheets and the summary | The author can review a plugin's GUI from the host. |
 
 Steps W5d.1 and W5d.2 are the start (this commit); W5d.3 is partly in it (sizes, scale-factor reaction measured and reported).
@@ -130,3 +130,23 @@ capture has the editor (Reference EQ: 9.5 % of the pixels differ from the backgr
   `setContentScaleFactor` there; the system scales by the backing scale). Since 0.40.0 the review says "not applicable" on macOS instead of "ignores".
 - Not tried: plugins that draw with Metal or OpenGL on macOS (the in-process `NSView` cache may miss them; ScreenCaptureKit would need the Screen Recording
   permission), DirectX editors on Windows (what `PW_RENDERFULLCONTENT` is for).
+
+### W5d.7: the GUI review on the Developer page (0.41.0)
+Every row of the Developer page has two more buttons, **GUI review** and **View GUI review**, and a column with the state of the review
+(`apps/host/DeveloperPanel.cpp`). The review runs as a child process (`PluginLabHost --gui-snapshot`) in the same queue as the reports (one plugin process
+at a time) and writes into `<report folder>/<plugin>_gui/`; a review that is being made goes to `..._gui.part` and is put in place only when it is
+complete. If the plugin crashes, the row says **"crashed while <step>"** from the progress file (e.g. "crashed while opening the editor"), and the host goes
+on. The view window shows the summary (as the report) with the two contact sheets below it. The review opens the plugin's editor visibly on the user's
+screen (that is what it measures); the row says "reviewing (editor windows open) ...".
+
+Command line for tests: `PluginLabHost --developer <plugin file> --gui [--view]` loads the plugin, starts the GUI review and shows it when it is ready.
+New: the environment variable `PLUGINLAB_SETTINGS_FOLDER` gives the host a settings and report folder of its own (a test run once wrote a review into
+the author's report folder before this existed; that folder was removed).
+
+Checked by hand in the virtual display (2026-10-09): the Reference EQ (review ready, the view window with summary and contact sheets) and the test editor
+that crashes (the host survives, the row says "crashed while opening the editor", the view stays disabled). No automated test of the page itself (as for
+the report).
+
+### Open
+- Plugins that draw with Metal/OpenGL (macOS) or DirectX (Windows): not tried yet.
+- The leak test editor shows twice the memory it keeps per opening (probably two editor instances per opening): not verified.

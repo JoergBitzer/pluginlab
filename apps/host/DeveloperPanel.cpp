@@ -19,6 +19,7 @@ constexpr int kColumnFormat = 3;
 constexpr int kColumnStatus = 4;
 constexpr int kColumnDate = 5;
 constexpr int kColumnActions = 6;
+constexpr int kColumnGui = 7;
 constexpr int kFirstSummaryColumn = 10; // the columns of the single results follow, in the order of kSummaryColumns
 constexpr int kWidthSummary = 90;
 const juce::Colour kDoubtfulColour(0xffffa040);
@@ -27,7 +28,8 @@ constexpr int kWidthName = 200;
 constexpr int kWidthFormat = 60;
 constexpr int kWidthStatus = 180;
 constexpr int kWidthDate = 150;
-constexpr int kWidthActions = 240;
+constexpr int kWidthActions = 480;
+constexpr int kWidthGui = 220;
 constexpr int kButtonWidth = 110;
 constexpr int kProcessTimeoutMs = 20 * 60 * 1000; // the measurement loads the plugin many times; a big plugin needs minutes
 constexpr int kPollMs = 200;
@@ -36,6 +38,9 @@ constexpr int kReportWindowWidth = 1000;
 constexpr int kReportWindowHeight = 720;
 constexpr float kTextFontHeight = 14.0f;
 const juce::String kReportExtension = ".md";
+const juce::String kGuiFolderSuffix = "_gui";
+const juce::String kGuiReviewFile = "gui_review.md";
+const juce::String kGuiWindowSuffix = "#gui";
 const juce::String kDateFormat = "%Y-%m-%d %H:%M";
 }
 
@@ -55,17 +60,18 @@ juce::File getSummaryFile(const juce::File& reportFile)
     return juce::File(reportFile.getFullPathName() + ".json");
 }
 
-// Runs "PluginLabHost --fingerprint" for one plugin in a child process and tells the panel when it has ended.
-class FingerprintJob : public juce::Thread
+// Runs "PluginLabHost --fingerprint" (a report) or "PluginLabHost --gui-snapshot" (a GUI review) for one plugin in a child process and tells the
+// panel when it has ended. The result is written next to its place and put there only when it is complete: a half-written result is never shown.
+class PanelJob : public juce::Thread
 {
 public:
-    FingerprintJob(DeveloperPanel& owner, const juce::File& pluginFile, const juce::String& identifier, const juce::File& reportFile,
-                   const juce::String& key)
-        : juce::Thread("FingerprintJob"), m_owner(owner), m_pluginFile(pluginFile), m_identifier(identifier), m_reportFile(reportFile), m_key(key)
+    PanelJob(DeveloperPanel& owner, DeveloperPanel::JobKind kind, const juce::File& pluginFile, const juce::String& identifier, const juce::File& target,
+             const juce::String& key)
+        : juce::Thread("PanelJob"), m_owner(owner), m_kind(kind), m_pluginFile(pluginFile), m_identifier(identifier), m_target(target), m_key(key)
     {
     }
 
-    ~FingerprintJob() override
+    ~PanelJob() override
     {
         signalThreadShouldExit();
         stopThread(kStopTimeoutMs);
@@ -73,16 +79,19 @@ public:
 
     void run() override
     {
-        // written next to the report and put in place when it is complete: a report that is being written is never shown
-        const juce::File temporary = m_reportFile.withFileExtension(".part");
-        temporary.deleteFile();
-        m_reportFile.getParentDirectory().createDirectory();
-
+        const juce::File temporary = m_target.withFileExtension(".part");
+        temporary.deleteRecursively();
+        m_target.getParentDirectory().createDirectory();
+        juce::String option = "--fingerprint";
+        if (m_kind == DeveloperPanel::JobKind::GuiReview)
+        {
+            option = "--gui-snapshot";
+        }
         juce::ChildProcess process;
         const juce::File host = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
-        const juce::StringArray arguments{host.getFullPathName(), "--fingerprint", m_pluginFile.getFullPathName(), temporary.getFullPathName(),
-                                          m_identifier};
+        const juce::StringArray arguments{host.getFullPathName(), option, m_pluginFile.getFullPathName(), temporary.getFullPathName(), m_identifier};
         bool success = false;
+        juce::String message;
         if (process.start(arguments, 0))
         {
             const juce::int64 started = juce::Time::getMillisecondCounter();
@@ -97,35 +106,64 @@ public:
             if (process.isRunning())
             {
                 process.kill();
+                message = "stopped (time limit)";
             }
             else
             {
-                // (a child that died from a signal reports exit code 0 on POSIX: the report file is what counts)
-                success = temporary.existsAsFile() && temporary.getSize() > 0 && temporary.moveFileTo(m_reportFile);
-                if (success)
-                {
-                    getSummaryFile(temporary).moveFileTo(getSummaryFile(m_reportFile));
-                }
+                // (a child that died from a signal reports exit code 0 on POSIX: the result file is what counts)
+                success = finish(temporary, message);
             }
         }
-        temporary.deleteFile();
+        else
+        {
+            message = "could not start the host process";
+        }
+        temporary.deleteRecursively();
         getSummaryFile(temporary).deleteFile();
         const juce::Component::SafePointer<DeveloperPanel> owner(&m_owner);
         const juce::String key = m_key;
-        juce::MessageManager::callAsync([owner, key, success]
+        const DeveloperPanel::JobKind kind = m_kind;
+        juce::MessageManager::callAsync([owner, key, kind, success, message]
                                         {
                                             if (owner != nullptr)
                                             {
-                                                owner->jobFinished(key, success);
+                                                owner->jobFinished(key, kind, success, message);
                                             }
                                         });
     }
 
 private:
+    // moves a complete result into place; for a GUI review that did not complete, the step it was in (progress.txt) is the message
+    bool finish(const juce::File& temporary, juce::String& message) const
+    {
+        if (m_kind == DeveloperPanel::JobKind::Report)
+        {
+            const bool complete = temporary.existsAsFile() && temporary.getSize() > 0 && temporary.moveFileTo(m_target);
+            if (complete)
+            {
+                getSummaryFile(temporary).moveFileTo(getSummaryFile(m_target));
+            }
+            return complete;
+        }
+        const juce::String progress = temporary.getChildFile("progress.txt").loadFileAsString().trim();
+        if (! temporary.getChildFile(kGuiReviewFile).existsAsFile() || progress != "done")
+        {
+            message = "crashed while " + progress;
+            if (progress.isEmpty())
+            {
+                message = "crashed before the review started";
+            }
+            return false;
+        }
+        m_target.deleteRecursively();
+        return temporary.moveFileTo(m_target);
+    }
+
     DeveloperPanel& m_owner;
+    DeveloperPanel::JobKind m_kind;
     juce::File m_pluginFile;
     juce::String m_identifier;
-    juce::File m_reportFile;
+    juce::File m_target;
     juce::String m_key;
 };
 
@@ -322,7 +360,61 @@ private:
     Content m_content;
 };
 
-// The cell with the two buttons of a row
+// A window with the GUI review: its summary (as the report) and the two contact sheets (vision variants, sizes and scale factors) below it
+class GuiReviewWindow : public juce::DocumentWindow
+{
+public:
+    GuiReviewWindow(DeveloperPanel& owner, const juce::String& key, const juce::String& title, const juce::File& folder)
+        : juce::DocumentWindow(title, juce::Desktop::getInstance().getDefaultLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId),
+                               juce::DocumentWindow::allButtons),
+          m_owner(owner),
+          m_key(key),
+          m_view(folder.getChildFile(kGuiReviewFile).loadFileAsString())
+    {
+        m_content.addAndMakeVisible(m_view);
+        int width = m_view.getWidth();
+        int height = m_view.getHeight();
+        for (const char* name : {"contact_sheet_vision.png", "contact_sheet_sizes.png"})
+        {
+            const juce::Image image = juce::ImageFileFormat::loadFrom(folder.getChildFile(name));
+            if (! image.isValid())
+            {
+                continue;
+            }
+            auto sheet = std::make_unique<juce::ImageComponent>();
+            sheet->setImage(image, juce::RectanglePlacement(juce::RectanglePlacement::xLeft | juce::RectanglePlacement::yTop | juce::RectanglePlacement::doNotResize));
+            sheet->setBounds(0, height + kMargin, image.getWidth(), image.getHeight());
+            height += image.getHeight() + kMargin;
+            width = juce::jmax(width, image.getWidth());
+            m_content.addAndMakeVisible(*sheet);
+            m_sheets.push_back(std::move(sheet));
+        }
+        m_content.setSize(width, height);
+        m_viewport.setViewedComponent(&m_content, false);
+        m_viewport.setScrollBarsShown(true, true);
+        m_viewport.setSize(kReportWindowWidth, kReportWindowHeight);
+        setUsingNativeTitleBar(true);
+        setContentNonOwned(&m_viewport, true);
+        setResizable(true, false);
+        centreWithSize(kReportWindowWidth, kReportWindowHeight);
+        setVisible(true);
+    }
+
+    void closeButtonPressed() override
+    {
+        m_owner.closeWindow(m_key);
+    }
+
+private:
+    DeveloperPanel& m_owner;
+    juce::String m_key;
+    ReportView m_view;
+    juce::Component m_content;
+    std::vector<std::unique_ptr<juce::ImageComponent>> m_sheets;
+    juce::Viewport m_viewport;
+};
+
+// The cell with the buttons of a row: the report and the GUI review
 class ActionCell : public juce::Component
 {
 public:
@@ -331,23 +423,31 @@ public:
     {
         m_generate.onClick = [this] { m_owner.generateReport(m_row); };
         m_view.onClick = [this] { m_owner.viewReport(m_row); };
-        addAndMakeVisible(m_generate);
-        addAndMakeVisible(m_view);
+        m_review.onClick = [this] { m_owner.generateGuiReview(m_row); };
+        m_viewGui.onClick = [this] { m_owner.viewGuiReview(m_row); };
+        for (juce::TextButton* button : {&m_generate, &m_view, &m_review, &m_viewGui})
+        {
+            addAndMakeVisible(button);
+        }
     }
 
-    void update(int row, bool ready, bool busy)
+    void update(int row, bool ready, bool busy, bool guiReady, bool guiBusy)
     {
         m_row = row;
         m_view.setEnabled(ready);
         m_generate.setEnabled(! busy);
+        m_viewGui.setEnabled(guiReady);
+        m_review.setEnabled(! guiBusy);
     }
 
     void resized() override
     {
         juce::Rectangle<int> area = getLocalBounds().reduced(2);
-        m_generate.setBounds(area.removeFromLeft(kButtonWidth));
-        area.removeFromLeft(kMargin);
-        m_view.setBounds(area.removeFromLeft(kButtonWidth));
+        for (juce::TextButton* button : {&m_generate, &m_view, &m_review, &m_viewGui})
+        {
+            button->setBounds(area.removeFromLeft(kButtonWidth));
+            area.removeFromLeft(kMargin);
+        }
     }
 
 private:
@@ -355,6 +455,8 @@ private:
     int m_row = 0;
     juce::TextButton m_generate{"Generate report"};
     juce::TextButton m_view{"View report"};
+    juce::TextButton m_review{"GUI review"};
+    juce::TextButton m_viewGui{"View GUI review"};
 };
 
 DeveloperPanel::DeveloperPanel(pluginlab::engine::MeasurementEngine& engine, HostSettings& settings)
@@ -368,6 +470,7 @@ DeveloperPanel::DeveloperPanel(pluginlab::engine::MeasurementEngine& engine, Hos
     m_table.getHeader().addColumn("Plugin", kColumnName, kWidthName);
     m_table.getHeader().addColumn("", kColumnActions, kWidthActions);
     m_table.getHeader().addColumn("Report", kColumnStatus, kWidthStatus);
+    m_table.getHeader().addColumn("GUI review", kColumnGui, kWidthGui);
     for (int index = 0; index < kNumberOfSummaryColumns; ++index)
     {
         m_table.getHeader().addColumn(kSummaryColumns[index].title, kFirstSummaryColumn + index, kWidthSummary);
@@ -376,7 +479,8 @@ DeveloperPanel::DeveloperPanel(pluginlab::engine::MeasurementEngine& engine, Hos
     m_table.getHeader().addColumn("Date", kColumnDate, kWidthDate);
     m_infoLabel.setText("The plugins loaded on the Plugins page. The columns show the single results of the last report (orange: worth a look; the tooltip "
                         "gives the number). A report tests a plugin technically (parameters, latency at three sample rates, block sizes, "
-                        "delivery of parameters, robustness) in a process of its own; it can take a minute. Reports are kept in "
+                        "delivery of parameters, robustness, AES17 measurements) in a process of its own; it can take a minute. The GUI review opens the plugin's "
+                        "editor in windows of its own (captures, colour-vision variants, scale factors, robustness, load). Reports are kept in "
                         + m_settings.getFingerprintFolder().getFullPathName() + ".",
                         juce::dontSendNotification);
     m_infoLabel.setMinimumHorizontalScale(1.0f);
@@ -438,7 +542,18 @@ void DeveloperPanel::refresh()
         row.pluginFile = juce::File(row.description.fileOrIdentifier);
         row.key = row.description.createIdentifierString();
         row.reportFile = makeReportFile(row.description);
+        row.guiFolder = row.reportFile.getSiblingFile(row.reportFile.getFileNameWithoutExtension() + kGuiFolderSuffix);
         const Row* known = findRow(row.key);
+        row.guiState = State::NoReport;
+        if (row.guiFolder.getChildFile(kGuiReviewFile).existsAsFile())
+        {
+            row.guiState = State::Ready;
+        }
+        if (known != nullptr && (known->guiState == State::Waiting || known->guiState == State::Running || known->guiState == State::Failed))
+        {
+            row.guiState = known->guiState;
+            row.guiMessage = known->guiMessage;
+        }
         if (known != nullptr && (known->state == State::Waiting || known->state == State::Running || known->state == State::Failed))
         {
             row.state = known->state;
@@ -453,7 +568,7 @@ void DeveloperPanel::refresh()
     // reports of plugins that were unloaded are not shown any more
     for (auto window = m_windows.begin(); window != m_windows.end();)
     {
-        if (findRow(window->first) == nullptr)
+        if (findRow(window->first.upToFirstOccurrenceOf(kGuiWindowSuffix, false, false)) == nullptr)
         {
             window = m_windows.erase(window);
             continue;
@@ -551,6 +666,10 @@ void DeveloperPanel::paintCell(juce::Graphics& g, int rowNumber, int columnId, i
     {
         text = getStatusText(rowNumber);
     }
+    else if (columnId == kColumnGui)
+    {
+        text = getGuiStatusText(rowNumber);
+    }
     else if (columnId == kColumnDate && row.reportFile.existsAsFile())
     {
         text = row.reportTime.formatted(kDateFormat);
@@ -625,23 +744,40 @@ juce::Component* DeveloperPanel::refreshComponentForCell(int rowNumber, int colu
         cell = new ActionCell(*this);
     }
     const Row& row = m_rows[static_cast<size_t>(rowNumber)];
-    cell->update(rowNumber, isReportReady(rowNumber), row.state == State::Running || row.state == State::Waiting);
+    cell->update(rowNumber, isReportReady(rowNumber), row.state == State::Running || row.state == State::Waiting, isGuiReviewReady(rowNumber),
+                 row.guiState == State::Running || row.guiState == State::Waiting);
     return cell;
 }
 
 void DeveloperPanel::generateReport(int row)
+{
+    queueJob(row, JobKind::Report);
+}
+
+void DeveloperPanel::generateGuiReview(int row)
+{
+    queueJob(row, JobKind::GuiReview);
+}
+
+void DeveloperPanel::queueJob(int row, JobKind kind)
 {
     if (row < 0 || row >= static_cast<int>(m_rows.size()))
     {
         return;
     }
     Row& entry = m_rows[static_cast<size_t>(row)];
-    if (entry.state == State::Running || entry.state == State::Waiting)
+    State* stateOfKind = &entry.state;
+    if (kind == JobKind::GuiReview)
+    {
+        stateOfKind = &entry.guiState;
+    }
+    State& target = *stateOfKind;
+    if (target == State::Running || target == State::Waiting)
     {
         return;
     }
-    entry.state = State::Waiting;
-    m_queue.push_back(entry.key);
+    target = State::Waiting;
+    m_queue.emplace_back(entry.key, kind);
     m_table.updateContent();
     m_table.repaint();
     startNextJob();
@@ -653,7 +789,7 @@ void DeveloperPanel::startNextJob()
     {
         return;
     }
-    const juce::String key = m_queue.front();
+    const auto [key, kind] = m_queue.front();
     m_queue.pop_front();
     Row* row = findRow(key);
     if (row == nullptr)
@@ -661,36 +797,115 @@ void DeveloperPanel::startNextJob()
         startNextJob(); // the plugin was unloaded in the meantime
         return;
     }
-    row->state = State::Running;
     // a file with many plugins (a bundle): only this plugin is measured
-    m_job = std::make_unique<FingerprintJob>(*this, row->pluginFile, row->key, row->reportFile, row->key);
+    if (kind == JobKind::Report)
+    {
+        row->state = State::Running;
+        m_job = std::make_unique<PanelJob>(*this, kind, row->pluginFile, row->key, row->reportFile, row->key);
+    }
+    else
+    {
+        row->guiState = State::Running;
+        m_job = std::make_unique<PanelJob>(*this, kind, row->pluginFile, row->key, row->guiFolder, row->key);
+    }
     m_job->startThread();
     m_table.updateContent();
     m_table.repaint();
 }
 
-void DeveloperPanel::jobFinished(const juce::String& key, bool success)
+void DeveloperPanel::jobFinished(const juce::String& key, JobKind kind, bool success, const juce::String& message)
 {
     m_job.reset();
     Row* row = findRow(key);
     if (row != nullptr)
     {
-        if (success)
+        const int index = static_cast<int>(row - m_rows.data());
+        if (kind == JobKind::Report)
         {
-            updateRowFromDisk(*row);
-            if (onReportReady)
+            if (success)
             {
-                onReportReady(static_cast<int>(row - m_rows.data()));
+                updateRowFromDisk(*row);
+                if (onReportReady)
+                {
+                    onReportReady(index);
+                }
+            }
+            else
+            {
+                row->state = State::Failed;
             }
         }
         else
         {
-            row->state = State::Failed;
+            row->guiState = State::Failed;
+            row->guiMessage = message;
+            if (success)
+            {
+                row->guiState = State::Ready;
+                row->guiMessage.clear();
+                m_windows.erase(key + kGuiWindowSuffix); // an open window shows the old review
+                if (onGuiReviewReady)
+                {
+                    onGuiReviewReady(index);
+                }
+            }
         }
     }
     m_table.updateContent();
     m_table.repaint();
     startNextJob();
+}
+
+juce::String DeveloperPanel::getGuiStatusText(int row) const
+{
+    if (row < 0 || row >= static_cast<int>(m_rows.size()))
+    {
+        return {};
+    }
+    const Row& entry = m_rows[static_cast<size_t>(row)];
+    switch (entry.guiState)
+    {
+        case State::NoReport:
+            return "no review yet";
+        case State::Waiting:
+            return "waiting ...";
+        case State::Running:
+            return "reviewing (editor windows open) ...";
+        case State::Failed:
+            return entry.guiMessage;
+        case State::Ready:
+            return "ready";
+    }
+    return {};
+}
+
+bool DeveloperPanel::isGuiReviewReady(int row) const
+{
+    if (row < 0 || row >= static_cast<int>(m_rows.size()))
+    {
+        return false;
+    }
+    const Row& entry = m_rows[static_cast<size_t>(row)];
+    return entry.guiFolder.getChildFile(kGuiReviewFile).existsAsFile() && entry.guiState != State::Running && entry.guiState != State::Waiting;
+}
+
+void DeveloperPanel::viewGuiReview(int row)
+{
+    if (! isGuiReviewReady(row))
+    {
+        return;
+    }
+    const Row& entry = m_rows[static_cast<size_t>(row)];
+    const juce::String windowKey = entry.key + kGuiWindowSuffix;
+    const auto existing = m_windows.find(windowKey);
+    if (existing != m_windows.end())
+    {
+        existing->second->toFront(true);
+        return;
+    }
+    const juce::Time time = entry.guiFolder.getChildFile(kGuiReviewFile).getLastModificationTime();
+    const juce::String title = "GUI review: " + hosting::getDisplayName(entry.description) + " (" + time.formatted(kDateFormat) + ")";
+    m_windows[windowKey] = std::make_unique<GuiReviewWindow>(*this, windowKey, title, entry.guiFolder);
 }
 
 void DeveloperPanel::viewReport(int row)

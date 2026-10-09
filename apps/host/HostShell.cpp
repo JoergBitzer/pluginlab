@@ -76,11 +76,23 @@ HostShell::HostShell(const StartupOptions& options)
         {
             m_pluginsPage->loadPlugin(scan.descriptions[0]);
             setCurrentTabIndex(2);
-            if (options.developerView)
+            if (options.developerGui)
             {
-                m_developerPage->onReportReady = [this](int row) { m_developerPage->viewReport(row); };
+                // the GUI review instead of the report (W5d.7)
+                if (options.developerView)
+                {
+                    m_developerPage->onGuiReviewReady = [this](int row) { m_developerPage->viewGuiReview(row); };
+                }
+                m_developerPage->generateGuiReview(0);
             }
-            m_developerPage->generateReport(0);
+            else
+            {
+                if (options.developerView)
+                {
+                    m_developerPage->onReportReady = [this](int row) { m_developerPage->viewReport(row); };
+                }
+                m_developerPage->generateReport(0);
+            }
         }
     }
 

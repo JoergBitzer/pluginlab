@@ -32,8 +32,9 @@ const juce::String kMeasureOption = "--measure";         // --measure <plugin fi
 const juce::String kGuiSnapshotOption = "--gui-snapshot"; // --gui-snapshot <plugin file> <folder>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
-const juce::String kDeveloperOption = "--developer"; // --developer <plugin file> [--view]: opens the Developer page and makes (and shows) the report
+const juce::String kDeveloperOption = "--developer"; // --developer <plugin file> [--gui] [--view]: opens the Developer page and makes (and shows) the report or the GUI review
 const juce::String kViewOption = "--view";
+const juce::String kGuiOption = "--gui";         // with --developer: the GUI review instead of the report
 const juce::String kPlayOption = "--play"; // --play <seconds> <report file> (with --compare): plays, writes the report, quits
 const juce::String kCompareOption = "--compare"; // --compare <audio file> [<plugin file>]: opens the Compare page
 constexpr int kArgumentsOfOneValue = 1;
@@ -200,6 +201,7 @@ public:
         {
             options.developerPlugin = resolveFile(arguments[developerIndex + 1]);
             options.developerView = arguments.contains(kViewOption);
+            options.developerGui = arguments.contains(kGuiOption);
         }
 
         const int playIndex = arguments.indexOf(kPlayOption);

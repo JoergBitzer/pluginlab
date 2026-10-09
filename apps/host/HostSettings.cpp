@@ -20,6 +20,12 @@ HostSettings::HostSettings() = default;
 
 juce::File HostSettings::getFolder() const
 {
+    // tests (and test runs of the host) give a folder of their own, so that they never touch the user's settings and reports
+    const juce::String overridden = juce::SystemStats::getEnvironmentVariable("PLUGINLAB_SETTINGS_FOLDER", {});
+    if (overridden.isNotEmpty())
+    {
+        return juce::File(overridden);
+    }
     return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile(kFolderName);
 }
 
