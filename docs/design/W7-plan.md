@@ -111,3 +111,12 @@ aliases and coinciding products included), also after a low-pass (Hammerstein): 
 3 x 500 Hz within 0.05 dB, independent of the window length. No oracle (the prototype has no IMD). The plan's 19/20 kHz was the CCIF pair; AES17 uses
 18 + 20 kHz. Finding for the report: AES17's modulation distortion sees only even orders (a symmetric curve has MD at the floor and shows at +-2 f1).
 The Hammerstein test device moved to `tests/MeasureTestDevices.h`.
+
+### W7.7 noise (0.32.0, done)
+`measureIdleNoise` (AES17 6.4.2, digital zero), `measureDynamicRange` (6.4.1, 997 Hz at -60 dBFS, standard notch), `measureMainsProducts` (6.5.1, bands half
+the mains frequency wide at M x mains, M = 1 ... 5, a window of whole seconds). Weightings (`Weighting.h`): unweighted (standard low-pass), 20 Hz ... 20 kHz,
+CCIR-RMS (BS.468-4 - 5.63 dB, 5.2.7) and A (IEC 61672-1 annex E), applied as the analogue magnitude on the bins of the spectrum (no warping). Document
+`docs/measurements/noise.md`. Tests `tests/MeasureNoiseTests.cpp`: CCIR-RMS within 0.08 dB of AES17 table 1, A within 0.04 dB of IEC 61672-1; dithered
+16/24-bit quantizers and added white noise within 0.07 dB of their known level in every weighting (idle and dynamic range); undithered 16 bits: dynamic
+range 98.07 dB against 6.02 N + 1.76 = 98.09 dB, idle silent; hum lines exact to 0.001 dB. Found on the way: the BS.468 closed form as remembered had a
+wrong constant (18.3 dB); the curve is normalised at 1 kHz instead and checked against table 1.

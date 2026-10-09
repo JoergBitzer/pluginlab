@@ -7,9 +7,11 @@ add_library(pluginlab_measure STATIC
     Distortion.cpp
     FrequencyResponse.cpp
     Intermodulation.cpp
+    Noise.cpp
     Gain.cpp
     Phase.cpp
-    SweptImpulse.cpp)
+    SweptImpulse.cpp
+    Weighting.cpp)
 
 target_include_directories(pluginlab_measure
     PUBLIC
