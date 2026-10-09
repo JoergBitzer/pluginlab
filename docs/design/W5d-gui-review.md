@@ -153,10 +153,10 @@ The same seven test editors and the Reference EQ on both systems:
 | Test editor | Windows | macOS |
 |---|---|---|
 | Crashes | exit 139, progress "opening the editor" | exit 139, progress "opening the editor" |
-| Leaks (20 MB per opening) | 41.95 MB per opening, probable leak | (as Windows, flagged) |
+| Leaks (20 MB per opening) | 41.95 MB per opening, probable leak | 43.08 MB per opening, probable leak |
 | Busy (60 Hz x 10 ms) | idle load 58.3 % | 20.2 % |
 | Blocks audio (30 Hz x 30 ms lock) | 46 of 161 blocks late, longest 28.4 ms; load 76.6 % | 7 of 92 blocks late, longest 27.0 ms; load 31.6 % |
-| Scales, Ignores, Size only, Reference EQ (correct) | 0 late blocks, 0.00 ... 0.02 MB per opening, load 0.0 ... 0.5 % | 0 late blocks, about 1.1 MB per opening (below the 5 MB flag), low load |
+| Scales, Ignores, Size only, Reference EQ (correct) | 0 late blocks, 0.00 ... 0.02 MB per opening, load 0.0 ... 0.5 % | 0 late blocks, 1.09 ... 1.10 MB per opening (Reference EQ 2.30 MB; below the 5 MB flag), low load |
 
 Every wrong editor is found on both systems. Differences to note: on macOS the audio thread reached only about 90 blocks in 2 s instead of 188 (the
 sleep of the pacing loop is coarse there), and the busy editors cost less CPU (their repaints are throttled); the memory of correct editors grows by
