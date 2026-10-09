@@ -40,7 +40,9 @@ template's float parameters in `tools/ParameterSpec.h`, and the grid of knobs an
 | Order | 1 ... 8 | Butterworth 1 ... 8; Linkwitz-Riley 2, 4, 8 (rounded up); Zoelzer shelves 1st or 2nd order |
 
 Offered combinations: RBJ and state variable all types; Orfanidis the peak; Zoelzer the shelves and the peak; Butterworth and
-Linkwitz-Riley low-pass and high-pass. Any other combination passes the audio unchanged, and the GUI says so.
+Linkwitz-Riley low-pass and high-pass. In the GUI the types an algorithm does not offer are greyed out, and a type that is not offered after a change of
+the algorithm moves to the algorithm's default (peak, resp. low-pass for Butterworth and Linkwitz-Riley; author's request, 0.27.1). Set by automation, a
+combination that is not offered passes the audio unchanged, and the GUI says so.
 
 ### PluginLab Reference Nonlinear
 | Control | Range | Meaning |

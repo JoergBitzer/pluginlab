@@ -40,7 +40,18 @@ void ReferenceControls::addChoice(const ChoiceSpec& spec)
     box->addItemList(spec.choices, 1);
     box->setTooltip(choiceHelpText(spec));
     m_comboAttachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(m_state, juce::String(spec.ID), *box));
+    m_comboBoxes[juce::String(spec.ID)] = box.get();
     addCell(juce::String(spec.name), std::move(box));
+}
+
+juce::ComboBox* ReferenceControls::getComboBox(const juce::String& parameterId) const
+{
+    const auto found = m_comboBoxes.find(parameterId);
+    if (found == m_comboBoxes.end())
+    {
+        return nullptr;
+    }
+    return found->second;
 }
 
 void ReferenceControls::addCell(const juce::String& name, std::unique_ptr<juce::Component> control)

@@ -80,6 +80,33 @@ EqSetting makeEqSetting(int algorithmIndex, int typeIndex, double frequencyHz, d
     return setting;
 }
 
+bool isTypeAvailable(EqAlgorithm algorithm, ref::FilterType type)
+{
+    switch (algorithm)
+    {
+        case EqAlgorithm::Rbj:
+        case EqAlgorithm::StateVariable:
+            return true;
+        case EqAlgorithm::Orfanidis:
+            return type == ref::FilterType::Peak;
+        case EqAlgorithm::Zoelzer:
+            return type == ref::FilterType::Peak || type == ref::FilterType::LowShelf || type == ref::FilterType::HighShelf;
+        case EqAlgorithm::Butterworth:
+        case EqAlgorithm::LinkwitzRiley:
+            return isPass(type);
+    }
+    return false;
+}
+
+ref::FilterType getDefaultType(EqAlgorithm algorithm)
+{
+    if (algorithm == EqAlgorithm::Butterworth || algorithm == EqAlgorithm::LinkwitzRiley)
+    {
+        return ref::FilterType::LowPass;
+    }
+    return ref::FilterType::Peak;
+}
+
 EqDesign designEq(const EqSetting& setting, double sampleRate)
 {
     const double frequency = std::min(setting.frequencyHz, kHighestFrequencyRatio * sampleRate);
@@ -93,7 +120,7 @@ EqDesign designEq(const EqSetting& setting, double sampleRate)
             design.description = "RBJ cookbook " + typeName;
             return design;
         case EqAlgorithm::Orfanidis:
-            if (setting.type != ref::FilterType::Peak)
+            if (!isTypeAvailable(setting.algorithm, setting.type))
             {
                 return makeUnsupported("Orfanidis offers the peak filter only");
             }
@@ -285,6 +312,7 @@ ReferenceEqGUI::ReferenceEqGUI(ReferenceEqAudioProcessor& p, juce::AudioProcesso
     m_controls.addKnob(g_paramOrder);
     addAndMakeVisible(m_controls);
     m_shownSetting = readSetting();
+    updateTypeChoice(m_shownSetting);
     startTimerHz(kTimerHz);
 }
 
@@ -296,9 +324,44 @@ EqSetting ReferenceEqGUI::readSetting() const
                          m_apvts.getRawParameterValue(g_paramQ.ID)->load(), m_apvts.getRawParameterValue(g_paramOrder.ID)->load());
 }
 
+void ReferenceEqGUI::updateTypeChoice(const EqSetting& setting)
+{
+    juce::ComboBox* box = m_controls.getComboBox(g_paramType.ID);
+    if (box == nullptr)
+    {
+        return;
+    }
+    if (!m_typesShown || setting.algorithm != m_typesAlgorithm)
+    {
+        for (int index = 0; index < static_cast<int>(std::size(kTypes)); ++index)
+        {
+            box->setItemEnabled(index + 1, isTypeAvailable(setting.algorithm, kTypes[index]));
+        }
+        m_typesShown = true;
+        m_typesAlgorithm = setting.algorithm;
+    }
+    if (isTypeAvailable(setting.algorithm, setting.type))
+    {
+        return;
+    }
+    // the chosen type is not offered by the new algorithm: move it to the algorithm's default (as a user gesture, so that the host records it)
+    const ref::FilterType wanted = getDefaultType(setting.algorithm);
+    for (int index = 0; index < static_cast<int>(std::size(kTypes)); ++index)
+    {
+        if (kTypes[index] == wanted)
+        {
+            juce::RangedAudioParameter* parameter = m_apvts.getParameter(g_paramType.ID);
+            parameter->beginChangeGesture();
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(static_cast<float>(index)));
+            parameter->endChangeGesture();
+        }
+    }
+}
+
 void ReferenceEqGUI::timerCallback()
 {
     const EqSetting setting = readSetting();
+    updateTypeChoice(setting);
     if (!(setting == m_shownSetting))
     {
         m_shownSetting = setting;

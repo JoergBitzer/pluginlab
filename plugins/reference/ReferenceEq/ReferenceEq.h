@@ -77,7 +77,7 @@ const pluginlab::refplugins::ChoiceSpec g_paramAlgorithm{
 
 const pluginlab::refplugins::ChoiceSpec g_paramType{
     "type", "Type", {"Low-pass", "High-pass", "Band-pass", "Band-pass 0 dB", "Notch", "All-pass", "Peak", "Low shelf", "High shelf"}, 6,
-    "The filter type. A combination the algorithm does not offer passes the audio unchanged (the GUI says so)."};
+    "The filter type. Types the algorithm does not offer are greyed out (set by automation, they pass the audio unchanged)."};
 
 enum class EqAlgorithm
 {
@@ -113,6 +113,11 @@ struct EqDesign
 };
 
 EqSetting makeEqSetting(int algorithmIndex, int typeIndex, double frequencyHz, double gainDb, double q, double order);
+
+// Whether an algorithm offers a filter type (RBJ and state variable: all; Orfanidis: peak; Zoelzer: shelves and peak; Butterworth, Linkwitz-Riley:
+// low-pass and high-pass), and the type the GUI switches to when the chosen one is not offered
+bool isTypeAvailable(EqAlgorithm algorithm, pluginlab::reference::FilterType type);
+pluginlab::reference::FilterType getDefaultType(EqAlgorithm algorithm);
 EqDesign designEq(const EqSetting& setting, double sampleRate);
 // The exact response of the design (1 for a combination that is not offered)
 std::complex<double> getEqResponse(const EqDesign& design, const EqSetting& setting, double frequencyHz, double sampleRate);
@@ -165,10 +170,14 @@ public:
 private:
     void timerCallback() override;
     EqSetting readSetting() const;
+    // Greys out the types the algorithm does not offer and moves an unavailable type to the algorithm's default
+    void updateTypeChoice(const EqSetting& setting);
 
     ReferenceEqAudioProcessor& m_processor;
     juce::AudioProcessorValueTreeState& m_apvts;
     pluginlab::refplugins::ReferenceControls m_controls;
     juce::Rectangle<int> m_plotArea;
     EqSetting m_shownSetting;
+    bool m_typesShown = false;
+    EqAlgorithm m_typesAlgorithm = EqAlgorithm::Rbj;
 };

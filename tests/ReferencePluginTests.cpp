@@ -3,9 +3,12 @@
 #include <memory>
 #include <vector>
 
+#include <juce_audio_processors/juce_audio_processors.h>
+
 #include "TestPluginPaths.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
+#include "pluginlab/ui/GuiFormats.h"
 #include "pluginlab/reference/Delays.h"
 #include "pluginlab/reference/Designs.h"
 #include "pluginlab/reference/Nonlinear.h"
@@ -50,23 +53,36 @@ public:
     void runTest() override
     {
         pluginlab::hosting::addHeadlessFormats(m_formats);
+        pluginlab::ui::addGuiFormats(m_guiFormats);
         testEq();
+        testEqTypeChoice();
         testNonlinear();
         testUtility();
     }
 
 private:
-    std::unique_ptr<juce::AudioPluginInstance> load(const juce::String& pluginName, double sampleRate)
+    juce::AudioPluginFormatManager& getFormats(bool withEditor)
     {
+        if (withEditor)
+        {
+            return m_guiFormats;
+        }
+        return m_formats;
+    }
+
+    // Loads a reference plugin; with withEditor through the formats with editor support (the headless ones cannot open an editor)
+    std::unique_ptr<juce::AudioPluginInstance> load(const juce::String& pluginName, double sampleRate, bool withEditor = false)
+    {
+        juce::AudioPluginFormatManager& formats = getFormats(withEditor);
         const juce::File file = testpaths::getReferencePlugin(pluginName);
-        const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner::scanFileInProcess(m_formats, file);
+        const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner::scanFileInProcess(formats, file);
         expect(!scan.descriptions.isEmpty(), "cannot scan " + file.getFullPathName());
         if (scan.descriptions.isEmpty())
         {
             return nullptr;
         }
         juce::String error;
-        std::unique_ptr<juce::AudioPluginInstance> plugin = m_formats.createPluginInstance(scan.descriptions[0], sampleRate, kBlockSize, error);
+        std::unique_ptr<juce::AudioPluginInstance> plugin = formats.createPluginInstance(scan.descriptions[0], sampleRate, kBlockSize, error);
         expect(plugin != nullptr, error);
         return plugin;
     }
@@ -209,6 +225,45 @@ private:
         }
     }
 
+    // The value text of a parameter (by its name)
+    juce::String getText(juce::AudioPluginInstance& plugin, const juce::String& parameterName)
+    {
+        for (juce::AudioProcessorParameter* parameter : plugin.getParameters())
+        {
+            if (parameter->getName(100) == parameterName)
+            {
+                return parameter->getCurrentValueAsText();
+            }
+        }
+        return {};
+    }
+
+    void testEqTypeChoice()
+    {
+        beginTest("Reference EQ editor: a type the algorithm does not offer is moved to the algorithm's default (Orfanidis -> peak, Butterworth -> low-pass)");
+        constexpr int kAlgorithms = 6;
+        constexpr int kTypes = 9;
+        constexpr int kWaitMs = 300;
+        std::unique_ptr<juce::AudioPluginInstance> plugin = load("Eq", 48000.0, true);
+        if (plugin == nullptr)
+        {
+            return;
+        }
+        std::unique_ptr<juce::AudioProcessorEditor> editor(plugin->createEditorAndMakeActive());
+        expect(editor != nullptr, "the editor opens");
+        setChoice(*plugin, "Type", 0, kTypes);       // low-pass
+        setChoice(*plugin, "Algorithm", 1, kAlgorithms); // Orfanidis: peak only
+        juce::MessageManager::getInstance()->runDispatchLoopUntil(kWaitMs);
+        expectEquals(getText(*plugin, "Type"), juce::String("Peak"));
+        setChoice(*plugin, "Algorithm", 4, kAlgorithms); // Butterworth: low-pass and high-pass
+        juce::MessageManager::getInstance()->runDispatchLoopUntil(kWaitMs);
+        expectEquals(getText(*plugin, "Type"), juce::String("Low-pass"));
+        setChoice(*plugin, "Algorithm", 0, kAlgorithms); // RBJ: everything, the type stays
+        juce::MessageManager::getInstance()->runDispatchLoopUntil(kWaitMs);
+        expectEquals(getText(*plugin, "Type"), juce::String("Low-pass"));
+        editor.reset();
+    }
+
     void testNonlinear()
     {
         beginTest("Reference Nonlinear: polynomial harmonics through the plugin equal the closed form; the 8-bit quantizer gives 6.02 N + 1.76 dB");
@@ -308,6 +363,7 @@ private:
     }
 
     juce::AudioPluginFormatManager m_formats;
+    juce::AudioPluginFormatManager m_guiFormats;
 };
 
 static ReferencePluginTests referencePluginTests;

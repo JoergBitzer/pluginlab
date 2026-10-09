@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -44,6 +45,9 @@ public:
 
     void addChoice(const ChoiceSpec& spec);
 
+    // The choice box of a parameter (nullptr if there is none), e.g. to disable entries
+    juce::ComboBox* getComboBox(const juce::String& parameterId) const;
+
     void resized() override;
 
 private:
@@ -54,6 +58,7 @@ private:
     std::vector<std::unique_ptr<juce::Component>> m_controls;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> m_sliderAttachments;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> m_comboAttachments;
+    std::map<juce::String, juce::ComboBox*> m_comboBoxes;
 };
 
 // The line at the bottom of every reference plugin: name, version, what it is
