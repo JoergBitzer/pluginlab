@@ -82,3 +82,12 @@ signal (6.2.8 b). Document `docs/measurements/delay-and-polarity.md`. Tests `tes
 exact in all methods; fractional delays exact only in the phase delay (Thiran 37.25: peak 37, parabola 37.10, phase delay 37.2500); RBJ low-pass: peak 9,
 phase delay 10.78, correlation 8 (a filter has no single delay); the RBJ high-pass fools the asymmetric-signal polarity method (looks inverted).
 
+### W7.4 phase response and group delay (0.29.0, done)
+`measurePhaseResponse`: the phase without the delay at the impulse peak (AES17 6.8.3 b), unwrapped with a group-delay prediction; the deviation from a fitted
+straight line in the passband (6.8.3 a; passband = band of validity and within 40 dB of the largest gain) with the "+max/-min degrees" summary; the
+group delay exactly from the window (Re{DTFT(n h)/DTFT(h)}, minus the reference channel) and by AES17's differences (6.8.4); the inter-channel phase (6.2.7).
+Document `docs/measurements/phase-and-group-delay.md`. Tests `tests/MeasurePhaseTests.cpp`: phase within 0.003 degrees, group delay within 0.033 samples
+above 50 Hz and 0.18 samples (4 microseconds) below, inter-channel phase within 0.016 degrees; the linear-phase FIR has deviation 0 and fitted delay 127.
+Two corrections on the way: the fit and the summary were spoiled by the noisy phase of a deep stop band (Butterworth: -17816 degrees), hence the passband;
+the group delay is compared in the passband only (float precision at -58 dB).
+

@@ -6,6 +6,7 @@ add_library(pluginlab_measure STATIC
     Device.cpp
     FrequencyResponse.cpp
     Gain.cpp
+    Phase.cpp
     SweptImpulse.cpp)
 
 target_include_directories(pluginlab_measure

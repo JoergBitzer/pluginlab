@@ -14,6 +14,7 @@ target_sources(PluginLabTests
         LoaderTests.cpp
         MeasureDelayTests.cpp
         MeasureGainTests.cpp
+        MeasurePhaseTests.cpp
         MeasureResponseTests.cpp
         NonlinearReferenceTests.cpp
         OracleTests.cpp
