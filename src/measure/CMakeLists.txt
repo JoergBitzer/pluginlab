@@ -8,6 +8,7 @@ add_library(pluginlab_measure STATIC
     Distortion.cpp
     FrequencyResponse.cpp
     Intermodulation.cpp
+    Linearity.cpp
     Noise.cpp
     Gain.cpp
     Phase.cpp

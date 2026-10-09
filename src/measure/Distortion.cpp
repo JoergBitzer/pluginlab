@@ -81,6 +81,7 @@ DistortionResult measureDistortion(const Device& device, const DistortionSetting
         const auto amplitude = [&spectrum, length](int bin) { return 2.0 * std::abs(spectrum[static_cast<size_t>(bin)]) / length; };
         const double fundamental = amplitude(fundamentalBin);
         distortion.fundamentalDbfs = rmsToDbfs(fundamental / std::sqrt(2.0));
+        distortion.outputDbfs = rmsToDbfs(getRms(out, start, length));
         double harmonicPower = 0.0;
         for (int order = 2; order <= settings.maximumHarmonic && order * fundamentalBin <= highestBin; ++order)
         {

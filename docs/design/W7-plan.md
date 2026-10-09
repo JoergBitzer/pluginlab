@@ -127,3 +127,14 @@ wrong constant (18.3 dB); the curve is normalised at 1 kHz instead and checked a
 `docs/measurements/crosstalk.md`. Tests `tests/MeasureCrosstalkTests.cpp`: channel matrices (crosstalk, width, asymmetric, identity) exact to 0.001 dB at
 every frequency, a high-pass leak follows k |H(f)| to 0.001 dB, noise shows in the broadband value only (-77 dB "crosstalk" from noise at -100 dB).
 Test device `FilteredCrosstalk` in `tests/MeasureTestDevices.h`.
+
+### W7.9 maximum level and gain non-linearity (0.34.0, done)
+`measureMaximumLevel` (AES17 6.2.1 a THD+N -40 dB and b compression 0.3 dB, 6.2.6 the output level there, 6.6.8 overload at +3 dB and rollover): a search from
+-20 dBFS up (to +24 dBFS) or down (to -60 dBFS), bisection to 0.01 dB; "not found" separates a linear device from one whose noise alone exceeds the limit.
+`measureGainLinearity` (6.3.7): 5 dB steps from 5 dB below the maximum, a 500 Hz frequency-domain band-pass, AES17's stop rule (within 5 dB of the CCIR-RMS
+idle noise), at the latest -140 dBFS. `ChannelDistortion` gained the broadband `outputDbfs`. Document `docs/measurements/maximum-level-and-linearity.md`.
+Tests `tests/MeasureLinearityTests.cpp`: hard clippers, a gain before a clipper, the quantizer's full scale and tanh (both methods) within 0.002 dB of the
+closed forms; wraparound detected as rollover; dithered gain linearity equal to the noise share; undithered: up to 1 dB wrong, silent below half a step.
+Two corrections: the search started at -60 dBFS, where an undithered quantizer's noise alone exceeds -40 dB (now from -20 dBFS); the wraparound fails at
+exactly 0 dBFS (a sample of the coherent sine is +1), not above. Test devices `Chain` and `Wraparound`. Also, a process slip: W7.8 was committed before
+its full test run had finished; the full run of 0.34.0 covers it.

@@ -25,6 +25,7 @@ struct DistortionSettings
 struct ChannelDistortion
 {
     double fundamentalDbfs = 0.0;
+    double outputDbfs = 0.0;                     // the output through the standard low-pass filter, true rms (AES17's level: everything)
     std::vector<int> harmonicOrders;             // 2, 3, ... (those below the upper band edge)
     std::vector<double> harmonicDb;              // level of each harmonic relative to the fundamental
     double thdDb = 0.0;                          // IEC 60268-3: sqrt(sum H_n^2) / H_1

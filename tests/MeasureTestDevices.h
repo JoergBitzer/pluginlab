@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cmath>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -64,5 +66,56 @@ public:
 private:
     double m_factor;
     reference::BiquadCascade m_filter;
+};
+
+// Processors in series
+class Chain : public reference::Processor
+{
+public:
+    void add(std::unique_ptr<reference::Processor> processor)
+    {
+        m_processors.push_back(std::move(processor));
+    }
+
+    void reset() override
+    {
+        for (auto& processor : m_processors)
+        {
+            processor->reset();
+        }
+    }
+
+    void process(juce::AudioBuffer<float>& buffer) override
+    {
+        for (auto& processor : m_processors)
+        {
+            processor->process(buffer);
+        }
+    }
+
+private:
+    std::vector<std::unique_ptr<reference::Processor>> m_processors;
+};
+
+// Integer-style overflow: values beyond +-1 wrap around to the other end (y = x - 2 for 1 <= x < 3, ...): the "rollover" of AES17 6.6.8
+class Wraparound : public reference::Processor
+{
+public:
+    void reset() override
+    {
+    }
+
+    void process(juce::AudioBuffer<float>& buffer) override
+    {
+        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        {
+            float* data = buffer.getWritePointer(channel);
+            for (int index = 0; index < buffer.getNumSamples(); ++index)
+            {
+                const double value = data[index];
+                data[index] = static_cast<float>(value - 2.0 * std::floor((value + 1.0) / 2.0));
+            }
+        }
+    }
 };
 }
