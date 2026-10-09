@@ -1,5 +1,7 @@
 #include "HostGuiSnapshot.h"
 
+#include "NativeWindowCapture.h"
+
 #include <memory>
 #include <vector>
 
@@ -17,7 +19,6 @@ namespace
 constexpr double kSampleRate = 48000.0;
 constexpr int kBlockSize = 512;
 constexpr int kSettleMs = 1500;              // the editor paints (and a plugin's timers run) before a capture
-constexpr int kCaptureTimeoutMs = 20000;
 constexpr double kLowContrastRatio = 1.5;    // edges that only colour carries: luminance contrast below this
 constexpr double kEmptyShare = 0.001;        // a capture with fewer differing pixels counts as empty
 constexpr int kNoLimit = 100000;             // a maximum size above this is "no limit"
@@ -43,30 +44,6 @@ bool writePng(const juce::Image& image, const juce::File& file)
     return stream.openedOk() && png.writeImageToStream(image, stream);
 }
 
-// The X window of a component on the desktop, read by xwd and converted by ImageMagick (Linux; an invalid image elsewhere or if the tools are missing)
-juce::Image captureNativeWindow(juce::Component& component, const juce::File& temporary)
-{
-#if JUCE_LINUX
-    juce::ComponentPeer* peer = component.getPeer();
-    if (peer == nullptr)
-    {
-        return {};
-    }
-    const auto windowId = static_cast<juce::uint64>(reinterpret_cast<juce::pointer_sized_uint>(peer->getNativeHandle()));
-    temporary.deleteFile();
-    juce::ChildProcess process;
-    const juce::String command = "xwd -silent -id " + juce::String(windowId) + " | convert xwd:- png:" + temporary.getFullPathName().quoted();
-    if (! process.start(juce::StringArray{"sh", "-c", command}) || ! process.waitForProcessToFinish(kCaptureTimeoutMs) || ! temporary.existsAsFile())
-    {
-        return {};
-    }
-    return juce::ImageFileFormat::loadFrom(temporary);
-#else
-    juce::ignoreUnused(component, temporary);
-    return {};
-#endif
-}
-
 struct Capture
 {
     juce::String name;
@@ -76,7 +53,7 @@ struct Capture
     juce::Image native;
     bool fitsScreen = true;                  // a window larger than the screen is captured only in part
 
-    // the capture that has content: the X window if JUCE's snapshot is empty (a native child window of a hosted editor)
+    // the capture that has content: the native window if JUCE's snapshot is empty (a native child window of a hosted editor)
     const juce::Image& best() const
     {
         if (getContentShare(component) < kEmptyShare && native.isValid())
@@ -101,11 +78,10 @@ Capture capture(juce::AudioProcessorEditor& editor, const juce::String& name, co
     result.height = editor.getHeight();
     if (const juce::Displays::Display* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
     {
-        result.fitsScreen = display->totalArea.contains(editor.getScreenBounds());
+        result.fitsScreen = display->logicalBounds.toNearestInt().contains(editor.getScreenBounds());
     }
     result.component = editor.createComponentSnapshot(editor.getLocalBounds());
     result.native = captureNativeWindow(editor, folder.getChildFile("capture_temporary.png"));
-    folder.getChildFile("capture_temporary.png").deleteFile();
     writePng(result.component, folder.getChildFile(name + "_component.png"));
     writePng(result.native, folder.getChildFile(name + "_window.png"));
     return result;
@@ -197,7 +173,8 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
     }
     text << "Editor: " << editorText << "; size " << baseWidth
          << " x " << baseHeight << "; " << sizeText << ".\n\n";
-    text << "| Capture | Size | JUCE snapshot has content | X window capture has content | Used |\n|---|---|---|---|---|\n";
+    text << "Native capture: " << getNativeCaptureName() << ".\n\n";
+    text << "| Capture | Size | JUCE snapshot has content | native window capture has content | Used |\n|---|---|---|---|---|\n";
     for (const Capture& item : captures)
     {
         const double componentShare = Capture::getContentShare(item.component);
@@ -205,7 +182,7 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
         juce::String used = "JUCE snapshot";
         if (&item.best() == &item.native)
         {
-            used = "X window";
+            used = "native window";
         }
         juce::String nativeText = "not available";
         if (item.native.isValid())

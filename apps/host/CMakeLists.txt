@@ -17,6 +17,15 @@ target_sources(PluginLabHost
         HostGuiSnapshot.cpp
         HostReport.cpp)
 
+# the capture of a native window for the GUI review (W5d): one implementation per platform
+if(WIN32)
+    target_sources(PluginLabHost PRIVATE NativeWindowCapture_windows.cpp)
+elseif(APPLE)
+    target_sources(PluginLabHost PRIVATE NativeWindowCapture_mac.mm)
+else()
+    target_sources(PluginLabHost PRIVATE NativeWindowCapture_linux.cpp)
+endif()
+
 target_compile_definitions(PluginLabHost
     PRIVATE
         JUCE_WEB_BROWSER=0

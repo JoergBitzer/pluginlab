@@ -1,4 +1,4 @@
-# Runs "PluginLabHost --gui-snapshot <plugin file> <folder>" on the Reference EQ (W5d) and checks the review: the X window capture has content
+# Runs "PluginLabHost --gui-snapshot <plugin file> <folder>" on the Reference EQ (W5d) and checks the review: the native window capture has content
 # (JUCE's component snapshot of a hosted editor is empty on Linux), the vision contact sheet exists. Arguments: HOST_APPLICATION, PLUGIN_FILE, FOLDER
 file(REMOVE_RECURSE "${FOLDER}")
 
@@ -16,7 +16,7 @@ foreach(EXPECTED_FILE "gui_review.md" "contact_sheet_vision.png" "contact_sheet_
     endif()
 endforeach()
 file(READ "${FOLDER}/gui_review.md" REVIEW)
-foreach(EXPECTED "# GUI review: PluginLab Reference EQ" "| scale_1 | 640 x 400 |" "X window |" "follows (size and content)")
+foreach(EXPECTED "# GUI review: PluginLab Reference EQ" "| scale_1 | 640 x 400 |" "native window |" "follows (size and content)")
     string(FIND "${REVIEW}" "${EXPECTED}" POSITION)
     if(POSITION EQUAL -1)
         message(FATAL_ERROR "The review does not contain '${EXPECTED}'")
