@@ -1,6 +1,7 @@
 #include "TestPlugin.h"
 
 #include <cmath>
+#include <memory>
 
 namespace
 {
@@ -144,6 +145,11 @@ bool TestPluginProcessor::isBusesLayoutSupported(const BusesLayout& layouts) con
 
 void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
+    std::unique_ptr<juce::ScopedLock> sharedLock;
+    if (PLUGINLAB_TEST_PLUGIN_EDITOR_MODE == 7)
+    {
+        sharedLock = std::make_unique<juce::ScopedLock>(m_sharedLock); // editor mode 7: the editor's paint takes the same lock
+    }
     juce::ignoreUnused(midiMessages);
     juce::ScopedNoDenormals noDenormals;
 
@@ -304,6 +310,31 @@ namespace
 constexpr int kEditorMode = PLUGINLAB_TEST_PLUGIN_EDITOR_MODE;
 constexpr int kEditorFollowsScale = 1;
 constexpr int kEditorIgnoresScale = 2;
+constexpr int kEditorSizeOnly = 3;
+constexpr int kEditorCrashes = 4;          // W5d.4: crashes when it opens
+constexpr int kEditorLeaks = 5;            // W5d.4: keeps 20 MB per opening
+constexpr int kEditorBusy = 6;             // W5d.5: repaints 60 times a second, each paint works 10 ms
+constexpr int kEditorBlocksAudio = 7;      // W5d.4: its paint holds the lock of processBlock for 30 ms, 30 times a second
+constexpr size_t kLeakBytes = 20u * 1024u * 1024u;
+constexpr int kBusyRepaintHz = 60;
+constexpr int kBusyPaintMs = 10;
+constexpr int kBlockingRepaintHz = 30;
+constexpr int kBlockingPaintMs = 30;
+
+// keeps whatever the leaking editor allocated until the plugin is unloaded
+std::vector<std::vector<char>>& getLeakedMemory()
+{
+    static std::vector<std::vector<char>> leaked;
+    return leaked;
+}
+
+void workFor(int milliseconds)
+{
+    const double end = juce::Time::getMillisecondCounterHiRes() + milliseconds;
+    while (juce::Time::getMillisecondCounterHiRes() < end)
+    {
+    }
+}
 constexpr int kPatternWidth = 400;
 constexpr int kPatternHeight = 300;
 constexpr int kPatternCell = 50;
@@ -311,7 +342,8 @@ constexpr int kPatternCell = 50;
 // A drawn editor with a fixed pattern (checkerboard and text) for the GUI review (W5d.3). JUCE's VST3 wrapper scales the whole editor by the host's
 // scale factor (its scale manager, not AudioProcessorEditor::setScaleFactor), so mode 1 needs nothing. Modes 2 and 3 undo it on purpose, as an editor
 // that is not scale-aware would look: the editor finds the scale it is shown at (the peer's platform scale, polled), mode 3 draws with the inverse scale (the window grows, the
-// drawing keeps its size), mode 2 also shrinks itself by the scale (the window keeps its size).
+// drawing keeps its size), mode 2 also shrinks itself by the scale (the window keeps its size). Modes 4 ... 7 are wrong on purpose for W5d.4/5:
+// a crash, a leak, a busy paint, a paint that blocks the audio.
 class PatternEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
@@ -319,14 +351,43 @@ public:
         : juce::AudioProcessorEditor(owner)
     {
         setSize(kPatternWidth, kPatternHeight);
-        if (kEditorMode != kEditorFollowsScale)
+        if (kEditorMode == kEditorCrashes)
+        {
+            volatile int* nothing = nullptr;
+            *nothing = 1;
+        }
+        if (kEditorMode == kEditorLeaks)
+        {
+            getLeakedMemory().emplace_back(kLeakBytes, static_cast<char>(1)); // touched: really resident
+        }
+        if (kEditorMode == kEditorIgnoresScale || kEditorMode == kEditorSizeOnly)
         {
             startTimer(kPollMs);
+        }
+        if (kEditorMode == kEditorBusy)
+        {
+            startTimerHz(kBusyRepaintHz);
+        }
+        if (kEditorMode == kEditorBlocksAudio)
+        {
+            startTimerHz(kBlockingRepaintHz);
         }
     }
 
     void paint(juce::Graphics& g) override
     {
+        if (kEditorMode == kEditorBusy)
+        {
+            workFor(kBusyPaintMs);
+        }
+        if (kEditorMode == kEditorBlocksAudio)
+        {
+            if (auto* owner = dynamic_cast<TestPluginProcessor*>(getAudioProcessor()))
+            {
+                const juce::ScopedLock lock(owner->getSharedLock());
+                workFor(kBlockingPaintMs);
+            }
+        }
         g.fillAll(juce::Colour(0xff203040));
         g.addTransform(juce::AffineTransform::scale(1.0f / m_undoneScale));
         for (int row = 0; row < kPatternHeight / kPatternCell; ++row)
@@ -348,6 +409,11 @@ public:
 private:
     void timerCallback() override
     {
+        if (kEditorMode == kEditorBusy || kEditorMode == kEditorBlocksAudio)
+        {
+            repaint();
+            return;
+        }
         // the scale of the window this editor is shown in: JUCE's VST3 wrapper sets the host's scale factor as the platform scale of the peer
         juce::ComponentPeer* peer = getPeer();
         if (peer == nullptr)
@@ -381,6 +447,11 @@ juce::AudioProcessorEditor* TestPluginProcessor::createEditor()
         return new PatternEditor(*this);
     }
     return new juce::GenericAudioProcessorEditor(*this);
+}
+
+juce::CriticalSection& TestPluginProcessor::getSharedLock()
+{
+    return m_sharedLock;
 }
 
 bool TestPluginProcessor::hasEditor() const

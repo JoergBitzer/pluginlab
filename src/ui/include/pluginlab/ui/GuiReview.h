@@ -48,7 +48,8 @@ enum class ScaleBehaviour
     SizeOnly,       // the size changes by the factor, the content does not scale with it uniformly (kept at its size or re-laid out)
     Ignores,        // the size stays
     Partly,         // the size changes, but not by the factor
-    NotJudged       // the capture is larger than the (virtual) screen
+    NotJudged,      // the capture is larger than the (virtual) screen
+    NotApplicable   // the platform has no host scale factor for plugin editors (macOS: the system scales by the backing scale)
 };
 
 constexpr double kSizeTolerance = 0.03;         // relative: the size counts as scaled by the factor within 3 %

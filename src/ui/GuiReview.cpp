@@ -298,6 +298,8 @@ juce::String describe(ScaleBehaviour behaviour)
             return "partly (the size changes, not by the factor)";
         case ScaleBehaviour::NotJudged:
             return "not judged (larger than the screen)";
+        case ScaleBehaviour::NotApplicable:
+            return "not applicable (macOS scales plugin editors itself, by the backing scale)";
     }
     return {};
 }

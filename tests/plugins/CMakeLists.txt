@@ -10,7 +10,8 @@ file(WRITE "${PLUGINLAB_TEST_PLUGIN_DIR}/NotAPlugin.vst3" "This file is not a pl
 # AUTO_MANIFEST FALSE: no moduleinfo.json, so JUCE has to load the binary to scan the plugin (with a manifest it reads the
 # description from the file and never runs the plugin code)
 # An optional 17th argument EDITOR_MODE (W5d): 0 the generic editor, 1 a drawn editor that follows the host's scale factor, 2 one that ignores it,
-# 3 one that changes only its size (the drawing keeps its size)
+# 3 one that changes only its size (the drawing keeps its size), 4 crashes when it opens, 5 leaks 20 MB per opening, 6 a busy paint (60 Hz, 10 ms),
+# 7 a paint that holds the lock of processBlock (30 Hz, 30 ms)
 function(pluginlab_add_test_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE CRASHES CRASHES_IN_PROCESS AUTO_MANIFEST WITH_VST2 MONO_ONLY DELAY_SAMPLES REPORTED_LATENCY FIR_TAPS BLOCK_MODE STEREO_MODE SIDECHAIN LFO TIME_MODE)
     set(EDITOR_MODE 0)
     if(ARGC GREATER 16)
@@ -92,6 +93,11 @@ pluginlab_add_test_plugin(PluginLabTestWallClock "PluginLab Test Wall Clock" Twc
 pluginlab_add_test_plugin(PluginLabTestEditorScales "PluginLab Test Editor Scales" Tes1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 1)
 pluginlab_add_test_plugin(PluginLabTestEditorIgnoresScale "PluginLab Test Editor Ignores Scale" Tei1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 2)
 pluginlab_add_test_plugin(PluginLabTestEditorSizeOnly "PluginLab Test Editor Size Only" Tez1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 3)
+# deliberately wrong editors for the robustness and load of the GUI review (W5d.4, W5d.5)
+pluginlab_add_test_plugin(PluginLabTestEditorCrashes "PluginLab Test Editor Crashes" Tec1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 4)
+pluginlab_add_test_plugin(PluginLabTestEditorLeaks "PluginLab Test Editor Leaks" Tel1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 5)
+pluginlab_add_test_plugin(PluginLabTestEditorBusy "PluginLab Test Editor Busy" Teb1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 6)
+pluginlab_add_test_plugin(PluginLabTestEditorBlocksAudio "PluginLab Test Editor Blocks Audio" Tea1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 7)
 
 # An RBJ peaking EQ for the fingerprint tests: correct, with the 44.1 kHz fault, with the prepareToPlay fault
 function(pluginlab_add_test_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE FS_BUG PREPARE_BUG ENABLE_SWITCH)

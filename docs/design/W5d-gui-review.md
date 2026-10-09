@@ -89,3 +89,44 @@ restores the opening size and scale before it closes the editor.
 `PW_RENDERFULLCONTENT` (renders DirectX/OpenGL child windows since Windows 8.1) on the host's window, fallback Windows.Graphics.Capture; macOS in-process
 `NSView cacheDisplayInRect` (no permission needed; Metal/OpenGL layers may come out empty), ScreenCaptureKit only locally (needs the Screen Recording
 permission).
+
+### W5d.4 and W5d.5: robustness and GUI load (0.40.0, done on Linux)
+After the captures the review runs three more steps on the same instance (`apps/host/HostGuiSnapshot.cpp`; CPU time and resident memory per platform in
+`apps/host/ProcessStats.cpp`: Linux `/proc/self/statm` and `getrusage`, macOS `task_info` and `getrusage`, Windows `GetProcessMemoryInfo` and
+`GetProcessTimes`):
+- **GUI load** (W5d.5): the process CPU time over 3 s with the editor open and idle, minus the same 3 s without it, in % of one core.
+- **Open and close ten times** (W5d.4): the resident memory after the first opening and its growth per further opening; more than 5 MB per opening is
+  reported as a probable leak.
+- **Audio while the editor opens and closes** (W5d.4): noise through `processBlock` at real-time pace in a thread of its own (blocks of 512 at 48 kHz,
+  10.67 ms), 2 s alone and 2 s while the editor opens and closes; the blocks that took longer than they last, the longest block, non-finite output.
+- **Progress file**: before every step the review writes the step into `progress.txt`; a plugin that crashes ends the process (the caller, the
+  Developer page in W5d.7, runs the review in a child process) and the file names the step. Results also in `gui_robustness.json`.
+
+Deliberately wrong test editors (`tests/plugins/TestPlugin.cpp`, editor modes 4 ... 7) and what the review finds (Linux, Xvfb):
+
+| Test editor | Built to | Found |
+|---|---|---|
+| PluginLab Test Editor Crashes | crash when it opens | exit 139 (segmentation fault), progress "opening the editor" |
+| PluginLab Test Editor Leaks | keep 20 MB per opening | 41.95 MB per opening, "probable leak" (twice the 20 MB: probably two editor instances per opening on the plugin side; not verified) |
+| PluginLab Test Editor Busy | repaint at 60 Hz, 10 ms of work per paint (60 % of a core) | idle load 51.0 % |
+| PluginLab Test Editor Blocks Audio | hold the lock of `processBlock` for 30 ms at 30 Hz in its paint | 40 of 156 audio blocks late, longest 27.8 ms (alone: 0 late, 0.47 ms); idle load 74.6 % |
+| PluginLab Test Editor Scales (correct) | - | 0 late blocks, 0.00 MB per opening, 1.5 % load |
+
+CTest `PluginLabHostGuiRobustness` (Linux) checks these five. The audio test uses the editor's own instance: the situation of a DAW (the editor and
+the audio of one plugin at the same time). A plugin whose GUI blocks its audio in a DAW causes dropouts only when the editor is open; this test makes it
+visible without a DAW.
+
+### The capture on Windows and macOS: CI trial (0.39.0, run 37990824875 of the workflow "GUI capture trial", 2026-10-09)
+The author called the Windows and macOS capture the show-stoppers of the feature; they were tried in CI before going on
+(`.github/workflows/gui-capture.yml`, started by hand, no tag). `apps/host/NativeWindowCapture_*`: Linux `xwd`, Windows `PrintWindow` with
+`PW_RENDERFULLCONTENT`, macOS `NSView cacheDisplayInRect` in the process.
+
+**Result: the capture works on both.** As on Linux, JUCE's component snapshot of a hosted editor is empty (0.0 %) on Windows and macOS, and the native
+capture has the editor (Reference EQ: 9.5 % of the pixels differ from the background on macOS, the same picture as on Linux; the test editors 50.7 ...
+50.9 %). The images (artifacts of the run) show the complete Reference EQ editor on both systems.
+- **Windows**: the scale factor judgements equal Linux: the test editors follow / ignore / size only (similarity 0.993 / 1.000 / -0.002); the Reference
+  EQ follows at 1.5 (0.888) and is "not judged" at 2 (1280 x 800 is larger than the runner's screen: the screen check works).
+- **macOS**: every editor stays at its size for the host's scale factors: macOS has no host scale factor for VST3 editors (JUCE's wrapper refuses
+  `setContentScaleFactor` there; the system scales by the backing scale). Since 0.40.0 the review says "not applicable" on macOS instead of "ignores".
+- Not tried: plugins that draw with Metal or OpenGL on macOS (the in-process `NSView` cache may miss them; ScreenCaptureKit would need the Screen Recording
+  permission), DirectX editors on Windows (what `PW_RENDERFULLCONTENT` is for).

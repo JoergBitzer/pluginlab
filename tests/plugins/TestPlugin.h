@@ -52,6 +52,9 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+    // editor mode 7 (W5d.4): a lock that processBlock and the editor's paint both take (a deliberately wrong design: the GUI blocks the audio)
+    juce::CriticalSection& getSharedLock();
+
 private:
     // PLUGINLAB_TEST_PLUGIN_TIME_MODE 1: the gain parameter reaches the audio only through this timer (message thread)
     void timerCallback() override;
@@ -68,6 +71,7 @@ private:
     std::vector<float> m_firCoefficients;
     std::vector<std::vector<float>> m_firHistory;
     int m_firPosition = 0;
+    juce::CriticalSection m_sharedLock;
 
     juce::AudioParameterFloat* m_gain = nullptr;
     juce::AudioParameterFloat* m_frequency = nullptr;

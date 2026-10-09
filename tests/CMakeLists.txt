@@ -123,6 +123,13 @@ if(UNIX AND NOT APPLE)
             -DPLUGIN_FOLDER=${PLUGINLAB_TEST_PLUGIN_DIR}
             -DFOLDER=${CMAKE_CURRENT_BINARY_DIR}/gui_review_scaling
             -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostGuiScaling.cmake)
+    # W5d.4/W5d.5: deliberately wrong editors (crash, leak, busy paint, a paint that blocks the audio) and a correct one
+    add_test(NAME PluginLabHostGuiRobustness
+        COMMAND ${CMAKE_COMMAND}
+            -DHOST_APPLICATION=$<TARGET_FILE:PluginLabHost>
+            -DPLUGIN_FOLDER=${PLUGINLAB_TEST_PLUGIN_DIR}
+            -DFOLDER=${CMAKE_CURRENT_BINARY_DIR}/gui_review_robustness
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostGuiRobustness.cmake)
 endif()
 
 # The loader plugin is self-contained: its bundle holds the scanner (found next to the plugin binary when the plugin runs in a DAW).

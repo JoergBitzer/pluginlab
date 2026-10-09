@@ -1,5 +1,5 @@
 # Trial of the GUI review (W5d, docs/design/W5d-gui-review.md) on Windows and macOS: can the editor of a hosted plugin be captured there?
-# Builds only the host and the plugins with editors, runs "PluginLabHost --gui-snapshot" on the Reference EQ and the three test editors of W5d.3,
+# Builds only the host and the plugins with editors, runs "PluginLabHost --gui-snapshot" on the Reference EQ and the test editors of W5d.3 ... W5d.5,
 # prints the reviews and uploads the images as an artifact. Start it with "Run workflow" (no tag, no release).
 name: GUI capture trial
 
@@ -36,6 +36,7 @@ jobs:
         run: >
           cmake --build build --config Release --parallel 4 --target PluginLabHost PluginLabReferenceEq_VST3
           PluginLabTestEditorScales_VST3 PluginLabTestEditorIgnoresScale_VST3 PluginLabTestEditorSizeOnly_VST3
+          PluginLabTestEditorCrashes_VST3 PluginLabTestEditorLeaks_VST3 PluginLabTestEditorBusy_VST3 PluginLabTestEditorBlocksAudio_VST3
 
       - name: Capture the editors
         shell: bash
@@ -43,8 +44,8 @@ jobs:
         run: |
           mkdir -p gui_capture
           "${{ matrix.host }}" --gui-snapshot build/plugins/reference/PluginLabReferenceEq_artefacts/Release/VST3/PluginLabReferenceEq.vst3 gui_capture/ReferenceEq || echo "ReferenceEq: exit $?"
-          for name in EditorScales EditorIgnoresScale EditorSizeOnly; do
-            "${{ matrix.host }}" --gui-snapshot "build/test_plugins/PluginLabTest${name}.vst3" "gui_capture/${name}" || echo "${name}: exit $?"
+          for name in EditorScales EditorIgnoresScale EditorSizeOnly EditorCrashes EditorLeaks EditorBusy EditorBlocksAudio; do
+            "${{ matrix.host }}" --gui-snapshot "build/test_plugins/PluginLabTest${name}.vst3" "gui_capture/${name}" || echo "${name}: exit $? (progress: $(cat gui_capture/${name}/progress.txt 2>/dev/null))"
           done
           for review in gui_capture/*/gui_review.md; do echo "===== ${review}"; cat "${review}"; done
 

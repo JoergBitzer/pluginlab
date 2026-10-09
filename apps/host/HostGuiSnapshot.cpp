@@ -1,8 +1,11 @@
 #include "HostGuiSnapshot.h"
 
 #include "NativeWindowCapture.h"
+#include "ProcessStats.h"
 
+#include <cmath>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -22,6 +25,13 @@ constexpr int kSettleMs = 1500;              // the editor paints (and a plugin'
 constexpr double kLowContrastRatio = 1.5;    // edges that only colour carries: luminance contrast below this
 constexpr double kEmptyShare = 0.001;        // a capture with fewer differing pixels counts as empty
 constexpr int kNoLimit = 100000;             // a maximum size above this is "no limit"
+constexpr int kOpenCloseCycles = 10;         // W5d.4
+constexpr int kCycleOpenMs = 300;
+constexpr int kAudioPhaseMs = 2000;          // audio alone, then audio while the editor opens and closes
+constexpr int kAudioEditorOpenMs = 400;
+constexpr int kLoadMs = 3000;                // W5d.5: the idle editor
+constexpr double kLeakFlagBytes = 5.0e6;     // more growth per opening than this is reported as a probable leak
+constexpr float kNoiseLevel = 0.1f;
 
 void runMessageLoop(int milliseconds)
 {
@@ -87,6 +97,139 @@ Capture capture(juce::AudioProcessorEditor& editor, const juce::String& name, co
     return result;
 }
 
+// The step the review is in, for the case that the plugin crashes (the caller reads it: W5d.4, W5d.7)
+void writeProgress(const juce::File& folder, const juce::String& step)
+{
+    folder.getChildFile("progress.txt").replaceWithText(step);
+}
+
+// Processes noise through the plugin at real-time pace in a thread of its own and measures every processBlock against the block's duration
+class AudioRunner : public juce::Thread
+{
+public:
+    struct Stats
+    {
+        int blocks = 0;
+        int late = 0;                        // processBlock took longer than the block lasts
+        double maximumMs = 0.0;
+        bool finite = true;
+    };
+
+    explicit AudioRunner(juce::AudioPluginInstance& plugin)
+        : juce::Thread("GuiReviewAudio"), m_plugin(plugin),
+          m_buffer(std::max(1, std::max(plugin.getTotalNumInputChannels(), plugin.getTotalNumOutputChannels())), kBlockSize)
+    {
+    }
+
+    ~AudioRunner() override
+    {
+        stopThread(kStopMs);
+    }
+
+    void run() override
+    {
+        juce::MidiBuffer midi;
+        juce::Random random(3);
+        const double blockMs = 1000.0 * kBlockSize / kSampleRate;
+        double next = juce::Time::getMillisecondCounterHiRes();
+        while (! threadShouldExit())
+        {
+            for (int channel = 0; channel < m_buffer.getNumChannels(); ++channel)
+            {
+                for (int sample = 0; sample < kBlockSize; ++sample)
+                {
+                    m_buffer.setSample(channel, sample, kNoiseLevel * (2.0f * random.nextFloat() - 1.0f));
+                }
+            }
+            const double start = juce::Time::getMillisecondCounterHiRes();
+            m_plugin.processBlock(m_buffer, midi);
+            const double took = juce::Time::getMillisecondCounterHiRes() - start;
+            bool finite = true;
+            for (int channel = 0; channel < m_buffer.getNumChannels(); ++channel)
+            {
+                for (int sample = 0; sample < kBlockSize; ++sample)
+                {
+                    finite = finite && std::isfinite(m_buffer.getSample(channel, sample));
+                }
+            }
+            {
+                const juce::ScopedLock lock(m_statsLock);
+                ++m_stats.blocks;
+                if (took > blockMs)
+                {
+                    ++m_stats.late;
+                }
+                m_stats.maximumMs = std::max(m_stats.maximumMs, took);
+                m_stats.finite = m_stats.finite && finite;
+            }
+            next += blockMs;
+            const double now = juce::Time::getMillisecondCounterHiRes();
+            if (next > now)
+            {
+                juce::Thread::sleep(static_cast<int>(next - now));
+            }
+            else
+            {
+                next = now; // behind: do not try to catch up
+            }
+        }
+    }
+
+    Stats takeStats()
+    {
+        const juce::ScopedLock lock(m_statsLock);
+        return std::exchange(m_stats, Stats{});
+    }
+
+private:
+    static constexpr int kStopMs = 2000;
+    juce::AudioPluginInstance& m_plugin;
+    juce::AudioBuffer<float> m_buffer;
+    juce::CriticalSection m_statsLock;
+    Stats m_stats;
+};
+
+std::unique_ptr<juce::AudioProcessorEditor> openEditor(juce::AudioPluginInstance& instance)
+{
+    std::unique_ptr<juce::AudioProcessorEditor> editor(pluginlab::ui::createEditorFor(instance));
+    editor->setTopLeftPosition(0, 0);
+    editor->addToDesktop(juce::ComponentPeer::windowIsTemporary);
+    editor->setVisible(true);
+    return editor;
+}
+
+void closeEditor(std::unique_ptr<juce::AudioProcessorEditor>& editor)
+{
+    editor->setVisible(false);
+    editor->removeFromDesktop();
+    editor.reset();
+}
+
+juce::String formatStats(const AudioRunner::Stats& stats)
+{
+    juce::String text = juce::String(stats.late) + " of " + juce::String(stats.blocks) + " blocks late, longest " + juce::String(stats.maximumMs, 2) + " ms";
+    if (! stats.finite)
+    {
+        text << ", NON-FINITE OUTPUT";
+    }
+    return text;
+}
+
+double toMegabytes(double bytes)
+{
+    return bytes / 1.0e6;
+}
+
+// macOS has no host scale factor for VST3 editors (JUCE's wrapper refuses setContentScaleFactor there; the system scales by the backing scale)
+bool isScaleFactorApplicable()
+{
+#if JUCE_MAC
+    return false;
+#else
+    return true;
+#endif
+}
+
 juce::String percent(double share)
 {
     return juce::String(100.0 * share, 1) + " %";
@@ -97,16 +240,16 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
     juce::String text;
     text << "# GUI review: " << description.name << " " << description.version << "\n\n";
     juce::String error;
+    writeProgress(folder, "creating the plugin");
     std::unique_ptr<juce::AudioPluginInstance> instance = formats.createPluginInstance(description, kSampleRate, kBlockSize, error);
     if (instance == nullptr)
     {
         return text + "The plugin could not be created: " + error + "\n";
     }
-    std::unique_ptr<juce::AudioProcessorEditor> editor(pluginlab::ui::createEditorFor(*instance));
+    writeProgress(folder, "opening the editor");
+    std::unique_ptr<juce::AudioProcessorEditor> editor = openEditor(*instance);
     const bool generic = ! instance->hasEditor();
-    editor->setTopLeftPosition(0, 0);
-    editor->addToDesktop(juce::ComponentPeer::windowIsTemporary);
-    editor->setVisible(true);
+    writeProgress(folder, "capturing the editor (scale factors and sizes)");
 
     std::vector<Capture> captures;
     captures.push_back(capture(*editor, "scale_1", folder));
@@ -206,6 +349,10 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
         {
             behaviour = pluginlab::ui::ScaleBehaviour::NotJudged;
         }
+        if (! isScaleFactorApplicable())
+        {
+            behaviour = pluginlab::ui::ScaleBehaviour::NotApplicable;
+        }
         if (index == 2)
         {
             behaviourAtTwo = behaviour;
@@ -249,9 +396,94 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
     editor->setScaleFactor(1.0f);
     editor->setSize(baseWidth, baseHeight);
     runMessageLoop(kSettleMs);
-    editor->setVisible(false);
-    editor->removeFromDesktop();
-    editor.reset();
+    writeProgress(folder, "closing the editor");
+    closeEditor(editor);
+
+    // W5d.5: the load of the idle editor (process CPU time with the editor open and nothing changing, minus the same time without it)
+    writeProgress(folder, "measuring the load of the idle editor");
+    const double baseStart = getProcessCpuSeconds();
+    runMessageLoop(kLoadMs);
+    const double baseCpu = getProcessCpuSeconds() - baseStart;
+    editor = openEditor(*instance);
+    runMessageLoop(kSettleMs);
+    const double loadStart = getProcessCpuSeconds();
+    runMessageLoop(kLoadMs);
+    const double editorCpu = getProcessCpuSeconds() - loadStart;
+    closeEditor(editor);
+    const double loadPercent = 100.0 * (editorCpu - baseCpu) / (kLoadMs / 1000.0);
+
+    // W5d.4: open and close ten times (memory growth after the first opening)
+    writeProgress(folder, "opening and closing the editor ten times");
+    juce::int64 memoryAfterFirst = -1;
+    for (int cycle = 0; cycle < kOpenCloseCycles; ++cycle)
+    {
+        editor = openEditor(*instance);
+        runMessageLoop(kCycleOpenMs);
+        closeEditor(editor);
+        runMessageLoop(kCycleOpenMs / 3);
+        if (cycle == 0)
+        {
+            memoryAfterFirst = getResidentBytes();
+        }
+    }
+    const juce::int64 memoryAfterAll = getResidentBytes();
+    double growthPerOpening = 0.0;
+    if (memoryAfterFirst > 0 && memoryAfterAll > 0)
+    {
+        growthPerOpening = static_cast<double>(memoryAfterAll - memoryAfterFirst) / (kOpenCloseCycles - 1);
+    }
+
+    // W5d.4: audio at real-time pace in its own thread, alone and while the editor opens and closes
+    writeProgress(folder, "running audio while the editor opens and closes");
+    instance->prepareToPlay(kSampleRate, kBlockSize);
+    AudioRunner::Stats alone;
+    AudioRunner::Stats withEditor;
+    {
+        AudioRunner audio(*instance);
+        audio.startThread(juce::Thread::Priority::high);
+        runMessageLoop(kAudioPhaseMs);
+        alone = audio.takeStats();
+        const double end = juce::Time::getMillisecondCounterHiRes() + kAudioPhaseMs;
+        while (juce::Time::getMillisecondCounterHiRes() < end)
+        {
+            editor = openEditor(*instance);
+            runMessageLoop(kAudioEditorOpenMs);
+            closeEditor(editor);
+            runMessageLoop(kAudioEditorOpenMs / 4);
+        }
+        withEditor = audio.takeStats();
+    }
+    instance->releaseResources();
+    writeProgress(folder, "done");
+
+    text << "\n**Robustness** (W5d.4): " << kOpenCloseCycles << " openings and closings without a crash; resident memory after the first opening ";
+    if (memoryAfterFirst > 0)
+    {
+        text << juce::String(toMegabytes(static_cast<double>(memoryAfterFirst)), 1) << " MB, then " << juce::String(toMegabytes(growthPerOpening), 2)
+             << " MB per opening";
+        if (growthPerOpening > kLeakFlagBytes)
+        {
+            text << " (**probable leak**)";
+        }
+    }
+    else
+    {
+        text << "not measured on this platform";
+    }
+    text << ".\nAudio at real-time pace (blocks of " << kBlockSize << " at " << kSampleRate << " Hz, " << juce::String(1000.0 * kBlockSize / kSampleRate, 2)
+         << " ms each): alone " << formatStats(alone) << "; while the editor opens and closes " << formatStats(withEditor) << ".\n";
+    text << "\n**GUI load** (W5d.5): the idle editor costs " << juce::String(loadPercent, 1) << " % of one core (process CPU time over "
+         << juce::String(kLoadMs / 1000.0, 0) << " s with the editor open minus the same without it).\n";
+    {
+        auto robustness = std::make_unique<juce::DynamicObject>();
+        robustness->setProperty("memoryGrowthPerOpeningBytes", growthPerOpening);
+        robustness->setProperty("probableLeak", growthPerOpening > kLeakFlagBytes);
+        robustness->setProperty("lateBlocksAlone", alone.late);
+        robustness->setProperty("lateBlocksWithEditor", withEditor.late);
+        robustness->setProperty("longestBlockWithEditorMs", withEditor.maximumMs);
+        robustness->setProperty("idleLoadPercent", loadPercent);
+        folder.getChildFile("gui_robustness.json").replaceWithText(juce::JSON::toString(juce::var(robustness.release())));
+    }
     return text;
 }
 }
