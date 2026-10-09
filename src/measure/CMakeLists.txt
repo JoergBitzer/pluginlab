@@ -6,6 +6,7 @@ add_library(pluginlab_measure STATIC
     Device.cpp
     Distortion.cpp
     FrequencyResponse.cpp
+    Intermodulation.cpp
     Gain.cpp
     Phase.cpp
     SweptImpulse.cpp)

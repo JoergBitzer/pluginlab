@@ -11,7 +11,7 @@ signals (the numbers come from the tests); implementation.
 | delay and polarity | [delay-and-polarity.md](delay-and-polarity.md) | AES17-2015 6.8.2, 6.2.8; Knapp and Carter 1976 | W7.3, done |
 | phase response and group delay, inter-channel phase | [phase-and-group-delay.md](phase-and-group-delay.md) | AES17-2015 6.8.3, 6.8.4, 6.2.7 | W7.4, done |
 | THD+N, THD (against level and frequency), harmonics from the sweep | [thd-and-thdn.md](thd-and-thdn.md) | AES17-2015 6.3.1 ... 6.3.3, A.3.6, A.4.7; IEC 60268-3; Novak et al. 2015 | W7.5, done |
-| intermodulation | (W7.6) | AES17-2015 6.3.5, 6.3.6 | planned |
+| intermodulation: difference-frequency (18 + 20 kHz), modulation distortion (41 + 7993 Hz) | [intermodulation.md](intermodulation.md) | AES17-2015 6.3.5, 6.3.6, 5.2.10, annex B | W7.6, done |
 | noise, dynamic range, mains products | (W7.7) | AES17-2015 6.4.1, 6.4.2, 6.5.1 | planned |
 | crosstalk | (W7.8) | AES17-2015 6.5.2 | planned |
 | maximum input level, gain non-linearity | (W7.9) | AES17-2015 6.2.1, 6.3.7 | planned |

@@ -15,6 +15,7 @@ target_sources(PluginLabTests
         MeasureDelayTests.cpp
         MeasureDistortionTests.cpp
         MeasureGainTests.cpp
+        MeasureIntermodulationTests.cpp
         MeasurePhaseTests.cpp
         MeasureResponseTests.cpp
         NonlinearReferenceTests.cpp

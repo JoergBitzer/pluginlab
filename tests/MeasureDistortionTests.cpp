@@ -6,6 +6,7 @@
 
 #include <juce_core/juce_core.h>
 
+#include "MeasureTestDevices.h"
 #include "pluginlab/measure/Distortion.h"
 #include "pluginlab/reference/Designs.h"
 #include "pluginlab/reference/Nonlinear.h"
@@ -25,31 +26,6 @@ double toDb(double ratio)
 {
     return 20.0 * std::log10(std::max(ratio, 1.0e-30));
 }
-
-// A Hammerstein system: a memoryless curve, then a linear filter
-class Hammerstein : public ref::Processor
-{
-public:
-    Hammerstein(std::vector<double> coefficients, std::vector<ref::BiquadCoefficients> sections, double sampleRate)
-        : m_shaper(ref::Waveshaper::makePolynomial(std::move(coefficients))), m_filter(std::move(sections), sampleRate)
-    {
-    }
-
-    void reset() override
-    {
-        m_filter.reset();
-    }
-
-    void process(juce::AudioBuffer<float>& buffer) override
-    {
-        m_shaper.process(buffer);
-        m_filter.process(buffer);
-    }
-
-private:
-    ref::Waveshaper m_shaper;
-    ref::BiquadCascade m_filter;
-};
 
 // THD+N of the hard clipper (amplitude 1, threshold 0.5) with every harmonic up to the 20000th, folded below Nyquist. With a coherent frequency each
 // alias lands on a bin; aliases on the same bin add with their signs (a component folded from above fs/2 changes sign).
@@ -259,7 +235,7 @@ private:
         m_lines.add("\n" + line);
 
         const std::vector<ref::BiquadCoefficients> lowPass = ref::designButterworth(ref::Pass::Low, 4, kSampleRate, 2000.0);
-        const measure::Device hammerstein = measure::makeProcessorDevice([lowPass](double rate) { return std::make_unique<Hammerstein>(kPolynomial, lowPass, rate); });
+        const measure::Device hammerstein = measure::makeProcessorDevice([lowPass](double rate) { return std::make_unique<pluginlab::test::Hammerstein>(kPolynomial, lowPass, rate); });
         settings.levelDbfs = -6.0;
         const std::vector<double> frequencies = {100.0, 300.0, 700.0, 1000.0, 1500.0};
         const std::vector<measure::DistortionResult> byFrequency = measure::measureDistortionVsFrequency(hammerstein, settings, frequencies);
@@ -293,7 +269,7 @@ private:
         const measure::HarmonicResponse flat = measure::measureSweptHarmonics(makePolynomialDevice(), sweep, 5, frequencies);
         const std::vector<ref::BiquadCoefficients> lowPass = ref::designButterworth(ref::Pass::Low, 4, kSampleRate, 2000.0);
         const measure::HarmonicResponse filtered = measure::measureSweptHarmonics(
-            measure::makeProcessorDevice([lowPass](double rate) { return std::make_unique<Hammerstein>(kPolynomial, lowPass, rate); }), sweep, 5, frequencies);
+            measure::makeProcessorDevice([lowPass](double rate) { return std::make_unique<pluginlab::test::Hammerstein>(kPolynomial, lowPass, rate); }), sweep, 5, frequencies);
         double flatError = 0.0;
         double filteredError = 0.0;
         juce::String line = "sweep, harmonic 2 / 3: ";

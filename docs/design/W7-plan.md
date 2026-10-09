@@ -42,7 +42,7 @@ reference of many levels; for a plugin it is 0 dBFS unless the unit "maximum inp
 | W7.3 | **delay (latency) and polarity** | AES17 6.8.2 (impulse response and cross-correlation), 6.2.8; Knapp and Carter 1976 (GCC) | integer and fractional delays (Thiran, Lagrange), inverted gain, linear-phase FIR (127) |
 | W7.4 | **phase response and group delay**, inter-channel phase | AES17 6.8.3, 6.8.4, 6.2.7, A.4.8 | all-pass, Butterworth, FIR (linear phase), Thiran |
 | W7.5 | **THD+N and THD** (vs level, vs frequency), harmonics by the sweep | AES17 6.3.1-6.3.3, A.4.7; IEC 60268-3; Novak et al. 2015 | polynomial (closed form), hard clip (Fourier series), quantizer; oracle: the prototype's THD |
-| W7.6 | **intermodulation**: difference frequency (19/20 kHz) and modulation distortion (41 Hz + 7993 Hz, 4:1) | AES17 6.3.5, 6.3.6; IEC 60268-3; SMPTE RP120 | polynomial: closed-form IMD products |
+| W7.6 | **intermodulation**: difference frequency (18 + 20 kHz; the plan said 19/20 kHz, that is CCIF) and modulation distortion (41 Hz + 7993 Hz, 4:1) | AES17 6.3.5, 6.3.6, 5.2.10, annex B | polynomial: closed-form IMD products |
 | W7.7 | **noise**: idle channel noise, dynamic range (SNR at -60 dBFS), mains products; CCIR-RMS and A weighting | AES17 6.4.1, 6.4.2, 6.5.1, 5.2.7; ITU-R BS.468-4; IEC 61672-1 | noise adder (known level and colour), quantizer (6.02 N + 1.76), hum adder (known lines) |
 | W7.8 | **crosstalk** and gain matching | AES17 6.5.2, 6.2.4, A.3.8 | channel matrix with known crosstalk and width |
 | W7.9 | **maximum input level and gain non-linearity** | AES17 6.2.1, 6.3.7 | hard clipper (exact threshold), tanh (compression), quantizer |
@@ -101,3 +101,13 @@ Nyquist; dithered quantizer and added noise within 0.3 dB of the noise in band; 
 and swept within 0.001 dB. Oracle `polynomial_thd_48k`: the C++ unit equals the prototype to 1e-5 dB.
 One correction on the way: a Hann window over the asymmetric harmonic segment (the harmonics lie closer together towards higher orders) did not have its
 maximum at the harmonic (2nd harmonic -1.51 dB, 3rd -0.62 dB); the window is now flat around the harmonic with cosine tapers at the ends.
+
+### W7.6 intermodulation (0.31.0, done)
+`measureDifferenceFrequency` (AES17 6.3.5: 18 + 20 kHz at equal level, 500 Hz bands at 2, 16, 18, 22 kHz) and `measureModulation` (6.3.6: 41 + 7993 Hz,
+4:1, 40 Hz bands at the first sidebands; also the sidebands at +-2 and +-3 x 41 Hz). Tones on bins of a power-of-two window, the frequency-domain band-pass
+(5.2.10) as the rms of the bins within a fixed width in Hz (annex B.5). Document `docs/measurements/intermodulation.md`. Tests
+`tests/MeasureIntermodulationTests.cpp` against the exact spectrum of polynomials (each sine as two exponentials, powers as cyclic convolutions mod N:
+aliases and coinciding products included), also after a low-pass (Hammerstein): every product and ratio within 0.001 dB; dithered quantizer: the noise of
+3 x 500 Hz within 0.05 dB, independent of the window length. No oracle (the prototype has no IMD). The plan's 19/20 kHz was the CCIF pair; AES17 uses
+18 + 20 kHz. Finding for the report: AES17's modulation distortion sees only even orders (a symmetric curve has MD at the floor and shows at +-2 f1).
+The Hammerstein test device moved to `tests/MeasureTestDevices.h`.
