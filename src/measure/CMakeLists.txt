@@ -4,6 +4,7 @@ add_library(pluginlab_measure STATIC
     Analyzer.cpp
     Delay.cpp
     Device.cpp
+    Distortion.cpp
     FrequencyResponse.cpp
     Gain.cpp
     Phase.cpp

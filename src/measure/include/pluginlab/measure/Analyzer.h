@@ -43,6 +43,12 @@ double getRms(const std::vector<double>& data, int start, int length);
 // signal, annex A.2); |amplitude| / sqrt(2) is the rms of the tone, the angle its phase (of a cosine) at sample start.
 std::complex<double> getToneAmplitude(const std::vector<double>& data, int start, int length, double frequencyHz, double sampleRate);
 
+// The discrete Fourier transform of real samples by a radix-2 FFT in double precision (the length must be a power of two); bins 0 ... N/2
+std::vector<std::complex<double>> getSpectrum(const std::vector<double>& data, int start, int length);
+
+// The frequency nearest to the wanted one with a whole number of periods in `length` samples (on a bin: no leakage, AES17 annex A.2)
+double getCoherentFrequency(double frequencyHz, double sampleRate, int length);
+
 // The length of a measurement window: a whole number of periods of the frequency, at least `seconds` and at least 25 ms (AES17 5.2.3)
 int getWholePeriodLength(double frequencyHz, double sampleRate, double seconds);
 }

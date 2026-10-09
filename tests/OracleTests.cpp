@@ -4,6 +4,7 @@
 
 #include <juce_core/juce_core.h>
 
+#include "pluginlab/measure/Distortion.h"
 #include "pluginlab/measure/FrequencyResponse.h"
 #include "pluginlab/measure/Gain.h"
 #include "pluginlab/reference/Delays.h"
@@ -283,6 +284,31 @@ private:
                    + " dB (closed form against the prototype's measurement)");
         expect(largest < tolerance, caseName + ": harmonics");
         expectWithinAbsoluteError(thd, static_cast<double>(oracle["thd_db"]), static_cast<double>(oracle["tolerance"]["thd_db"]), caseName + ": THD");
+
+        // the C++ unit (W7.5) on the same device, at the oracle's coherent frequency and window (2^16 samples at 48 kHz)
+        pluginlab::measure::DistortionSettings settings;
+        settings.sampleRate = oracle["processor"]["sample_rate"];
+        settings.frequencyHz = oracle["signal"]["frequency_hz"];
+        settings.levelDbfs = oracle["signal"]["level_dbfs_peak"];
+        settings.maximumHarmonic = static_cast<int>(harmonics.back());
+        settings.channels = 1;
+        const pluginlab::measure::DistortionResult measured = pluginlab::measure::measureDistortion(
+            pluginlab::measure::makeProcessorDevice([coefficients](double) { return std::make_unique<ref::Waveshaper>(ref::Waveshaper::makePolynomial(coefficients)); }),
+            settings);
+        expectWithinAbsoluteError(measured.frequencyHz, settings.frequencyHz, 1.0e-9, caseName + ": same coherent frequency");
+        double betweenMeasurements = 0.0;
+        for (size_t index = 0; index < harmonics.size(); ++index)
+        {
+            if (values[index] > kAbsentDb)
+            {
+                betweenMeasurements = std::max(betweenMeasurements, std::abs(measured.channels[0].harmonicDb[index] - values[index]));
+            }
+        }
+        logMessage(caseName + ": the C++ THD measurement against the prototype's: harmonics " + juce::String(betweenMeasurements, 5) + " dB, THD "
+                   + juce::String(measured.channels[0].thdDb, 4) + " dB");
+        expect(betweenMeasurements < tolerance, caseName + ": C++ harmonics");
+        expectWithinAbsoluteError(measured.channels[0].thdDb, static_cast<double>(oracle["thd_db"]), static_cast<double>(oracle["tolerance"]["thd_db"]),
+                                  caseName + ": C++ THD");
     }
 
     void checkSnr(const juce::var& oracle, const juce::String& caseName)

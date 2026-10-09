@@ -91,3 +91,13 @@ above 50 Hz and 0.18 samples (4 microseconds) below, inter-channel phase within 
 Two corrections on the way: the fit and the summary were spoiled by the noisy phase of a deep stop band (Butterworth: -17816 degrees), hence the passband;
 the group delay is compared in the passband only (float precision at -58 dB).
 
+### W7.5 THD+N and THD (0.30.0, done)
+`measureDistortion`: a sine made coherent with a power-of-two window (997 Hz -> 996.83 Hz at 48 kHz), the double-precision FFT of the analyzer
+(`getSpectrum`, `getCoherentFrequency`); harmonics and THD after IEC 60268-3, THD+N in the frequency domain (annex A.3.6) and with the standard notch
+(6.3.1, Q 2); `measureDistortionVsLevel` (6.3.3), `measureDistortionVsFrequency` (6.3.2); `measureSweptHarmonics` (A.4.7): the harmonic impulse responses
+of the synchronized sweep. Document `docs/measurements/thd-and-thdn.md`. Tests `tests/MeasureDistortionTests.cpp`: polynomial harmonics, THD and both
+THD+N within 0.01 dB of the closed form; hard clipper within 0.05 dB of its Fourier series, its THD+N within 0.01 dB of all harmonics folded below
+Nyquist; dithered quantizer and added noise within 0.3 dB of the noise in band; a Hammerstein system (polynomial, then a low-pass) stepped within 0.01 dB
+and swept within 0.001 dB. Oracle `polynomial_thd_48k`: the C++ unit equals the prototype to 1e-5 dB.
+One correction on the way: a Hann window over the asymmetric harmonic segment (the harmonics lie closer together towards higher orders) did not have its
+maximum at the harmonic (2nd harmonic -1.51 dB, 3rd -0.62 dB); the window is now flat around the harmonic with cosine tapers at the ends.

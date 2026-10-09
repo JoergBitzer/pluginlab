@@ -1,5 +1,7 @@
 #include "pluginlab/measure/Analyzer.h"
 
+#include <juce_core/juce_core.h>
+
 #include <algorithm>
 #include <cmath>
 
@@ -146,6 +148,55 @@ std::complex<double> getToneAmplitude(const std::vector<double>& data, int start
         sum += data[static_cast<size_t>(start + index)] * std::polar(1.0, -2.0 * kPi * frequencyHz * index / sampleRate);
     }
     return 2.0 * sum / static_cast<double>(std::max(1, length));
+}
+
+std::vector<std::complex<double>> getSpectrum(const std::vector<double>& data, int start, int length)
+{
+    jassert(length > 0 && (length & (length - 1)) == 0);
+    std::vector<std::complex<double>> values(static_cast<size_t>(length));
+    for (int index = 0; index < length; ++index)
+    {
+        values[static_cast<size_t>(index)] = data[static_cast<size_t>(start + index)];
+    }
+    // bit reversal
+    for (int index = 1, reversed = 0; index < length; ++index)
+    {
+        int bit = length >> 1;
+        for (; (reversed & bit) != 0; bit >>= 1)
+        {
+            reversed ^= bit;
+        }
+        reversed ^= bit;
+        if (index < reversed)
+        {
+            std::swap(values[static_cast<size_t>(index)], values[static_cast<size_t>(reversed)]);
+        }
+    }
+    // butterflies
+    for (int size = 2; size <= length; size <<= 1)
+    {
+        const std::complex<double> step = std::polar(1.0, -2.0 * kPi / size);
+        for (int block = 0; block < length; block += size)
+        {
+            std::complex<double> twiddle = 1.0;
+            for (int offset = 0; offset < size / 2; ++offset)
+            {
+                const std::complex<double> even = values[static_cast<size_t>(block + offset)];
+                const std::complex<double> odd = twiddle * values[static_cast<size_t>(block + offset + size / 2)];
+                values[static_cast<size_t>(block + offset)] = even + odd;
+                values[static_cast<size_t>(block + offset + size / 2)] = even - odd;
+                twiddle *= step;
+            }
+        }
+    }
+    values.resize(static_cast<size_t>(length / 2 + 1));
+    return values;
+}
+
+double getCoherentFrequency(double frequencyHz, double sampleRate, int length)
+{
+    const double bin = std::max(1.0, std::round(frequencyHz * length / sampleRate));
+    return bin * sampleRate / length;
 }
 
 int getWholePeriodLength(double frequencyHz, double sampleRate, double seconds)
