@@ -33,6 +33,7 @@ const juce::Identifier kPokeDistance("pokeDistance");
 const juce::Identifier kMaximumParameters("maximumParameters");
 const juce::Identifier kMaximumJumpedParameters("maximumJumpedParameters");
 const juce::Identifier kRealTimeTests("realTimeTests");
+const juce::Identifier kMeasurements("measurements");
 const juce::Identifier kRealTimeSeconds("realTimeSeconds");
 const juce::Identifier kLongRealTimeSeconds("longRealTimeSeconds");
 
@@ -112,6 +113,7 @@ FingerprintSettings FingerprintSettings::loadOrCreate(const juce::File& file, ju
     readInt(*object, kMaximumParameters, settings.maximumParameters);
     readInt(*object, kMaximumJumpedParameters, settings.maximumJumpedParameters);
     readBool(*object, kRealTimeTests, settings.realTimeTests);
+    readBool(*object, kMeasurements, settings.measurements);
     readDouble(*object, kRealTimeSeconds, settings.realTimeSeconds);
     readDouble(*object, kLongRealTimeSeconds, settings.longRealTimeSeconds);
     const juce::var blockSizes = object->getProperty(kBlockSizes);
@@ -158,6 +160,7 @@ juce::String FingerprintSettings::toJson() const
     object->setProperty(kMaximumParameters, maximumParameters);
     object->setProperty(kMaximumJumpedParameters, maximumJumpedParameters);
     object->setProperty(kRealTimeTests, realTimeTests);
+    object->setProperty(kMeasurements, measurements);
     object->setProperty(kRealTimeSeconds, realTimeSeconds);
     object->setProperty(kLongRealTimeSeconds, longRealTimeSeconds);
     return juce::JSON::toString(juce::var(object.release()));

@@ -22,6 +22,7 @@ target_sources(PluginLabTests
         MeasureNullTests.cpp
         MeasurePhaseTests.cpp
         MeasureResponseTests.cpp
+        PluginMeasurementTests.cpp
         NonlinearReferenceTests.cpp
         OracleTests.cpp
         BrowserTests.cpp
@@ -97,6 +98,14 @@ add_test(NAME PluginLabHostFingerprint
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostFingerprint.cmake)
 # the measurement reads its settings from this file, not from the user's
 set_tests_properties(PluginLabHostFingerprint PROPERTIES ENVIRONMENT "PLUGINLAB_FINGERPRINT_SETTINGS=${CMAKE_CURRENT_BINARY_DIR}/fingerprint_settings.json")
+
+# The measurement units of W7 on a hosted plugin from the command line (W7.11)
+add_test(NAME PluginLabHostMeasure
+    COMMAND ${CMAKE_COMMAND}
+        -DHOST_APPLICATION=$<TARGET_FILE:PluginLabHost>
+        -DPLUGIN_FILE=${PLUGINLAB_TEST_PLUGIN_DIR}/PluginLabTestGain.vst3
+        -DREPORT_FILE=${CMAKE_CURRENT_BINARY_DIR}/host_measure.md
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostMeasure.cmake)
 
 # The loader plugin is self-contained: its bundle holds the scanner (found next to the plugin binary when the plugin runs in a DAW).
 add_test(NAME PluginLabLoaderBundleHasScanner

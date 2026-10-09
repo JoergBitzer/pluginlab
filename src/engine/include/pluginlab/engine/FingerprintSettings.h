@@ -44,6 +44,9 @@ struct FingerprintSettings
     double realTimeSeconds = 2.0;            // length of the paced renders
     double longRealTimeSeconds = 0.0;        // a long paced run (demo noise and the like); 0 = off
 
+    // the measurement units of W7 on the plugin's default setting, appended to the report (docs/measurements/plugins-and-host.md)
+    bool measurements = true;
+
     // The default place of the file: the application data folder of the user, or the file named by the environment variable
     // PLUGINLAB_FINGERPRINT_SETTINGS (tests use it, so that they never touch the user's file).
     static juce::File getDefaultFile();

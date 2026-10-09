@@ -1,6 +1,6 @@
 # W7: measurement units (plan)
 
-Status: **plan, W7.1 started** (author's request 2026-10-08: "for each measurement unit a detailed file.md explaining the measurement routine, the scientific
+Status: **done** (W7.1 ... W7.11, 2026-10-09) (author's request 2026-10-08: "for each measurement unit a detailed file.md explaining the measurement routine, the scientific
 source (norms and standards if possible) and results for known test signals"). Planning §8, W7: "Measurement units (frequency response, phase, group delay,
 latency, THD, THD+N, noise, SNR, crosstalk, null test with alignment), easy to add new ones. Done when: each agrees with analytic ground truth and with the
 oracle files within a stated tolerance; band of validity documented."
@@ -147,3 +147,16 @@ exact cases (itself, delay 37 and -0.5 dB, B 1000 samples late, inverted +3 dB) 
 peaks, a shelf, Thiran, Lagrange) within 0.1 dB of the exact expectation and equal to the best possible alignment (searched); two dithered quantizers -70.3 dB
 as expected. One expectation was wrong: the delay that aligns a whole band best is not the low-frequency phase delay of a Thiran (37.17, not 37.25); the
 test now checks against the searched optimum.
+
+### W7.11 plugins and host (0.36.0, done)
+The careful render of the fingerprint (`Rig`, `Bench`, the poke values and noise) moved from `Fingerprint.cpp` into the internal header
+`src/engine/PluginRig.h`, shared by the fingerprint and the new **plugin device** (`makePluginDevice`: fresh instance, prepare, poke, setting, settle,
+input; `getPluginChannels`, `getSetting`, `getDefaultSetting`); `pluginlab_engine` links `pluginlab_measure`. `measureDevice` / `measurePlugin` run all
+units of one device with their AES17 defaults and `createMeasurementReport` writes a Markdown section; the fingerprint report ends with it (switch
+`measurements` in the fingerprint settings), so the Developer page shows it; `PluginLabHost --measure` writes it alone. Document
+`docs/measurements/plugins-and-host.md`. Tests `tests/PluginMeasurementTests.cpp`: the three reference plugins through the device equal the library
+(response within 0.00005 dB, Thiran phase delay 37.5000, harmonics within 0.01 dB), the summary of the Reference EQ; CTest `PluginLabHostMeasure`, and
+`PluginLabHostFingerprint` checks the new section. The fingerprint's results are unchanged by the move (its tests pass).
+
+With W7.11 the definition of done of W7 (planning §8) is met for the planned units: each agrees with analytic ground truth (and, for gain, frequency
+response and THD, with the oracle files) within a stated tolerance, and the band of validity is documented in `docs/measurements/`.

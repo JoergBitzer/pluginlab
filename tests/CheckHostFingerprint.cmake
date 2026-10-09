@@ -24,7 +24,7 @@ if(POSITION EQUAL -1)
     message(FATAL_ERROR "The summary does not contain the item 'deterministic'")
 endif()
 
-foreach(EXPECTED "# Fingerprint: PluginLab Test Gain" "## Summary" "## Findings" "## Delivery of parameters" "## Block sizes")
+foreach(EXPECTED "# Fingerprint: PluginLab Test Gain" "## Summary" "## Findings" "## Delivery of parameters" "## Block sizes" "## Measurements (AES17)")
     string(FIND "${REPORT}" "${EXPECTED}" POSITION)
     if(POSITION EQUAL -1)
         message(FATAL_ERROR "The report does not contain '${EXPECTED}'")

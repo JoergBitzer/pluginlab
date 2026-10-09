@@ -20,11 +20,13 @@ juce::File resolveFile(const juce::String& text)
 //   --write-version <file>              writes the version into the file and quits
 //   --report <plugin folder> <file>     scans the folder, loads the plugins, writes a report (see HostReport.h) and quits
 //   --fingerprint <plugin file> <file> [<plugin id>]  measures the fingerprint of the plugin (see HostFingerprint.h), writes it and quits
+//   --measure <plugin file> <file> [<plugin id>]      runs the measurement units of W7 on the plugin (see HostFingerprint.h), writes them and quits
 // Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
 // after the scan, --compare <audio file> [<plugin file>] opens the Compare page with the file, a dry slot and the plugin
 const juce::String kWriteVersionOption = "--write-version";
 const juce::String kReportOption = "--report";
 const juce::String kFingerprintOption = "--fingerprint"; // --fingerprint <plugin file> <report file>
+const juce::String kMeasureOption = "--measure";         // --measure <plugin file> <report file>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
 const juce::String kDeveloperOption = "--developer"; // --developer <plugin file> [--view]: opens the Developer page and makes (and shows) the report
@@ -96,6 +98,27 @@ public:
             const juce::File pluginFolder = resolveFile(arguments[reportIndex + 1]);
             const juce::File reportFile = resolveFile(arguments[reportIndex + 2]);
             const bool written = pluginlab::host::writeReport(pluginFolder, reportFile);
+            int returnValue = kExitOk;
+            if (! written)
+            {
+                returnValue = kExitReportFailed;
+            }
+            setApplicationReturnValue(returnValue);
+            quit();
+            return;
+        }
+
+        const int measureIndex = arguments.indexOf(kMeasureOption);
+        if (measureIndex >= 0 && measureIndex + kArgumentsOfReport < arguments.size())
+        {
+            juce::String identifier;
+            const int identifierIndex = measureIndex + kArgumentsOfReport + 1;
+            if (identifierIndex < arguments.size() && ! arguments[identifierIndex].startsWith("--"))
+            {
+                identifier = arguments[identifierIndex].unquoted();
+            }
+            const bool written = pluginlab::host::writeMeasurementReport(resolveFile(arguments[measureIndex + 1]), resolveFile(arguments[measureIndex + 2]),
+                                                                         identifier);
             int returnValue = kExitOk;
             if (! written)
             {

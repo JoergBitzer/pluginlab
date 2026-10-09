@@ -16,6 +16,7 @@ signals (the numbers come from the tests); implementation.
 | crosstalk (selective and broadband, every channel driven in turn) | [crosstalk.md](crosstalk.md) | AES17-2015 6.5.2, A.3.8 | W7.8, done |
 | maximum input and output level, overload (rollover), gain non-linearity | [maximum-level-and-linearity.md](maximum-level-and-linearity.md) | AES17-2015 6.2.1, 6.2.6, 6.6.8, 6.3.7 | W7.9, done |
 | null test with alignment (delay, also fractional; gain and polarity) | [null-test.md](null-test.md) | no standard; Knapp and Carter 1976 | W7.10, done |
+| all units on a hosted plugin (plugin device, summary, `--measure`, Developer page) | [plugins-and-host.md](plugins-and-host.md) | (the units' standards) | W7.11, done |
 
 ## The common basis: AES17-2015
 **AES17-2015**, *AES standard method for digital audio engineering - Measurement of digital audio equipment*, Audio Engineering Society, New York 2015.
@@ -43,7 +44,7 @@ impedances, power supplies, jitter and digital interfaces do not apply. The conv
 
 ## The device under test
 A unit measures a `Device`: a function that renders an input buffer at a sample rate from a fresh state. `makeProcessorDevice` makes one from a reference
-processor of `pluginlab_reference` (used by the tests); the plugin device with the delivery protocol of the fingerprint follows in W7.11.
+processor of `pluginlab_reference` (used by the tests); the plugin device with the delivery protocol of the fingerprint is W7.11 ([plugins-and-host.md](plugins-and-host.md)).
 
 ## Known test signals
 The units are tested against the reference processors of W6 (`src/reference/`, teaching pages `docs/teaching/references/`), whose answers are known
