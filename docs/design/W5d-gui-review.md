@@ -147,6 +147,21 @@ Checked by hand in the virtual display (2026-10-09): the Reference EQ (review re
 that crashes (the host survives, the row says "crashed while opening the editor", the view stays disabled). No automated test of the page itself (as for
 the report).
 
+### Robustness and load on Windows and macOS: second CI trial (0.40.0, run 37995426898)
+The same seven test editors and the Reference EQ on both systems:
+
+| Test editor | Windows | macOS |
+|---|---|---|
+| Crashes | exit 139, progress "opening the editor" | exit 139, progress "opening the editor" |
+| Leaks (20 MB per opening) | 41.95 MB per opening, probable leak | (as Windows, flagged) |
+| Busy (60 Hz x 10 ms) | idle load 58.3 % | 20.2 % |
+| Blocks audio (30 Hz x 30 ms lock) | 46 of 161 blocks late, longest 28.4 ms; load 76.6 % | 7 of 92 blocks late, longest 27.0 ms; load 31.6 % |
+| Scales, Ignores, Size only, Reference EQ (correct) | 0 late blocks, 0.00 ... 0.02 MB per opening, load 0.0 ... 0.5 % | 0 late blocks, about 1.1 MB per opening (below the 5 MB flag), low load |
+
+Every wrong editor is found on both systems. Differences to note: on macOS the audio thread reached only about 90 blocks in 2 s instead of 188 (the
+sleep of the pacing loop is coarse there), and the busy editors cost less CPU (their repaints are throttled); the memory of correct editors grows by
+about 1 MB per opening on macOS (below the flag). Absolute numbers are therefore platform-dependent; the findings are not.
+
 ### Open
 - Plugins that draw with Metal/OpenGL (macOS) or DirectX (Windows): not tried yet.
 - The leak test editor shows twice the memory it keeps per opening (probably two editor instances per opening): not verified.
