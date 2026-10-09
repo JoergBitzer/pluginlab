@@ -74,6 +74,7 @@ struct Capture
     int height = 0;
     juce::Image component;
     juce::Image native;
+    bool fitsScreen = true;                  // a window larger than the screen is captured only in part
 
     // the capture that has content: the X window if JUCE's snapshot is empty (a native child window of a hosted editor)
     const juce::Image& best() const
@@ -98,21 +99,16 @@ Capture capture(juce::AudioProcessorEditor& editor, const juce::String& name, co
     result.name = name;
     result.width = editor.getWidth();
     result.height = editor.getHeight();
+    if (const juce::Displays::Display* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+    {
+        result.fitsScreen = display->totalArea.contains(editor.getScreenBounds());
+    }
     result.component = editor.createComponentSnapshot(editor.getLocalBounds());
     result.native = captureNativeWindow(editor, folder.getChildFile("capture_temporary.png"));
     folder.getChildFile("capture_temporary.png").deleteFile();
     writePng(result.component, folder.getChildFile(name + "_component.png"));
     writePng(result.native, folder.getChildFile(name + "_window.png"));
     return result;
-}
-
-juce::String yesNo(bool value)
-{
-    if (value)
-    {
-        return "yes";
-    }
-    return "no";
 }
 
 juce::String percent(double share)
@@ -218,13 +214,64 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
         }
         text << "| " << item.name << " | " << item.width << " x " << item.height << " | " << percent(componentShare) << " | " << nativeText << " | " << used << " |\n";
     }
-    text << "\nScale factor: the editor is " << captures[1].width << " x " << captures[1].height << " at 1.5 and " << captures[2].width << " x "
-         << captures[2].height << " at 2 (" << yesNo(captures[2].width > baseWidth) << ": it reacts to the host's scale factor).\n";
+    // W5d.3: the scale factor (size and content) and resizing
+    text << "\n**Scale factor** (the host asks for 1.5 and 2; content: the capture reduced to the default size against the default capture, luminance "
+            "correlation):\n\n| Factor | Size | Size ratio | Content similarity | Behaviour |\n|---|---|---|---|---|\n";
+    pluginlab::ui::ScaleBehaviour behaviourAtTwo = pluginlab::ui::ScaleBehaviour::Ignores;
+    double similarityAtTwo = 0.0;
+    for (size_t index = 1; index <= 2; ++index)
+    {
+        const double factor = 1.0 + 0.5 * static_cast<double>(index);
+        const double ratio = static_cast<double>(captures[index].width) / baseWidth;
+        const double similarity = pluginlab::ui::getImageSimilarity(base, captures[index].best());
+        pluginlab::ui::ScaleBehaviour behaviour = pluginlab::ui::judgeScaling(factor, ratio, similarity);
+        if (! captures[index].fitsScreen)
+        {
+            behaviour = pluginlab::ui::ScaleBehaviour::NotJudged;
+        }
+        if (index == 2)
+        {
+            behaviourAtTwo = behaviour;
+            similarityAtTwo = similarity;
+        }
+        text << "| " << factor << " | " << captures[index].width << " x " << captures[index].height << " | " << juce::String(ratio, 3) << " | "
+             << juce::String(similarity, 3) << " | " << pluginlab::ui::describe(behaviour) << " |\n";
+    }
+    juce::String resizeText = "not resizable";
+    if (captures.size() > 4)
+    {
+        const Capture& largest = captures.back();
+        const double similarity = pluginlab::ui::getImageSimilarity(base, largest.best());
+        juce::String layout = "the layout changes (re-laid out or stretched: compare contact_sheet_sizes.png)";
+        if (similarity >= pluginlab::ui::kSameContentSimilarity)
+        {
+            layout = "the content zooms with the window";
+        }
+        resizeText = "resized to " + juce::String(largest.width) + " x " + juce::String(largest.height) + ": content similarity " + juce::String(similarity, 3) + ", "
+                     + layout + "; the smallest size reached is " + juce::String(captures[3].width) + " x " + juce::String(captures[3].height);
+    }
+    text << "\n**Resizing**: " << resizeText << ".\n";
+
+    // the single results for programs (the Developer page, W5d.7)
+    auto json = std::make_unique<juce::DynamicObject>();
+    json->setProperty("plugin", description.name);
+    json->setProperty("width", baseWidth);
+    json->setProperty("height", baseHeight);
+    json->setProperty("resizable", resizable);
+    json->setProperty("scaleBehaviour", pluginlab::ui::describe(behaviourAtTwo));
+    json->setProperty("scaleSimilarity", similarityAtTwo);
+    json->setProperty("lowContrastShare", lowContrastShare);
+    json->setProperty("componentSnapshotEmpty", Capture::getContentShare(captures.front().component) < kEmptyShare);
+    folder.getChildFile("gui_review.json").replaceWithText(juce::JSON::toString(juce::var(json.release())));
     text << "Low-contrast edges (colour changes with a luminance contrast below " << kLowContrastRatio << ":1): " << percent(lowContrastShare)
          << " of the colour edges (a hint, not a verdict; see low_contrast_map.png).\n";
     text << "\nImages: contact_sheet_vision.png (original, grayscale, protanopia, deuteranopia, tritanopia, low-contrast map), contact_sheet_sizes.png, and the "
             "single captures.\n";
 
+    // leave the editor as it was opened: many plugins store their editor size, the review must not change it
+    editor->setScaleFactor(1.0f);
+    editor->setSize(baseWidth, baseHeight);
+    runMessageLoop(kSettleMs);
     editor->setVisible(false);
     editor->removeFromDesktop();
     editor.reset();

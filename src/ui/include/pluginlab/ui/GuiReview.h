@@ -36,4 +36,26 @@ juce::Image makeContactSheet(const std::vector<std::pair<juce::String, juce::Ima
 
 // The share of pixels that differ from the first pixel (0: a uniform image, e.g. a capture that got nothing)
 double getContentShare(const juce::Image& image);
+
+// How alike two images look independent of their size: both scaled to the size of the first (high-quality resampling), then the correlation
+// coefficient of their luminance (1: the same picture; near 0: unrelated; a drawing that did not scale with its window gives a low value)
+double getImageSimilarity(const juce::Image& reference, const juce::Image& other);
+
+// W5d.3: how an editor reacts to the host's scale factor
+enum class ScaleBehaviour
+{
+    Follows,        // size and content scale by the factor
+    SizeOnly,       // the size changes by the factor, the content does not scale with it uniformly (kept at its size or re-laid out)
+    Ignores,        // the size stays
+    Partly,         // the size changes, but not by the factor
+    NotJudged       // the capture is larger than the (virtual) screen
+};
+
+constexpr double kSizeTolerance = 0.03;         // relative: the size counts as scaled by the factor within 3 %
+// content counts as scaled if the similarity is at least this: calibrated with the test editors (W5d.3): a drawing scaled by JUCE 0.99, the
+// Reference EQ (fine text and 1-pixel lines) 0.89, a drawing that keeps its size in a grown window 0.0
+constexpr double kSameContentSimilarity = 0.7;
+
+ScaleBehaviour judgeScaling(double factor, double sizeRatio, double similarity);
+juce::String describe(ScaleBehaviour behaviour);
 }

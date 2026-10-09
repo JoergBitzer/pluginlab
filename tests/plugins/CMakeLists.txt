@@ -9,7 +9,13 @@ file(WRITE "${PLUGINLAB_TEST_PLUGIN_DIR}/NotAPlugin.vst3" "This file is not a pl
 
 # AUTO_MANIFEST FALSE: no moduleinfo.json, so JUCE has to load the binary to scan the plugin (with a manifest it reads the
 # description from the file and never runs the plugin code)
+# An optional 17th argument EDITOR_MODE (W5d): 0 the generic editor, 1 a drawn editor that follows the host's scale factor, 2 one that ignores it,
+# 3 one that changes only its size (the drawing keeps its size)
 function(pluginlab_add_test_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE CRASHES CRASHES_IN_PROCESS AUTO_MANIFEST WITH_VST2 MONO_ONLY DELAY_SAMPLES REPORTED_LATENCY FIR_TAPS BLOCK_MODE STEREO_MODE SIDECHAIN LFO TIME_MODE)
+    set(EDITOR_MODE 0)
+    if(ARGC GREATER 16)
+        set(EDITOR_MODE ${ARGV16})
+    endif()
     set(TEST_PLUGIN_FORMATS VST3)
     if(WITH_VST2 AND PLUGINLAB_VST2)
         list(APPEND TEST_PLUGIN_FORMATS VST)
@@ -48,7 +54,8 @@ function(pluginlab_add_test_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE CRASHES 
             PLUGINLAB_TEST_PLUGIN_STEREO_MODE=${STEREO_MODE}
             PLUGINLAB_TEST_PLUGIN_SIDECHAIN=${SIDECHAIN}
             PLUGINLAB_TEST_PLUGIN_LFO=${LFO}
-            PLUGINLAB_TEST_PLUGIN_TIME_MODE=${TIME_MODE})
+            PLUGINLAB_TEST_PLUGIN_TIME_MODE=${TIME_MODE}
+            PLUGINLAB_TEST_PLUGIN_EDITOR_MODE=${EDITOR_MODE})
 
     target_link_libraries(${TARGET_NAME}
         PRIVATE
@@ -81,6 +88,10 @@ pluginlab_add_test_plugin(PluginLabTestTremolo "PluginLab Test Tremolo" Ttr1 0 0
 pluginlab_add_test_plugin(PluginLabTestTimerGain "PluginLab Test Timer Gain" Ttg1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 1)
 pluginlab_add_test_plugin(PluginLabTestOfflineSwitch "PluginLab Test Offline Switch" Tos1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 2)
 pluginlab_add_test_plugin(PluginLabTestWallClock "PluginLab Test Wall Clock" Twc1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 3)
+# editors for the GUI review (W5d.3): follows the scale factor, ignores it, changes only its size
+pluginlab_add_test_plugin(PluginLabTestEditorScales "PluginLab Test Editor Scales" Tes1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 1)
+pluginlab_add_test_plugin(PluginLabTestEditorIgnoresScale "PluginLab Test Editor Ignores Scale" Tei1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 2)
+pluginlab_add_test_plugin(PluginLabTestEditorSizeOnly "PluginLab Test Editor Size Only" Tez1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 3)
 
 # An RBJ peaking EQ for the fingerprint tests: correct, with the 44.1 kHz fault, with the prepareToPlay fault
 function(pluginlab_add_test_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE FS_BUG PREPARE_BUG ENABLE_SWITCH)

@@ -94,6 +94,24 @@ public:
         expect(ui::getContentShare(makeEdge(pureRed, juce::Colours::black)) > 0.4, "half the image differs");
         const juce::Image sheet = ui::makeContactSheet({{"a", makeFilled(juce::Colours::red, 30, 20)}, {"b", makeFilled(juce::Colours::blue, 30, 20)}}, 2);
         expect(sheet.getWidth() > 60 && sheet.getHeight() > 20, "contact sheet size");
+
+        beginTest("image similarity across sizes and the judgement of the scale factor (W5d.3)");
+        const juce::Image pattern = makeEdge(pureRed, juce::Colours::black).rescaled(100, 50, juce::Graphics::lowResamplingQuality);
+        expectWithinAbsoluteError(ui::getImageSimilarity(pattern, pattern), 1.0, 1.0e-9, "an image against itself");
+        const juce::Image doubled = pattern.rescaled(200, 100, juce::Graphics::lowResamplingQuality);
+        expect(ui::getImageSimilarity(pattern, doubled) > 0.95, "against its own enlargement: " + juce::String(ui::getImageSimilarity(pattern, doubled)));
+        // the same drawing at its old size in the corner of a window twice as large (an editor that does not scale its content)
+        juce::Image corner(juce::Image::ARGB, 200, 100, true);
+        {
+            juce::Graphics g(corner);
+            g.fillAll(juce::Colours::black);
+            g.drawImageAt(pattern, 0, 0);
+        }
+        expect(ui::getImageSimilarity(pattern, corner) < 0.5, "a drawing that kept its size: " + juce::String(ui::getImageSimilarity(pattern, corner)));
+        expect(ui::judgeScaling(2.0, 2.0, 0.99) == ui::ScaleBehaviour::Follows, "follows");
+        expect(ui::judgeScaling(2.0, 2.0, 0.0) == ui::ScaleBehaviour::SizeOnly, "size only");
+        expect(ui::judgeScaling(2.0, 1.0, 1.0) == ui::ScaleBehaviour::Ignores, "ignores");
+        expect(ui::judgeScaling(2.0, 1.5, 0.99) == ui::ScaleBehaviour::Partly, "partly");
     }
 };
 

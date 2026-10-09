@@ -1,6 +1,6 @@
 # W5d: GUI review aids on the Developer page (design and progress)
 
-Status: **W5d.1 and W5d.2 done on Linux** (2026-10-09, 0.37.0; the author's idea of 2026-10-09 in planning §8, row W5d; "You can also start with 5d (the GUI fingerprint)").
+Status: **W5d.1 ... W5d.3 done on Linux** (2026-10-09, 0.37.0 and 0.38.0; the author's idea of 2026-10-09 in planning §8, row W5d; "You can also start with 5d (the GUI fingerprint)").
 Goal (planning): the plugin's editor rendered offscreen and shown to the developer in variants that make GUI problems visible at once: (1) grayscale,
 (2) zoom (smallest and largest size, scale factors 1, 1.5, 2), proposed additions (3) colour-vision simulation, (4) a low-contrast map, (5) scale-factor
 honesty, (6) editor robustness, (7) GUI load, (8) accessibility. The risk named in the plan: on Linux a hosted plugin's editor is a native child window
@@ -53,6 +53,39 @@ background colour: the drawing). The tool therefore uses the X capture when the 
   colour-vision simulations everything stays readable: no information is carried by colour alone.
 These are review items for the Reference EQ's editor, not fixed here.
 
-Not done yet: W5d.3 as its own summary item (the scale-factor reaction is measured, the content is not compared), W5d.4 ... W5d.7, real plugins (the
+Not done yet: W5d.4 ... W5d.7, real plugins (the
 author's plugins are not used without asking), Windows and macOS capture. The X server prints "BadWindow" errors when the hosted editor closes; harmless
 (the program exits normally), noted for W5d.4.
+
+### W5d.3: scale-factor honesty and resizing (0.38.0, done on Linux)
+For the scale factors 1.5 and 2 the review reports the size, the size ratio and the **content similarity**: the capture reduced to the default size
+against the default capture, the correlation coefficient of their luminance (`ui::getImageSimilarity`). The judgement (`ui::judgeScaling`): **follows**
+(size by the factor within 3 %, similarity at least 0.7), **size only** (size by the factor, content not scaled uniformly: kept at its size or
+re-laid out), **ignores** (size unchanged), **partly** (size changed, not by the factor), **not judged** (the window is larger than the screen, so the
+capture is incomplete). Resizing: the content similarity at twice the size tells whether the content zooms or the layout changes. The results also go
+into `gui_review.json` (for the Developer page, W5d.7). Since 0.38.0 the review leaves the editor at the size it opened with (see below).
+
+**How JUCE scales** (found on the way): JUCE 9's VST3 wrapper does not call `AudioProcessorEditor::setScaleFactor` for the host's scale factor; its
+scale manager sets it as the platform scale of the editor's peer (`ComponentPeer::setCustomPlatformScaleFactor`), so every JUCE editor follows the
+host's scale factor without doing anything. Test editors that do not follow therefore have to undo it on purpose: the test plugins
+`PluginLab Test Editor Scales` (follows), `... Ignores Scale` (shrinks itself by the peer's platform scale) and `... Size Only` (draws with the inverse
+scale) (`tests/plugins/TestPlugin.cpp`, editor modes 1 ... 3, an optional 17th argument of `pluginlab_add_test_plugin`).
+
+**Calibration of the threshold** (similarity at scale 2): the test editor that follows 0.995, the Reference EQ 0.895 (fine text and 1-pixel lines do not
+reduce exactly), the size-only editor 0.0; hence 0.7. Tests: `GuiReviewTests` (similarity of an image with itself, with its enlargement, with a drawing
+that kept its size; the four judgements) and the CTest `PluginLabHostGuiScaling` (the three test editors judged correctly), Linux.
+
+**Real EQs** (second run, scale 2): Shape it, FreeEQ8 (0.78), Pult EQ, ZL Equalizer 2, PeakEqualizer, EQoder follow; WSTD MSEQ ignores the scale
+factor; ZeroEQ (0.28) is re-laid out rather than zoomed (the graph grows more than the knob rows: "size only" in the strict sense of the judgement);
+the own PeakEQ (0.49) does not scale uniformly either. For 4K EQ, Multi-Q and WayQ the second run said "size only", but that is **invalid**: their
+windows were larger than the virtual screen (see the side effect below); the review now marks such captures "not judged".
+
+**A side effect of the first run (fixed in 0.38.0):** the review resized editors to twice their size and closed them in that state; 4K EQ, Multi-Q,
+WayQ and ZL Equalizer 2 store their editor size, so they opened at twice their default size in the second run (and in the author's DAW until resized;
+the author resizes them by hand). At scale 2 these windows were larger than the virtual screen (2560 x 1600) and were captured only in part. The review now
+restores the opening size and scale before it closes the editor.
+
+**Windows and macOS** (the author: "show-stoppers for this feature"; to be tried in CI before going on): Windows `PrintWindow` with
+`PW_RENDERFULLCONTENT` (renders DirectX/OpenGL child windows since Windows 8.1) on the host's window, fallback Windows.Graphics.Capture; macOS in-process
+`NSView cacheDisplayInRect` (no permission needed; Metal/OpenGL layers may come out empty), ScreenCaptureKit only locally (needs the Screen Recording
+permission).

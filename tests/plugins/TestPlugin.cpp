@@ -299,8 +299,87 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     }
 }
 
+namespace
+{
+constexpr int kEditorMode = PLUGINLAB_TEST_PLUGIN_EDITOR_MODE;
+constexpr int kEditorFollowsScale = 1;
+constexpr int kEditorIgnoresScale = 2;
+constexpr int kPatternWidth = 400;
+constexpr int kPatternHeight = 300;
+constexpr int kPatternCell = 50;
+
+// A drawn editor with a fixed pattern (checkerboard and text) for the GUI review (W5d.3). JUCE's VST3 wrapper scales the whole editor by the host's
+// scale factor (its scale manager, not AudioProcessorEditor::setScaleFactor), so mode 1 needs nothing. Modes 2 and 3 undo it on purpose, as an editor
+// that is not scale-aware would look: the editor finds the scale it is shown at (the peer's platform scale, polled), mode 3 draws with the inverse scale (the window grows, the
+// drawing keeps its size), mode 2 also shrinks itself by the scale (the window keeps its size).
+class PatternEditor : public juce::AudioProcessorEditor, private juce::Timer
+{
+public:
+    explicit PatternEditor(juce::AudioProcessor& owner)
+        : juce::AudioProcessorEditor(owner)
+    {
+        setSize(kPatternWidth, kPatternHeight);
+        if (kEditorMode != kEditorFollowsScale)
+        {
+            startTimer(kPollMs);
+        }
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        g.fillAll(juce::Colour(0xff203040));
+        g.addTransform(juce::AffineTransform::scale(1.0f / m_undoneScale));
+        for (int row = 0; row < kPatternHeight / kPatternCell; ++row)
+        {
+            for (int column = 0; column < kPatternWidth / kPatternCell; ++column)
+            {
+                if ((row + column) % 2 == 0)
+                {
+                    g.setColour(juce::Colour(0xffd0a020));
+                    g.fillRect(column * kPatternCell, row * kPatternCell, kPatternCell, kPatternCell);
+                }
+            }
+        }
+        g.setColour(juce::Colours::white);
+        g.setFont(juce::FontOptions(40.0f));
+        g.drawText("pluginlab", 0, 2 * kPatternCell, kPatternWidth, 2 * kPatternCell, juce::Justification::centred);
+    }
+
+private:
+    void timerCallback() override
+    {
+        // the scale of the window this editor is shown in: JUCE's VST3 wrapper sets the host's scale factor as the platform scale of the peer
+        juce::ComponentPeer* peer = getPeer();
+        if (peer == nullptr)
+        {
+            return;
+        }
+        const auto shown = static_cast<float>(peer->getPlatformScaleFactor());
+        if (std::abs(shown - m_shownScale) < 0.01f)
+        {
+            return;
+        }
+        m_shownScale = shown;
+        m_undoneScale = shown;
+        if (kEditorMode == kEditorIgnoresScale)
+        {
+            setSize(juce::roundToInt(kPatternWidth / shown), juce::roundToInt(kPatternHeight / shown));
+        }
+        repaint();
+    }
+
+    static constexpr int kPollMs = 100;
+    float m_shownScale = 1.0f;
+    float m_undoneScale = 1.0f;
+};
+}
+
 juce::AudioProcessorEditor* TestPluginProcessor::createEditor()
 {
+    if (kEditorMode != 0)
+    {
+        return new PatternEditor(*this);
+    }
     return new juce::GenericAudioProcessorEditor(*this);
 }
 

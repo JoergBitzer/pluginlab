@@ -116,6 +116,13 @@ if(UNIX AND NOT APPLE)
             -DPLUGIN_FILE=${PLUGINLAB_REFERENCE_PLUGIN_DIR}/PluginLabReferenceEq.vst3
             -DFOLDER=${CMAKE_CURRENT_BINARY_DIR}/gui_review_reference_eq
             -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostGuiSnapshot.cmake)
+    # W5d.3: test editors that follow the scale factor, ignore it, or grow without scaling their drawing
+    add_test(NAME PluginLabHostGuiScaling
+        COMMAND ${CMAKE_COMMAND}
+            -DHOST_APPLICATION=$<TARGET_FILE:PluginLabHost>
+            -DPLUGIN_FOLDER=${PLUGINLAB_TEST_PLUGIN_DIR}
+            -DFOLDER=${CMAKE_CURRENT_BINARY_DIR}/gui_review_scaling
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostGuiScaling.cmake)
 endif()
 
 # The loader plugin is self-contained: its bundle holds the scanner (found next to the plugin binary when the plugin runs in a DAW).

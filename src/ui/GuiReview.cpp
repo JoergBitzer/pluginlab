@@ -230,4 +230,75 @@ double getContentShare(const juce::Image& image)
     }
     return static_cast<double>(different) / (static_cast<double>(image.getWidth()) * image.getHeight());
 }
+
+double getImageSimilarity(const juce::Image& reference, const juce::Image& other)
+{
+    if (! reference.isValid() || ! other.isValid())
+    {
+        return 0.0;
+    }
+    const juce::Image scaled = other.rescaled(reference.getWidth(), reference.getHeight(), juce::Graphics::highResamplingQuality);
+    const int count = reference.getWidth() * reference.getHeight();
+    double sumA = 0.0;
+    double sumB = 0.0;
+    double sumAA = 0.0;
+    double sumBB = 0.0;
+    double sumAB = 0.0;
+    for (int y = 0; y < reference.getHeight(); ++y)
+    {
+        for (int x = 0; x < reference.getWidth(); ++x)
+        {
+            const double a = getRelativeLuminance(reference.getPixelAt(x, y));
+            const double b = getRelativeLuminance(scaled.getPixelAt(x, y));
+            sumA += a;
+            sumB += b;
+            sumAA += a * a;
+            sumBB += b * b;
+            sumAB += a * b;
+        }
+    }
+    const double covariance = sumAB / count - (sumA / count) * (sumB / count);
+    const double varianceA = sumAA / count - (sumA / count) * (sumA / count);
+    const double varianceB = sumBB / count - (sumB / count) * (sumB / count);
+    if (varianceA <= 0.0 || varianceB <= 0.0)
+    {
+        return 0.0;
+    }
+    return covariance / std::sqrt(varianceA * varianceB);
+}
+
+ScaleBehaviour judgeScaling(double factor, double sizeRatio, double similarity)
+{
+    if (std::abs(sizeRatio - 1.0) <= kSizeTolerance)
+    {
+        return ScaleBehaviour::Ignores;
+    }
+    if (std::abs(sizeRatio / factor - 1.0) > kSizeTolerance)
+    {
+        return ScaleBehaviour::Partly;
+    }
+    if (similarity >= kSameContentSimilarity)
+    {
+        return ScaleBehaviour::Follows;
+    }
+    return ScaleBehaviour::SizeOnly;
+}
+
+juce::String describe(ScaleBehaviour behaviour)
+{
+    switch (behaviour)
+    {
+        case ScaleBehaviour::Follows:
+            return "follows (size and content)";
+        case ScaleBehaviour::SizeOnly:
+            return "size only (the content does not scale uniformly)";
+        case ScaleBehaviour::Ignores:
+            return "ignores the scale factor";
+        case ScaleBehaviour::Partly:
+            return "partly (the size changes, not by the factor)";
+        case ScaleBehaviour::NotJudged:
+            return "not judged (larger than the screen)";
+    }
+    return {};
+}
 }
