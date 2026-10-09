@@ -17,6 +17,7 @@ signals (the numbers come from the tests); implementation.
 | maximum input and output level, overload (rollover), gain non-linearity | [maximum-level-and-linearity.md](maximum-level-and-linearity.md) | AES17-2015 6.2.1, 6.2.6, 6.6.8, 6.3.7 | W7.9, done |
 | null test with alignment (delay, also fractional; gain and polarity) | [null-test.md](null-test.md) | no standard; Knapp and Carter 1976 | W7.10, done |
 | all units on a hosted plugin (plugin device, summary, `--measure`, Developer page) | [plugins-and-host.md](plugins-and-host.md) | (the units' standards) | W7.11, done |
+| first run on twelve real EQs at their defaults (measurement and GUI review) | [real-plugins-2026-10-09.md](real-plugins-2026-10-09.md) | - | results |
 
 ## The common basis: AES17-2015
 **AES17-2015**, *AES standard method for digital audio engineering - Measurement of digital audio equipment*, Audio Engineering Society, New York 2015.
