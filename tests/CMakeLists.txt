@@ -12,6 +12,7 @@ target_sources(PluginLabTests
         HostedPluginTests.cpp
         ValidatorTests.cpp
         LoaderTests.cpp
+        MeasureDelayTests.cpp
         MeasureGainTests.cpp
         MeasureResponseTests.cpp
         NonlinearReferenceTests.cpp

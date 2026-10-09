@@ -8,7 +8,7 @@ signals (the numbers come from the tests); implementation.
 |---|---|---|---|
 | level and gain, gain matching | [level-and-gain.md](level-and-gain.md) | AES17-2015 6.2.2, 6.2.4 | W7.1, done |
 | frequency response (stepped sine, multitone, synchronized sweep) | [frequency-response.md](frequency-response.md) | AES17-2015 6.2.3, annex A.3/A.4; Novak et al. 2015 | W7.2, done |
-| delay and polarity | (W7.3) | AES17-2015 6.8.2, 6.2.8 | planned |
+| delay and polarity | [delay-and-polarity.md](delay-and-polarity.md) | AES17-2015 6.8.2, 6.2.8; Knapp and Carter 1976 | W7.3, done |
 | phase response and group delay | (W7.4) | AES17-2015 6.8.3, 6.8.4, 6.2.7 | planned |
 | THD+N, THD | (W7.5) | AES17-2015 6.3.1 ... 6.3.3, A.4.7 | planned |
 | intermodulation | (W7.6) | AES17-2015 6.3.5, 6.3.6 | planned |

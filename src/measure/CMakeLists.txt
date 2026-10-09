@@ -2,9 +2,11 @@
 # the analyzer of AES17-2015 (level meter, standard filters) and the units. No hosting, no GUI.
 add_library(pluginlab_measure STATIC
     Analyzer.cpp
+    Delay.cpp
     Device.cpp
     FrequencyResponse.cpp
-    Gain.cpp)
+    Gain.cpp
+    SweptImpulse.cpp)
 
 target_include_directories(pluginlab_measure
     PUBLIC
@@ -21,5 +23,6 @@ target_link_libraries(pluginlab_measure
         pluginlab_reference
         juce::juce_audio_basics
     PRIVATE
+        juce::juce_dsp
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)

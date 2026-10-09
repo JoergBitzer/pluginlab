@@ -74,3 +74,11 @@ On the author's request (2026-10-08) the Python prototype also uses the synchron
 `prototype_sweep_rbj_peak_48k` agrees with the exact response and with the C++ measurement to 0.0002 dB.
 Also: tests run offscreen (`tools/ctest_offscreen.sh`, Xvfb + openbox; 0.26.2), `PluginLabTests --only <name>`.
 
+### W7.3 delay and polarity (0.28.0, done)
+The sweep deconvolution with its window and reference channel moved into `SweptImpulse` (`measureSweptImpulses`, `getSweptResponse`), shared by W7.2,
+W7.3 and W7.4 (results of W7.2 unchanged to the digit). `measureDelay`: impulse-response peak (AES17 6.8.2 a; also parabola-interpolated and the phase
+delay at 100 Hz), cross-correlation with white noise (6.8.2 b, by FFT), polarity by the impulse response (6.2.8 c) and by the asymmetric 997 + 1994 Hz
+signal (6.2.8 b). Document `docs/measurements/delay-and-polarity.md`. Tests `tests/MeasureDelayTests.cpp`: integer delays, inversion, linear-phase FIR
+exact in all methods; fractional delays exact only in the phase delay (Thiran 37.25: peak 37, parabola 37.10, phase delay 37.2500); RBJ low-pass: peak 9,
+phase delay 10.78, correlation 8 (a filter has no single delay); the RBJ high-pass fools the asymmetric-signal polarity method (looks inverted).
+

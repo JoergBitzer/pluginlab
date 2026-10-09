@@ -7,6 +7,7 @@
 
 #include "pluginlab/measure/Analyzer.h"
 #include "pluginlab/measure/Device.h"
+#include "pluginlab/measure/SweptImpulse.h"
 
 namespace pluginlab::measure
 {
@@ -69,18 +70,6 @@ struct MultitoneResponseSettings
     int channels = 2;
 };
 
-struct SweepResponseSettings
-{
-    double sampleRate = 48000.0;
-    double startHz = 5.0;            // two octaves below the passband, so that 20 Hz is measured cleanly
-    double stopHz = 0.0;             // 0: 0.95 of Nyquist, at most 40 kHz
-    double approximateSeconds = 4.0;
-    double levelDbfs = -20.0;        // peak of the sweep
-    double windowBeforeSeconds = 0.25;   // the window around the peak of the impulse response: before it (the band-limited impulse rings before its peak)
-    double windowAfterSeconds = 0.5;     // and after it (the tail of the device)
-    std::vector<double> frequencies; // where the response is evaluated; empty: 1/24 octave from 20 Hz to 20 kHz (and 997 Hz)
-    int channels = 2;
-};
 
 FrequencyResponse measureSteppedResponse(const Device& device, const SteppedResponseSettings& settings);
 FrequencyResponse measureMultitoneResponse(const Device& device, const MultitoneResponseSettings& settings);

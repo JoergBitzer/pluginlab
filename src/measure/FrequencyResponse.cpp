@@ -4,7 +4,6 @@
 
 #include "pluginlab/signals/Signals.h"
 #include "pluginlab/signals/SteppedSine.h"
-#include "pluginlab/signals/SweptSine.h"
 
 namespace pluginlab::measure
 {
@@ -14,13 +13,8 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kDegreesPerRadian = 180.0 / kPi;
 constexpr int kMinimumPeriods = 10;
 constexpr double kMultitonePeriodSeconds = 1.3;     // the multitone period: the power of two at or above this
-constexpr double kSweepStopFraction = 0.95;         // of Nyquist
-constexpr double kSweepHighestStopHz = 40000.0;
-constexpr double kSweepPreSilenceSeconds = 0.1;
-constexpr double kSweepPostSilenceSeconds = 1.0;
 constexpr double kGridLowestHz = 20.0;
 constexpr int kGridPointsPerOctave = 24;
-constexpr int kRenormaliseEvery = 1024;             // the rotating phasor of the DTFT is renormalised this often
 // the standard third-octave frequencies of AES17 table 3 (IEC 61260-1 nominal values), 20 Hz ... 20 kHz; 1 kHz is replaced by 997 Hz
 constexpr double kThirdOctaves[] = {20.0,   25.0,   31.5,   40.0,   50.0,   63.0,   80.0,   100.0,   125.0,   160.0,   200.0,
                                     250.0,  315.0,  400.0,  500.0,  630.0,  800.0,  997.0,   1250.0,  1600.0,  2000.0,  2500.0,
@@ -57,25 +51,6 @@ void finish(ChannelResponse& channel, std::complex<double> reference)
     }
 }
 
-// The DTFT of a segment whose first sample is at time `firstTime` (samples): sum x[n] e^(-j 2 pi f (firstTime + n) / fs)
-std::complex<double> getDtft(const std::vector<double>& segment, int firstTime, double frequencyHz, double sampleRate)
-{
-    const double omega = 2.0 * kPi * frequencyHz / sampleRate;
-    const std::complex<double> step = std::polar(1.0, -omega);
-    std::complex<double> phasor = std::polar(1.0, -omega * firstTime);
-    std::complex<double> sum = 0.0;
-    for (size_t index = 0; index < segment.size(); ++index)
-    {
-        sum += segment[index] * phasor;
-        phasor *= step;
-        if (index % kRenormaliseEvery == kRenormaliseEvery - 1)
-        {
-            phasor = std::polar(1.0, -omega * (firstTime + static_cast<double>(index) + 1.0));
-        }
-    }
-    return sum;
-}
-
 int getPowerOfTwoAtLeast(double samples)
 {
     int size = 1;
@@ -86,15 +61,6 @@ int getPowerOfTwoAtLeast(double samples)
     return size;
 }
 
-// A raised-cosine taper: 0 at the first sample, 1 after `length` samples
-double getTaper(int sample, int length)
-{
-    if (length <= 0 || sample >= length)
-    {
-        return 1.0;
-    }
-    return 0.5 - 0.5 * std::cos(kPi * sample / length);
-}
 }
 
 const char* getResponseMethodName(ResponseMethod method)
@@ -206,24 +172,9 @@ FrequencyResponse measureSweptResponse(const Device& device, const SweepResponse
     FrequencyResponse result;
     result.method = ResponseMethod::SweptSine;
     result.sampleRate = settings.sampleRate;
-
-    signals::SweptSineSettings sweepSettings;
-    sweepSettings.sampleRate = settings.sampleRate;
-    sweepSettings.startHz = settings.startHz;
-    sweepSettings.stopHz = settings.stopHz;
-    if (sweepSettings.stopHz <= 0.0)
-    {
-        sweepSettings.stopHz = std::min(kSweepStopFraction * settings.sampleRate / 2.0, kSweepHighestStopHz);
-    }
-    sweepSettings.approximateSeconds = settings.approximateSeconds;
-    sweepSettings.levelDbfsPeak = settings.levelDbfs;
-    sweepSettings.preSilenceSeconds = kSweepPreSilenceSeconds;
-    sweepSettings.postSilenceSeconds = std::max(kSweepPostSilenceSeconds, settings.windowAfterSeconds + kSweepPreSilenceSeconds);
-    const signals::SweptSine sweep = signals::makeSweptSine(sweepSettings, settings.channels);
-    const juce::AudioBuffer<float> output = device(sweep.signal, settings.sampleRate);
-    result.validFromHz = std::max(2.0 * sweepSettings.startHz, kGridLowestHz);
-    result.validToHz = std::min(sweepSettings.stopHz / 1.05, kUpperBandEdgeHz);
-
+    const SweptImpulses impulses = measureSweptImpulses(device, settings);
+    result.validFromHz = impulses.validFromHz;
+    result.validToHz = impulses.validToHz;
     result.frequencyHz = settings.frequencies;
     if (result.frequencyHz.empty())
     {
@@ -232,63 +183,14 @@ FrequencyResponse measureSweptResponse(const Device& device, const SweepResponse
             result.frequencyHz.push_back(frequency);
         }
     }
-
-    // The window around the peak of an impulse response: before it at most half of the distance to the 2nd harmonic response (-L ln 2),
-    // after it windowAfterSeconds; raised-cosine tapers over the first half of the part before and the last half of the part after the peak
-    const int harmonicDistance = static_cast<int>(signals::getHarmonicAdvanceSamples(sweep, 2));
-    const auto window = [&](const std::vector<float>& impulse, int peak, int& firstTime)
+    for (int channel = 0; channel < static_cast<int>(impulses.channels.size()); ++channel)
     {
-        const int size = static_cast<int>(impulse.size());
-        const int before = std::min(static_cast<int>(settings.windowBeforeSeconds * settings.sampleRate), harmonicDistance / 2);
-        const int after = std::min(static_cast<int>(settings.windowAfterSeconds * settings.sampleRate), size / 2 - 1);
-        std::vector<double> segment;
-        for (int offset = -before; offset <= after; ++offset)
-        {
-            const int index = ((peak + offset) % size + size) % size;
-            double weight = getTaper(offset + before, before / 2);
-            if (offset > after / 2)
-            {
-                weight = getTaper(after - offset, after / 2);
-            }
-            segment.push_back(weight * impulse[static_cast<size_t>(index)]);
-        }
-        firstTime = peak - before;
-        return segment;
-    };
-
-    // The reference channel: the stimulus itself through the same deconvolution and window. Its band-edge ripple (the sweep starts and stops
-    // abruptly) is the same as in the device's response and cancels in the ratio (as in a dual-channel FFT analyser).
-    const std::vector<float> stimulus(sweep.signal.getReadPointer(0), sweep.signal.getReadPointer(0) + sweep.signal.getNumSamples());
-    int referenceFirst = 0;
-    const std::vector<double> referenceSegment = window(signals::deconvolveSweptSine(sweep, stimulus), 0, referenceFirst);
-    std::vector<std::complex<double>> identity;
-    for (const double frequency : result.frequencyHz)
-    {
-        identity.push_back(getDtft(referenceSegment, referenceFirst, frequency, settings.sampleRate));
-    }
-    const std::complex<double> identityAtReference = getDtft(referenceSegment, referenceFirst, kStandardFrequencyHz, settings.sampleRate);
-
-    for (int channel = 0; channel < settings.channels; ++channel)
-    {
-        const std::vector<float> response(output.getReadPointer(channel), output.getReadPointer(channel) + output.getNumSamples());
-        const std::vector<float> impulse = signals::deconvolveSweptSine(sweep, response);
-        // the linear impulse response: its peak in the first half (the harmonic responses lie at negative times, i.e. at the end of the buffer)
-        int peak = 0;
-        for (int index = 1; index < static_cast<int>(impulse.size()) / 2; ++index)
-        {
-            if (std::abs(impulse[static_cast<size_t>(index)]) > std::abs(impulse[static_cast<size_t>(peak)]))
-            {
-                peak = index;
-            }
-        }
-        int firstTime = 0;
-        const std::vector<double> segment = window(impulse, peak, firstTime);
         ChannelResponse channelResponse;
-        for (size_t index = 0; index < result.frequencyHz.size(); ++index)
+        for (const double frequency : result.frequencyHz)
         {
-            channelResponse.response.push_back(getDtft(segment, firstTime, result.frequencyHz[index], settings.sampleRate) / identity[index]);
+            channelResponse.response.push_back(getSweptResponse(impulses, channel, frequency));
         }
-        finish(channelResponse, getDtft(segment, firstTime, kStandardFrequencyHz, settings.sampleRate) / identityAtReference);
+        finish(channelResponse, getSweptResponse(impulses, channel, kStandardFrequencyHz));
         result.channels.push_back(channelResponse);
     }
     return result;
