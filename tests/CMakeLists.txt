@@ -29,6 +29,7 @@ target_sources(PluginLabTests
         CatalogTests.cpp
         EngineTests.cpp
         FingerprintTests.cpp
+        GuiReviewTests.cpp
         ProbeTests.cpp
         RealWorldTests.cpp
         ReferencePluginTests.cpp
@@ -106,6 +107,16 @@ add_test(NAME PluginLabHostMeasure
         -DPLUGIN_FILE=${PLUGINLAB_TEST_PLUGIN_DIR}/PluginLabTestGain.vst3
         -DREPORT_FILE=${CMAKE_CURRENT_BINARY_DIR}/host_measure.md
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostMeasure.cmake)
+
+# The GUI review (W5d): the capture of a hosted editor needs X (xwd and ImageMagick); Linux only, in the virtual display of tools/ctest_offscreen.sh
+if(UNIX AND NOT APPLE)
+    add_test(NAME PluginLabHostGuiSnapshot
+        COMMAND ${CMAKE_COMMAND}
+            -DHOST_APPLICATION=$<TARGET_FILE:PluginLabHost>
+            -DPLUGIN_FILE=${PLUGINLAB_REFERENCE_PLUGIN_DIR}/PluginLabReferenceEq.vst3
+            -DFOLDER=${CMAKE_CURRENT_BINARY_DIR}/gui_review_reference_eq
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostGuiSnapshot.cmake)
+endif()
 
 # The loader plugin is self-contained: its bundle holds the scanner (found next to the plugin binary when the plugin runs in a DAW).
 add_test(NAME PluginLabLoaderBundleHasScanner

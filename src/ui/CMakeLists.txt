@@ -1,7 +1,8 @@
 # pluginlab_hosting_ui: GUI components shared by the host application and the loader plugin (plugin browser with scanning and
-# validation, parameter table, formats with editor support).
+# validation, parameter table, formats with editor support) and the image variants of the GUI review (W5d).
 add_library(pluginlab_hosting_ui STATIC
     GuiFormats.cpp
+    GuiReview.cpp
     PluginEditorFactory.cpp
     ParameterTableComponent.cpp
     PluginEditorWindow.cpp

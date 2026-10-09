@@ -4,6 +4,7 @@
 
 #include "HostShell.h"
 #include "HostFingerprint.h"
+#include "HostGuiSnapshot.h"
 #include "HostReport.h"
 #include "pluginlab/PluginLabVersion.h"
 
@@ -21,12 +22,14 @@ juce::File resolveFile(const juce::String& text)
 //   --report <plugin folder> <file>     scans the folder, loads the plugins, writes a report (see HostReport.h) and quits
 //   --fingerprint <plugin file> <file> [<plugin id>]  measures the fingerprint of the plugin (see HostFingerprint.h), writes it and quits
 //   --measure <plugin file> <file> [<plugin id>]      runs the measurement units of W7 on the plugin (see HostFingerprint.h), writes them and quits
+//   --gui-snapshot <plugin file> <folder> [<plugin id>] captures the plugin's editor and writes the GUI review (see HostGuiSnapshot.h); in a virtual display
 // Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
 // after the scan, --compare <audio file> [<plugin file>] opens the Compare page with the file, a dry slot and the plugin
 const juce::String kWriteVersionOption = "--write-version";
 const juce::String kReportOption = "--report";
 const juce::String kFingerprintOption = "--fingerprint"; // --fingerprint <plugin file> <report file>
 const juce::String kMeasureOption = "--measure";         // --measure <plugin file> <report file>
+const juce::String kGuiSnapshotOption = "--gui-snapshot"; // --gui-snapshot <plugin file> <folder>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
 const juce::String kDeveloperOption = "--developer"; // --developer <plugin file> [--view]: opens the Developer page and makes (and shows) the report
@@ -98,6 +101,26 @@ public:
             const juce::File pluginFolder = resolveFile(arguments[reportIndex + 1]);
             const juce::File reportFile = resolveFile(arguments[reportIndex + 2]);
             const bool written = pluginlab::host::writeReport(pluginFolder, reportFile);
+            int returnValue = kExitOk;
+            if (! written)
+            {
+                returnValue = kExitReportFailed;
+            }
+            setApplicationReturnValue(returnValue);
+            quit();
+            return;
+        }
+
+        const int snapshotIndex = arguments.indexOf(kGuiSnapshotOption);
+        if (snapshotIndex >= 0 && snapshotIndex + kArgumentsOfReport < arguments.size())
+        {
+            juce::String identifier;
+            const int identifierIndex = snapshotIndex + kArgumentsOfReport + 1;
+            if (identifierIndex < arguments.size() && ! arguments[identifierIndex].startsWith("--"))
+            {
+                identifier = arguments[identifierIndex].unquoted();
+            }
+            const bool written = pluginlab::host::writeGuiSnapshots(resolveFile(arguments[snapshotIndex + 1]), resolveFile(arguments[snapshotIndex + 2]), identifier);
             int returnValue = kExitOk;
             if (! written)
             {
