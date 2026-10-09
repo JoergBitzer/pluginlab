@@ -10,7 +10,7 @@ needed.
 answers **what kind of system it is**: LTI, time-variant, non-linear without memory, Hammerstein, generalized Hammerstein, or other. A typical user does
 not know that most tools (a frequency response, a band model, a matcher) assume LTI; the classification says which measurements and models are valid for
 a plugin. The band model then applies to the LTI part only. Calibration only **reports** deviations; the matcher of W9 only needs a few examples, not the
-full behaviour. The final test objects are **not decided yet**.
+full behaviour. Test objects (decided later the same day): only our own reference models and deliberately wrong test plugins in the repository; the author's two test objects stay local.
 
 ## 1. What W8 has to answer
 For a plugin (an EQ first) and a setting of its knobs:
@@ -79,7 +79,7 @@ The classification is the first line of every plugin's report: "**LTI** (frequen
 | **W8.2** | **Band model** (`pluginlab_eqmodel`, no hosting): `Band` = type (peak, low/high shelf, low/high pass, band pass, notch, all-pass, tilt), frequency, gain, shape (Q, bandwidth in octaves, shelf slope S, order or dB/octave), **design family** (RBJ, Orfanidis, Zölzer, analogue-matched, Butterworth/LR, **linear phase**) and on/off; `EqModel` = bands + output gain + latency. Conversions between the Q and bandwidth definitions. **The Reference EQ gets a linear-phase band** (the author's answer 3: common in mastering EQs): the magnitude of a chosen design with zero phase, as a symmetric FIR with its latency. | The model reproduces every reference processor (response to 1e-6 dB), including the new linear-phase band; the conversions agree with the cookbook; `docs/eqmodel/band-model.md`. |
 | **W8.3** | **Band identification** for an LTI (or the filter of a Hammerstein) system: fit an `EqModel` to the measured response (magnitude in dB; the phase decides between minimum phase and linear phase); initial guesses from the response, Levenberg-Marquardt; bands added while the residual drops clearly; the family chosen by the smallest residual. | Reference processors with 1 ... 4 known bands (including linear phase) are recovered (frequency 0.1 %, gain 0.01 dB, Q 0.5 %); "no good description" for a non-EQ instead of invented bands. |
 | **W8.4** | **Parameter survey**: every parameter alone over its range, measured and classified (moves a frequency, changes a gain or a width, switches a type or a band, changes the **system class**, e.g. a drive knob that makes an EQ non-linear, does nothing); the texts the plugin shows. | The classification is right for every parameter of the reference plugins and the test objects; coupled parameters are reported, not guessed. |
-| **W8.5** | **Mapping proposal and file**: from the survey, "parameter 3 = band 2 frequency, law: log, 20 Hz ... 20 kHz", the knob law fitted for the displayed text and for the measured value. JSON per plugin (identifier, version, sample rates, date, who confirmed it). **Both places** (the author's answer 2): confirmed mappings of the test objects in the repository (`mappings/`, they are test data), all others in the user's settings folder. | Proposals for the test objects need at most small edits; the files drive the reference plugins exactly. |
+| **W8.5** | **Mapping proposal and file**: from the survey, "parameter 3 = band 2 frequency, law: log, 20 Hz ... 20 kHz", the knob law fitted for the displayed text and for the measured value. JSON per plugin (identifier, version, sample rates, date, who confirmed it). **Both places** (the author's answer 2): confirmed mappings of our own plugins (reference and test plugins) in the repository (`mappings/`, test data), all others (including the author's two test objects) in the user's settings folder. | Proposals for the reference and test plugins and for the author's two test objects need at most small edits; the files drive the reference plugins exactly. |
 | **W8.6** | **Calibration report, deviations only** (the author's answer 4): for each mapped band parameter, the displayed value against the measured one over the range and at 44.1/48/96 kHz, as a "myth and reality" report. No corrected knob law is handed to the matcher. | The PeakEQ case of W5 reproduced from the calibration alone; the report of each test object lists its deviations. |
 | **W8.7** | **Interactions**: bands that do not add in dB (analogue-modelled EQs, proportional Q, an output stage), measured by pairs of bands against the sum of single bands. | Reported for each test object; the model flags when the sum of single bands is not good enough. |
 | **W8.8** | **Host and report**: classification, survey, mapping and calibration on the Developer page and as Markdown, like the fingerprint. | The author can classify, survey, confirm and read the calibration of a plugin from the host. |
@@ -87,14 +87,19 @@ The classification is the first line of every plugin's report: "**LTI** (frequen
 Order: W8.1 first (it decides what the rest may assume), then W8.2 and W8.3 (no plugin needed; reference processors and the Reference EQ), then W8.4
 ... W8.8. Each step: design note in this file, code, tests, document, version, commit (as in W7).
 
-## 5. Test objects (the final set is **not decided** by the author yet)
-- Known by construction (enough to develop and test every step): the **Reference EQ** with its designs (RBJ, Orfanidis, Zölzer, SVF, Butterworth, ...)
-  and, new in W8.2, a linear-phase band; more special designs from the side studies (Orfanidis Q correction, Nyquist-matched low-pass) can be added to
-  it when needed (the author's answer 1); the Reference Nonlinear and Utility plugins; the test plugins of W5/W5d; the Hammerstein, Wiener and
-  generalized-Hammerstein test devices of W8.1.
-- Real plugins as examples, not as a test set: the twelve EQs of `docs/measurements/real-plugins-2026-10-09.md` (Pult EQ: non-linear at its defaults;
-  4K EQ: crosstalk and latency; Shape it: text-list parameters; the own PeakEQ: the 44.1 kHz design).
-- The final test set (planning §9 question 1) is chosen by the author later; W8 does not depend on it until W8.5's committed mappings.
+## 5. Test objects (decided 2026-10-09)
+The author changed the decision of the beginning (planning §6, "Test objects of the project"): the training material and the tests use **only our own
+reference models and deliberately wrong test plugins**; the manual suggests websites for open-source or free plugins; the author uses **two test objects
+downloaded with his own credentials**, which are **not part of the repository** (and not of CI).
+- **In the repository and in CI** (every step is developed and tested with these): the **Reference EQ** with its designs (RBJ, Orfanidis, Zölzer, SVF,
+  Butterworth, ...) and, new in W8.2, a linear-phase band; more special designs from the side studies (Orfanidis Q correction, Nyquist-matched low-pass)
+  added when needed; the Reference Nonlinear and Utility plugins; the **deliberately wrong test plugins** (W5: EQ designed for 44.1 kHz, EQ that resets in
+  prepare, latency liar, ...; W5d.3: editors that mishandle the scale factor), extended by test plugins with a known system class for W8.1 (Hammerstein,
+  Wiener, generalized Hammerstein, time-variant) and with known knob errors for W8.6 (a frequency knob off by a factor, a Q knob that is a bandwidth, a
+  gain knob that is not in dB).
+- **The author's two test objects** (local, not committed): the real-world check of W8.1 ... W8.6; their results are reported in the author's words,
+  their mappings are **not** committed (W8.5: "in the repository" now means the mappings of our own plugins only).
+- The real EQs measured so far (`docs/measurements/real-plugins-2026-10-09.md`) remain local examples.
 
 ## 6. Design questions to settle in W8.2/W8.3 (proposals)
 1. **One model, several families**: RBJ, Orfanidis, analogue-matched and linear-phase designs differ for the same numbers; the model keeps the family
@@ -105,7 +110,9 @@ Order: W8.1 first (it decides what the rest may assume), then W8.2 and W8.3 (no 
 5. **Delivery**: all renders through the plugin device of W7.11.
 
 ## 7. Answers of the author (2026-10-09)
-1. Test set: not decided yet; the reference implementations of several EQ types and the side-study designs serve as known test objects. → section 5.
+1. Test set: only our own reference models and deliberately wrong test plugins in the repository and the training material; the author's two test
+   objects (downloaded with his credentials) stay local; the manual suggests websites for open-source or free plugins (decided later the same day). →
+   section 5.
 2. Mapping files: both (repository for the test objects, user folder for the rest). → W8.5.
 3. Scope: a linear-phase band belongs in (common in mastering EQs; the Reference EQ gets one); dynamic EQ bands and M/S modes later. → W8.2.
 4. Calibration: only report the deviations; the matcher needs only very few examples, not the full behaviour. → W8.6.
@@ -135,4 +142,6 @@ Comments:
 > Hammerstein system. If we get a nonlinear behaviour and the transfer function is different for all overtones the system is a generalized Hammerstein
 > system. For time-variant system we need other meaningfull measurements. Ideas? Perhaps our fingerprint measurement is enough.
 
-And later: "I still have not decided for the final test objects".
+And later: "I still have not decided for the final test objects". Then the decision: "Test objects for training session e.g. in the manual are only our
+own reference models and deliberately wrong test plugins. We will suggest some web-sites to download other test-objects that are open-source or free.
+With this constraint, I can download 2 test objects that are downloaded with my credentials. These are not part of the repository."
