@@ -12,9 +12,22 @@
 # pluginval is taken from $PLUGINVAL, from the PATH, or downloaded once into
 # ~/.cache/pluginval.
 #
+# On Linux pluginval opens the plugin's editor; when xvfb-run is available the script runs itself in a virtual display (with the
+# window manager openbox if installed: hosted VST2 editors need one), so that no window appears on the desktop. Set
+# PLUGINVAL_ON_DESKTOP=1 to run on the real display.
+#
 # Exit code 0: all runs passed. Linux/macOS; for Windows use run_pluginval.ps1.
 
 set -u
+
+if [ "$(uname)" = "Linux" ] && [ -z "${PLUGINVAL_IN_XVFB:-}" ] && [ -z "${PLUGINVAL_ON_DESKTOP:-}" ] && command -v xvfb-run > /dev/null; then
+    export PLUGINVAL_IN_XVFB=1
+    window_manager=""
+    if command -v openbox > /dev/null; then
+        window_manager="openbox > /dev/null 2>&1 & sleep 1;"
+    fi
+    exec env -u WAYLAND_DISPLAY xvfb-run -a bash -c "$window_manager \"\$0\" \"\$@\"" "$0" "$@"
+fi
 
 if [ $# -lt 1 ]; then
     echo "Usage: $0 <path/to/YourPlugin.vst3> [runs]"

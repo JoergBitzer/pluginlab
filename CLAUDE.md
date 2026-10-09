@@ -44,7 +44,8 @@ tools/run_pluginval.sh build/plugins/loader/PluginLabLoader_artefacts/Debug/VST3
 ```
 Develop with the Debug build (JUCE assertions are on). **Run the tests offscreen** (the author's rule: no test windows on the desktop):
 `tools/ctest_offscreen.sh` runs CTest in Xvfb with openbox (hosted VST2 editors need a window manager; without one they die with an X "BadAtom"
-error). Compared on 2026-10-08: offscreen and desktop give the same results. `PluginLabTests --only <part of a test name>` runs single tests.
+error). Compared on 2026-10-08: offscreen and desktop give the same results. `tools/run_pluginval.sh` runs itself in Xvfb (+ openbox) when
+`xvfb-run` exists (pluginval opens the plugin's editor); `PLUGINVAL_ON_DESKTOP=1` overrides. `PluginLabTests --only <part of a test name>` runs single tests.
 CI (`.github/workflows/ci.yml`) builds, tests and runs pluginval on Windows and macOS, only for a version tag (see "CI and tags" below).
 
 ## Workflow rules (from the author)
