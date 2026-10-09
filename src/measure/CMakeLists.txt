@@ -2,6 +2,7 @@
 # the analyzer of AES17-2015 (level meter, standard filters) and the units. No hosting, no GUI.
 add_library(pluginlab_measure STATIC
     Analyzer.cpp
+    Crosstalk.cpp
     Delay.cpp
     Device.cpp
     Distortion.cpp

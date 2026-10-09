@@ -13,7 +13,7 @@ signals (the numbers come from the tests); implementation.
 | THD+N, THD (against level and frequency), harmonics from the sweep | [thd-and-thdn.md](thd-and-thdn.md) | AES17-2015 6.3.1 ... 6.3.3, A.3.6, A.4.7; IEC 60268-3; Novak et al. 2015 | W7.5, done |
 | intermodulation: difference-frequency (18 + 20 kHz), modulation distortion (41 + 7993 Hz) | [intermodulation.md](intermodulation.md) | AES17-2015 6.3.5, 6.3.6, 5.2.10, annex B | W7.6, done |
 | noise: idle channel noise, dynamic range, mains products; CCIR-RMS and A weighting | [noise.md](noise.md) | AES17-2015 6.4.1, 6.4.2, 6.5.1, 5.2.7; ITU-R BS.468-4; IEC 61672-1 | W7.7, done |
-| crosstalk | (W7.8) | AES17-2015 6.5.2 | planned |
+| crosstalk (selective and broadband, every channel driven in turn) | [crosstalk.md](crosstalk.md) | AES17-2015 6.5.2, A.3.8 | W7.8, done |
 | maximum input level, gain non-linearity | (W7.9) | AES17-2015 6.2.1, 6.3.7 | planned |
 | null test | (W7.10) | (no standard) | planned |
 

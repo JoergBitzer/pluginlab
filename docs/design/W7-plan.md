@@ -120,3 +120,10 @@ CCIR-RMS (BS.468-4 - 5.63 dB, 5.2.7) and A (IEC 61672-1 annex E), applied as the
 16/24-bit quantizers and added white noise within 0.07 dB of their known level in every weighting (idle and dynamic range); undithered 16 bits: dynamic
 range 98.07 dB against 6.02 N + 1.76 = 98.09 dB, idle silent; hum lines exact to 0.001 dB. Found on the way: the BS.468 closed form as remembered had a
 wrong constant (18.3 dB); the curve is normalised at 1 kHz instead and checked against table 1.
+
+### W7.8 crosstalk (0.33.0, done)
+`measureCrosstalk` (AES17 6.5.2): each channel driven in turn with -20 dBFS at octave steps from 20 Hz to 20 kHz, digital zero on the others; selective
+(the tone, as A.3.8) and broadband (AES17's level) crosstalk for every pair. Gain matching (6.2.4) was already part of W7.1. Document
+`docs/measurements/crosstalk.md`. Tests `tests/MeasureCrosstalkTests.cpp`: channel matrices (crosstalk, width, asymmetric, identity) exact to 0.001 dB at
+every frequency, a high-pass leak follows k |H(f)| to 0.001 dB, noise shows in the broadband value only (-77 dB "crosstalk" from noise at -100 dB).
+Test device `FilteredCrosstalk` in `tests/MeasureTestDevices.h`.
