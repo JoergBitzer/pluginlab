@@ -10,6 +10,7 @@ add_library(pluginlab_measure STATIC
     Intermodulation.cpp
     Linearity.cpp
     Noise.cpp
+    NullTest.cpp
     Gain.cpp
     Phase.cpp
     SweptImpulse.cpp

@@ -138,3 +138,12 @@ closed forms; wraparound detected as rollover; dithered gain linearity equal to 
 Two corrections: the search started at -60 dBFS, where an undithered quantizer's noise alone exceeds -40 dB (now from -20 dBFS); the wraparound fails at
 exactly 0 dBFS (a sample of the coherent sine is +1), not above. Test devices `Chain` and `Wraparound`. Also, a process slip: W7.8 was committed before
 its full test run had finished; the full run of 0.34.0 covers it.
+
+### W7.10 null test with alignment (0.35.0, done)
+`measureNull`: the same stimulus (white noise, or any buffer) through two devices; integer delay from the cross-correlation (+-0.25 s), the fraction from the
+weighted phase slope of the cross-spectrum, the polarity from the sign of the real cross power, the least-squares gain; the residual relative to A in the
+band 20 Hz ... 20 kHz, per third-octave band, and unaligned for comparison. Document `docs/measurements/null-test.md`. Tests `tests/MeasureNullTests.cpp`:
+exact cases (itself, delay 37 and -0.5 dB, B 1000 samples late, inverted +3 dB) delay and gain exact, null at the float floor; known differences (two RBJ
+peaks, a shelf, Thiran, Lagrange) within 0.1 dB of the exact expectation and equal to the best possible alignment (searched); two dithered quantizers -70.3 dB
+as expected. One expectation was wrong: the delay that aligns a whole band best is not the low-frequency phase delay of a Thiran (37.17, not 37.25); the
+test now checks against the searched optimum.
