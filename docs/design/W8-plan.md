@@ -1,73 +1,138 @@
-# W8: EQ band model, parameter mapping and calibration (plan)
+# W8: system classification, EQ band model, parameter mapping and calibration (plan)
 
-Status: **plan, not started** (author's request 2026-10-09: "start the planning document on W8"). Planning §8, W8: "EQ band model + parameter mapping,
-calibration of knobs by measurement. Done when: mapping data validated for the test EQs." Lessons of the prototype (planning §5 item 4,
-`docs/prototype/LESSONS_LEARNED.md`): the model of "one peaking band" was too narrow (shelves, high/low-pass, several bands, bands without Q); every
-plugin needed an hour of manual exploration for its mapping file; a tool that lists all parameters and proposes a mapping is needed.
+Status: **plan v2, not started** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
+and comments, kept verbatim in the appendix). Planning §8, W8: "EQ band model + parameter mapping, calibration of knobs by measurement. Done when:
+mapping data validated for the test EQs." Lessons of the prototype (planning §5 item 4, `docs/prototype/LESSONS_LEARNED.md`): the model of "one peaking
+band" was too narrow; every plugin needed an hour of manual exploration for its mapping file; a tool that lists all parameters and proposes a mapping is
+needed.
+
+**What changed in v2** (the author: "it is too early for W8 in this form"): before a plugin is described as an EQ (an LTI system made of bands), W8 first
+answers **what kind of system it is**: LTI, time-variant, non-linear without memory, Hammerstein, generalized Hammerstein, or other. A typical user does
+not know that most tools (a frequency response, a band model, a matcher) assume LTI; the classification says which measurements and models are valid for
+a plugin. The band model then applies to the LTI part only. Calibration only **reports** deviations; the matcher of W9 only needs a few examples, not the
+full behaviour. The final test objects are **not decided yet**.
 
 ## 1. What W8 has to answer
-For an EQ plugin and a setting of its knobs:
-1. **What does the plugin do?** A description in the terms of an EQ: bands with type, frequency, gain, Q (or bandwidth, slope, order) and phase behaviour.
-   This description comes from a **measurement** (W7: frequency response, phase), not from the knobs.
+For a plugin (an EQ first) and a setting of its knobs:
+0. **What kind of system is it?** LTI (up to low-level noise and distortion), time-variant, non-linear (memoryless, Hammerstein, generalized
+   Hammerstein, Wiener, other), and which measurements are therefore meaningful.
+1. **What does the plugin do?** For the LTI part: bands with type, frequency, gain, Q (or bandwidth, slope, order) and phase behaviour, from a
+   **measurement** (W7), not from the knobs.
 2. **What do the knobs say?** Which parameter belongs to which band and which band quantity, and the knob law (normalised value -> Hz, dB, Q).
 3. **Myth and reality:** where the two disagree (the knob says 1 kHz, the filter sits at 1087 Hz, as in the PeakEQ of W5; the knob says Q 1, the bandwidth
-   is that of RBJ Q 0.7; the gain says +6 dB and the peak is +5.6 dB; the frequency moves with the sample rate).
-4. **The base of the matcher (W9):** to set plugin B so that it does what plugin A does, the matcher needs B's knobs in band terms and a model to optimise.
+   is that of RBJ Q 0.7; "all knobs at 0" and the plugin distorts, as Pult EQ with its default drive: `docs/measurements/real-plugins-2026-10-09.md`).
+4. **The base of the matcher (W9):** a few well-chosen examples (not the full behaviour, the author's answer 4).
 
-## 2. Sources
+## 2. System classification (W8.1)
+The author's proposal (appendix), reviewed. All tests use the synchronized sweep of W7.2/W7.5 (Novak et al. 2015): its deconvolution gives the linear
+response $H_1(f)$ and the harmonic responses $H_n(f)$ (the n-th harmonic for the input frequency f) in one measurement.
+
+| Class | Signature in the measurements | Test (proposal) |
+|---|---|---|
+| **LTI** | $H_n$ below a limit (e.g. -80 dB re $H_1$) **and** $H_1$ the same at every level **and** time-invariant | sweeps at three levels (e.g. -40, -20, -6 dBFS); time invariance as below |
+| **Time-variant** (LFO, tremolo, chorus, auto-gain, random modulation) | two identical inputs at different times give different outputs; energy outside the harmonic windows of the deconvolution; sidebands around a steady sine | the fingerprint's determinism and time-invariance tests (W5); the same sweep at two start times; the spectrum of a long sine (sidebands at $f \pm f_\text{mod}$) |
+| **Memoryless non-linear** | $H_1$ and every $H_n$ flat in magnitude with constant phase (only the common latency); the harmonics change with level as the orders of a polynomial predict | flatness of all $H_n$ over the band; a polynomial (or a table) fitted at one level predicts another level |
+| **Hammerstein** (curve, then one filter $H$) | $H_n(f) = c_n\,H(n f)$: every harmonic response is the **same** filter, read at the output frequency $n f$; $H_1 = c_1 H$ | $H_n(f) / H_1(n f)$ constant over f for every n (verified on a Hammerstein test device in W7.5: within 0.001 dB) |
+| **Wiener** (one filter $G$, then a curve) | $H_n(f) \propto G(f)^n$ (read at the input frequency) for the leading order of each harmonic | $H_n(f) / H_1(f)^n$ constant over f at a level where the leading order dominates |
+| **Generalized Hammerstein** (parallel branches $x^n \to G_n$) | harmonic responses that differ, and a model fitted at one level **predicts the other levels** | the branch filters $G_n$ from the $H_n$ (a triangular linear transform, Novak et al. 2010); the prediction of a second and third level |
+| **Other** (Wiener-Hammerstein, Volterra, dynamics such as compressors, hysteresis) | none of the above: e.g. $H_1$ changes with level (a compressor), the generalized Hammerstein fit does not predict other levels | reported as "other", with the evidence (level dependence of $H_1$, residual of the best model) |
+
+**Remarks on the author's decision tree** (the author: "I am not sure, if this is always correct"):
+1. *"A linear response ⇒ LTI"* needs more than one level: a compressor below its threshold, an expander above it, or a soft clipper at a low level all
+   look LTI at -20 dBFS. Hence sweeps at several levels (and the maximum input level of W7.9 as the upper end).
+2. *"Non-linear without a transfer function ⇒ memoryless"*: yes; "no transfer function" means flat $H_1$ and flat $H_n$ (constant phase), allowing a
+   common latency (a curve followed by a pure delay is memoryless in this sense).
+3. *"The transfer function equal for all overtones ⇒ Hammerstein"*: yes, if "equal" is read at the **output frequency**: harmonic n of the input frequency
+   f passes the filter at $n f$. Harmonic n also contains contributions of the orders $n+2, n+4, \dots$; they pass the same filter, so the test holds.
+4. *"Different for all overtones ⇒ generalized Hammerstein"*: not necessarily. A Wiener system, a Volterra system or a dynamics processor also has
+   different harmonic responses. A generalized Hammerstein model can always be fitted at one level; whether the system **is** one shows only when the
+   fitted model predicts another level. The Wiener system is worth its own class: it is common (a pre-emphasis before a saturation, a tone stack
+   before a tube model) and has a clear signature.
+5. *Time variance*: the fingerprint (W5: determinism, time invariance, real-time pace, a parameter change) answers most of it; two cheap measurements are
+   added: the same sweep at two start times (an LFO changes $H_1$ between them) and sidebands around a long sine (modulation, AES17 6.4.4 is the same idea
+   for converters). A time-variant system makes the harmonic responses of the sweep meaningless (the sweep assumes time invariance).
+6. *Noise and floors*: "LTI" needs limits (harmonics below e.g. -80 dB, $H_1$ equal within 0.05 dB across levels); a float plugin is at -150 dB, a
+   dithered one at its noise; the limits go into a settings file like the fingerprint's.
+
+The classification is the first line of every plugin's report: "**LTI** (frequency response, phase and the band model are valid)", "**Hammerstein**
+(the frequency response describes the filter; the distortion comes before it)", "**time-variant**: the frequency response is an average", and so on.
+
+## 3. Sources
+- A. Novak, L. Simon, F. Kadlec, P. Lotton, "Nonlinear system identification using exponential swept-sine signal", IEEE Transactions on Instrumentation
+  and Measurement 59(8), 2010, pp. 2220-2229 (the generalized Hammerstein model from the harmonic responses of the sweep).
+- A. Novak, P. Lotton, L. Simon, "Synchronized swept-sine: theory, application, and implementation", J. Audio Eng. Soc. 63(10), 2015, pp. 786-798.
+- A. Farina, "Simultaneous measurement of impulse response and distortion with a swept-sine technique", AES 108th Convention, 2000, preprint 5093.
 - R. Bristow-Johnson, "Cookbook formulae for audio EQ biquad filter coefficients" (the RBJ designs and their Q, bandwidth and shelf-slope definitions).
 - S. J. Orfanidis, "Digital parametric equalizer design with prescribed Nyquist-frequency gain", J. Audio Eng. Soc. 45(6), 1997, pp. 444-455.
 - T. Schmidt, J. Bitzer, "Digital equalization filter: New solution to the frequency response near Nyquist and evaluation by listening tests", AES 128th
   Convention, London, 2010 (the side study `docs/design/orfanidis-q-correction-study.md`).
 - U. Zölzer (ed.), *DAFX: Digital Audio Effects*, 2nd ed., Wiley 2011 (shelving and peak filters).
-- V. Välimäki, J. D. Reiss, "All about audio equalization: solutions and frontiers", Applied Sciences 6(5), 2016, 129 (a review of parametric and
-  graphic EQ designs, Q and bandwidth definitions, proportional Q).
-- D. A. Bohn, "Constant-Q graphic equalizers", J. Audio Eng. Soc. 34(9), 1986 (constant against proportional Q: the bandwidth of many analogue EQs
-  depends on the gain).
-- The reference designs of W6 (`pluginlab_reference`): RBJ, Orfanidis, Zölzer, SVF (TPT), analogue prototypes, Butterworth, Linkwitz-Riley,
-  linear-phase FIR, and the Nyquist-matched low-pass of the side study (`docs/design/nyquist-matched-lowpass-study.md`).
+- V. Välimäki, J. D. Reiss, "All about audio equalization: solutions and frontiers", Applied Sciences 6(5), 2016, 129.
+- D. A. Bohn, "Constant-Q graphic equalizers", J. Audio Eng. Soc. 34(9), 1986 (constant against proportional Q).
+- The reference designs of W6 (`pluginlab_reference`) and the side studies (Orfanidis Q correction, Nyquist-matched low-pass).
 - Fitting: nonlinear least squares (Levenberg-Marquardt), J. Nocedal, S. J. Wright, *Numerical Optimization*, 2nd ed., Springer 2006, chapter 10.
 
-## 3. The work packages
+## 4. The work packages
 | Step | Content | Done when |
 |---|---|---|
-| **W8.1** | **Band model** (`pluginlab_eqmodel`, no hosting): `Band` = type (peak, low/high shelf, low/high pass, band pass, notch, all-pass, tilt), frequency, gain, shape (Q, bandwidth in octaves, shelf slope S, order or dB/octave), **design family** (RBJ, Orfanidis, Zölzer, analogue-matched, Butterworth/LR, linear phase) and on/off; `EqModel` = bands + output gain + latency. The response of the model (magnitude and phase) from the reference designs. Conversions between the Q and bandwidth definitions (RBJ Q, bandwidth at -3 dB of the gain, "half-gain" bandwidth, proportional Q). | The model reproduces every reference processor of W6 exactly (its response equals the processor's to 1e-6 dB); the conversions agree with the cookbook formulas; a document `docs/eqmodel/band-model.md` with the definitions side by side. |
-| **W8.2** | **Band identification by measurement**: fit an `EqModel` to a measured response (W7.2 sweep, magnitude in dB and, for minimum-phase EQs, the phase of W7.4): initial guesses from the response (peaks, slopes, plateaus), then Levenberg-Marquardt on the band parameters; the number of bands chosen by the residual (add a band while the residual drops clearly); the family chosen by the smallest residual. The residual over 20 Hz ... 20 kHz says how well the description fits. | Reference processors with 1 ... 4 known bands are recovered (frequency within 0.1 %, gain within 0.01 dB, Q within 0.5 %) from the measured response at 44.1/48/96 kHz; the fit says "no good description" for a non-EQ (e.g. a comb filter) instead of inventing bands. |
-| **W8.3** | **Parameter survey** of a plugin (from the fingerprint's scan, W5): every parameter alone over its range (e.g. 9 positions), the response measured each time, the change classified: moves a frequency, changes a gain, changes a width, switches a type or a band on/off, does nothing; the texts the plugin shows at each position (`getText`) recorded. Choice parameters with all their entries. | For the three reference plugins and the test EQs the classification is right for every parameter (checked by hand once and kept as expected results); unknown or coupled parameters are reported, not guessed. |
-| **W8.4** | **Mapping proposal and file**: from the survey, a proposal "parameter 3 = band 2 frequency, law: log, 20 Hz ... 20 kHz" for each band parameter, with the knob law fitted (linear, logarithmic, table of points) both for the displayed text and for the measured band value. Stored as JSON per plugin (identifier, version, sample rates, date, who confirmed it); the author or user confirms or edits the proposal. | Proposals for the test EQs need at most small edits; the files load and drive the reference plugins exactly. |
-| **W8.5** | **Calibration: knob against measurement** ("myth and reality"): for each mapped band parameter, the displayed value against the measured one over the range and at 44.1/48/96 kHz; the deviations in a report (e.g. "frequency: measured = 1.087 x knob at 48 kHz, 1.000 x at 44.1 kHz: the design assumes 44.1 kHz"; "Q: the knob is the bandwidth in octaves, not RBJ Q"; "gain: proportional Q, the bandwidth narrows with gain"). | The PeakEQ case of W5 is reproduced from the calibration alone; the report of each test EQ lists its laws and deviations. |
-| **W8.6** | **Interactions**: bands that do not add in dB (an analogue-modelled EQ whose bands interact, a band whose Q depends on its gain, an output stage), checked by measuring pairs of bands against the sum of the single bands. | Interaction measured and reported for each test EQ; the model flags when the sum of single bands is not good enough for the matcher. |
-| **W8.7** | **Host and report**: the survey, the proposal, the confirmed mapping and the calibration report on the Developer page (a table; editing of the mapping) and as Markdown, like the fingerprint. | The author can survey, confirm and read the calibration of a test EQ from the host without the command line. |
+| **W8.1** | **System classification** (section 2): sweeps at three levels, the harmonic responses, the tests for each class, the time-variance tests (fingerprint, sweep at two start times, sidebands of a long sine); the class with its evidence and the list of measurements that are valid for it, first line of the report. Test devices with known class: gain and filters (LTI), tremolo (time-variant), polynomial and clippers (memoryless), polynomial then a filter (Hammerstein), a filter then a polynomial (Wiener), parallel branches with different filters (generalized Hammerstein), a compressor-like gain that follows the level (other). | Every test device is classified correctly at 44.1/48/96 kHz; the limits are in a settings file; the twelve EQs of `real-plugins-2026-10-09.md` classified (at their defaults) as a first real check. |
+| **W8.2** | **Band model** (`pluginlab_eqmodel`, no hosting): `Band` = type (peak, low/high shelf, low/high pass, band pass, notch, all-pass, tilt), frequency, gain, shape (Q, bandwidth in octaves, shelf slope S, order or dB/octave), **design family** (RBJ, Orfanidis, Zölzer, analogue-matched, Butterworth/LR, **linear phase**) and on/off; `EqModel` = bands + output gain + latency. Conversions between the Q and bandwidth definitions. **The Reference EQ gets a linear-phase band** (the author's answer 3: common in mastering EQs): the magnitude of a chosen design with zero phase, as a symmetric FIR with its latency. | The model reproduces every reference processor (response to 1e-6 dB), including the new linear-phase band; the conversions agree with the cookbook; `docs/eqmodel/band-model.md`. |
+| **W8.3** | **Band identification** for an LTI (or the filter of a Hammerstein) system: fit an `EqModel` to the measured response (magnitude in dB; the phase decides between minimum phase and linear phase); initial guesses from the response, Levenberg-Marquardt; bands added while the residual drops clearly; the family chosen by the smallest residual. | Reference processors with 1 ... 4 known bands (including linear phase) are recovered (frequency 0.1 %, gain 0.01 dB, Q 0.5 %); "no good description" for a non-EQ instead of invented bands. |
+| **W8.4** | **Parameter survey**: every parameter alone over its range, measured and classified (moves a frequency, changes a gain or a width, switches a type or a band, changes the **system class**, e.g. a drive knob that makes an EQ non-linear, does nothing); the texts the plugin shows. | The classification is right for every parameter of the reference plugins and the test objects; coupled parameters are reported, not guessed. |
+| **W8.5** | **Mapping proposal and file**: from the survey, "parameter 3 = band 2 frequency, law: log, 20 Hz ... 20 kHz", the knob law fitted for the displayed text and for the measured value. JSON per plugin (identifier, version, sample rates, date, who confirmed it). **Both places** (the author's answer 2): confirmed mappings of the test objects in the repository (`mappings/`, they are test data), all others in the user's settings folder. | Proposals for the test objects need at most small edits; the files drive the reference plugins exactly. |
+| **W8.6** | **Calibration report, deviations only** (the author's answer 4): for each mapped band parameter, the displayed value against the measured one over the range and at 44.1/48/96 kHz, as a "myth and reality" report. No corrected knob law is handed to the matcher. | The PeakEQ case of W5 reproduced from the calibration alone; the report of each test object lists its deviations. |
+| **W8.7** | **Interactions**: bands that do not add in dB (analogue-modelled EQs, proportional Q, an output stage), measured by pairs of bands against the sum of single bands. | Reported for each test object; the model flags when the sum of single bands is not good enough. |
+| **W8.8** | **Host and report**: classification, survey, mapping and calibration on the Developer page and as Markdown, like the fingerprint. | The author can classify, survey, confirm and read the calibration of a plugin from the host. |
 
-Order: W8.1 and W8.2 first (they need no plugin; tested with the reference processors and the Reference EQ plugin), then W8.3 ... W8.5 on the
-reference plugins and the test EQs, W8.6, W8.7. Each step: design note in this file, code, tests, document, version, commit (as in W7).
+Order: W8.1 first (it decides what the rest may assume), then W8.2 and W8.3 (no plugin needed; reference processors and the Reference EQ), then W8.4
+... W8.8. Each step: design note in this file, code, tests, document, version, commit (as in W7).
 
-## 4. Test objects
-- The **Reference EQ plugin** (W6.4: RBJ, Orfanidis, Zölzer, SVF, Butterworth, ...): every answer known; the first and decisive test of W8.1 ... W8.5.
-- The **test EQs** of planning §6 (at most 5: own, 2 open source, 2 free closed source; decided so far: Dusk Audio 4K EQ 2 and Soundly Shape it) and
-  the candidates of open question 1 (Venn Free EQ). The own **PeakEQ** with its known 44.1 kHz design for W8.5.
-- Shape it: 1001 log-spaced frequency texts and text lists for the type: the survey must handle text-list parameters.
-- 4K EQ 2: an analogue-modelled EQ (proportional Q likely): W8.6.
+## 5. Test objects (the final set is **not decided** by the author yet)
+- Known by construction (enough to develop and test every step): the **Reference EQ** with its designs (RBJ, Orfanidis, Zölzer, SVF, Butterworth, ...)
+  and, new in W8.2, a linear-phase band; more special designs from the side studies (Orfanidis Q correction, Nyquist-matched low-pass) can be added to
+  it when needed (the author's answer 1); the Reference Nonlinear and Utility plugins; the test plugins of W5/W5d; the Hammerstein, Wiener and
+  generalized-Hammerstein test devices of W8.1.
+- Real plugins as examples, not as a test set: the twelve EQs of `docs/measurements/real-plugins-2026-10-09.md` (Pult EQ: non-linear at its defaults;
+  4K EQ: crosstalk and latency; Shape it: text-list parameters; the own PeakEQ: the 44.1 kHz design).
+- The final test set (planning §9 question 1) is chosen by the author later; W8 does not depend on it until W8.5's committed mappings.
 
-## 5. Design questions to settle in W8.1/W8.2 (proposals)
-1. **One model, several families**: a band is not just "a peak of Q 2"; RBJ, Orfanidis and the analogue-matched designs give different responses near
-   Nyquist for the same numbers. The model keeps the family as a property and the fit tries the families; the report says which family describes the
-   plugin best (itself a finding: "this EQ cramps near Nyquist like RBJ").
-2. **Q definitions**: the model stores one internal Q (RBJ's, defined on the analogue prototype) and converts for display; the mapping records which
-   definition the plugin's knob uses.
-3. **Fitting in dB with weights**: the magnitude in dB, weighted by third-octave density (not by bin count, which would favour the high frequencies);
-   phase only as a check (an EQ that is not minimum phase: linear-phase or mixed-phase modes, W7.4 shows it).
-4. **Sample rate**: every survey and calibration at 44.1, 48 and 96 kHz (the PeakEQ lesson); mapping laws may depend on the rate.
-5. **Delivery**: all renders through the plugin device of W7.11 (fresh instance, careful delivery); the parameter smoothing and delivery quirks of W5 are
-   therefore already handled.
+## 6. Design questions to settle in W8.2/W8.3 (proposals)
+1. **One model, several families**: RBJ, Orfanidis, analogue-matched and linear-phase designs differ for the same numbers; the model keeps the family
+   and the fit tries the families; the report says which describes the plugin best.
+2. **Q definitions**: one internal Q (RBJ's, on the analogue prototype), converted for display; the mapping records the plugin's definition.
+3. **Fitting in dB with weights** by third-octave density; the phase decides minimum against linear phase (W7.4).
+4. **Sample rate**: every survey and calibration at 44.1, 48 and 96 kHz.
+5. **Delivery**: all renders through the plugin device of W7.11.
 
-## 6. Open questions for the author
-1. **Which EQs form the test set** (planning §9, question 1 is still open): W8 needs at least the Reference EQ plus two real EQs to be meaningful.
-2. **Are mapping files part of the repository** (e.g. `mappings/<plugin>.json`, committed after confirmation) or user data only? Proposal: both:
-   confirmed mappings of the test EQs in the repository (they are test data), others in the user's settings folder.
-3. **Scope of band types**: dynamic EQ bands, M/S modes and linear-phase modes are out of W8 (they need W11 or the stereo units); is that right?
-4. **How far "calibration" goes**: only report the deviations (myth and reality), or also offer a corrected knob law to the matcher (W9)? Proposal: both;
-   the matcher uses the measured law, the report shows the difference.
+## 7. Answers of the author (2026-10-09)
+1. Test set: not decided yet; the reference implementations of several EQ types and the side-study designs serve as known test objects. → section 5.
+2. Mapping files: both (repository for the test objects, user folder for the rest). → W8.5.
+3. Scope: a linear-phase band belongs in (common in mastering EQs; the Reference EQ gets one); dynamic EQ bands and M/S modes later. → W8.2.
+4. Calibration: only report the deviations; the matcher needs only very few examples, not the full behaviour. → W8.6.
+5. Comments: classify the system first (LTI, time-variant, non-linear with or without memory; Hammerstein and generalized Hammerstein as models; Volterra,
+   hysteresis and the like as "other"). → section 2, W8.1.
 
 ## Progress
 (none yet)
+
+## Appendix: the author's comments (2026-10-09, verbatim)
+Answers in the question list:
+1. "We have your reference implementation of several EQ types and with our side projects we can even implement more special designs"
+2. "both is good"
+3. "linear phase is very common for mastering EQs, so it would be good to have at least a linear phase band in the reference EQ. Dynamic EQs and M/S
+   modes are more complex and can be left for later."
+4. "Only reporting the deviation. The matcher do not need to match the full behaviour, just very feq examples"
+
+Comments:
+> I think, it is to early for W8 in this form.
+> Of course we can do it, but in my opinion, we should first answer the question, if the system is mainly LTI. Also it would be great to have an idea, if
+> the system is just time-variant or non-linear. And if non-linear, if it is memoryless or has memory. This would help to understand the system and to
+> find a good model. Hammerstein models and generalized Hammerstein models are a good starting point for non-linear systems. Volterra and other
+> non-linearitise like hysteresis are subsumable as "others". Thought process: A typical user is not aware, that many tools need assume LTI.
+> I am not sure, if this is always correct, but I think it is: Iw we measure an exponential sweep and we get a linear response the system is LTI (of
+> course some low-level noise and some low-level distortion artefacts should be allowed). If we get a non-linear beahviour without any transfer functin
+> the system is memoryless non-linear. If we get a nonlinear behaviour and the transfer function is equal for all overtones the system is a simple
+> Hammerstein system. If we get a nonlinear behaviour and the transfer function is different for all overtones the system is a generalized Hammerstein
+> system. For time-variant system we need other meaningfull measurements. Ideas? Perhaps our fingerprint measurement is enough.
+
+And later: "I still have not decided for the final test objects".
