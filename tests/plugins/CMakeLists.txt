@@ -105,6 +105,10 @@ function(pluginlab_add_test_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE FS_BU
     if(ARGC GREATER 6)
         set(DRIVE ${ARGV6})
     endif()
+    set(KNOB_FAULTS 0)
+    if(ARGC GREATER 7)
+        set(KNOB_FAULTS ${ARGV7})
+    endif()
     juce_add_plugin(${TARGET_NAME}
         COMPANY_NAME "Jade_Hochschule"
         IS_SYNTH FALSE
@@ -130,7 +134,8 @@ function(pluginlab_add_test_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE FS_BU
             PLUGINLAB_TEST_EQ_FS_BUG=${FS_BUG}
             PLUGINLAB_TEST_EQ_PREPARE_BUG=${PREPARE_BUG}
             PLUGINLAB_TEST_EQ_ENABLE_SWITCH=${ENABLE_SWITCH}
-            PLUGINLAB_TEST_EQ_DRIVE=${DRIVE})
+            PLUGINLAB_TEST_EQ_DRIVE=${DRIVE}
+            PLUGINLAB_TEST_EQ_KNOB_FAULTS=${KNOB_FAULTS})
 
     target_link_libraries(${TARGET_NAME}
         PRIVATE
@@ -148,3 +153,5 @@ pluginlab_add_test_eq_plugin(PluginLabTestEqSwitch "PluginLab Test EQ Switch" Te
 # an "analogue" EQ for the parameter survey (W8.4): a drive (tanh before the band, off at 0 dB: the EQ becomes non-linear), an output level and a
 # display switch that changes nothing in the audio
 pluginlab_add_test_eq_plugin(PluginLabTestEqDrive "PluginLab Test EQ Drive" Teq5 0 0 0 1)
+# knobs that show something else than they do, for the calibration (W8.6): frequency 5 % high, "Q" a bandwidth in octaves, gain half the dB shown
+pluginlab_add_test_eq_plugin(PluginLabTestEqKnobs "PluginLab Test EQ Knob Faults" Teq6 0 0 0 0 1)

@@ -4,6 +4,7 @@
 
 #include "HostSettings.h"
 #include "pluginlab/PluginLabVersion.h"
+#include "pluginlab/engine/Calibration.h"
 #include "pluginlab/engine/Fingerprint.h"
 #include "pluginlab/engine/Mapping.h"
 #include "pluginlab/engine/ParameterSurvey.h"
@@ -19,6 +20,7 @@ namespace
 {
 constexpr double kFingerprintShare = 0.75; // of a report: the fingerprint; the measurement units the rest
 constexpr double kSurveyShare = 0.97;      // of a mapping: the survey; the proposal the rest
+constexpr double kCalibrationSurveyShare = 0.5; // of a calibration without a mapping: the survey first
 
 double getMeasurementRate()
 {
@@ -208,5 +210,65 @@ bool writeMappingProposal(const juce::File& pluginFile, const juce::File& report
     }
     pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
     return reportFile.replaceWithText(report) && written;
+}
+
+bool writeCalibrationReport(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier)
+{
+    juce::AudioPluginFormatManager formatManager;
+    hosting::addHeadlessFormats(formatManager);
+    const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(formatManager, pluginFile);
+    const juce::File folder = HostSettings().getMappingFolder();
+    ProgressWriter progress(reportFile);
+    juce::String report;
+    for (const juce::PluginDescription& description : scan.descriptions)
+    {
+        if (pluginIdentifier.isNotEmpty() && description.createIdentifierString() != pluginIdentifier)
+        {
+            continue;
+        }
+        const pluginlab::engine::SurveySubject subject = pluginlab::engine::makePluginSubject(formatManager, description, getMeasurementRate());
+        const juce::File file = folder.getChildFile(pluginlab::engine::getMappingFileName(description.name));
+        juce::String error;
+        std::optional<pluginlab::engine::Mapping> mapping = pluginlab::engine::Mapping::read(file, error);
+        juce::String note;
+        double share = 0.0; // of the progress that the survey took
+        if (mapping)
+        {
+            note = "Mapping: `" + file.getFullPathName() + "` (" + (mapping->confirmedBy.isEmpty() ? juce::String("a proposal, not confirmed") : "confirmed by " + mapping->confirmedBy) + ").";
+        }
+        else
+        {
+            // no mapping yet: the survey proposes one (written as --map would)
+            share = kCalibrationSurveyShare;
+            pluginlab::engine::SurveySettings settings;
+            settings.sampleRate = getMeasurementRate();
+            const pluginlab::engine::SurveyResult survey = pluginlab::engine::surveyParameters(subject, settings, [&progress, &subject](int index, int total) {
+                if (index < total)
+                {
+                    progress(kCalibrationSurveyShare * index / std::max(total, 1),
+                             "survey (no mapping yet): parameter " + juce::String(index + 1) + " of " + juce::String(total) + ", " + subject.parameters[static_cast<size_t>(index)].name);
+                }
+            });
+            mapping = pluginlab::engine::proposeMapping(subject, survey, pluginlab::engine::makePluginIdentity(description),
+                                                         "PluginLabHost " + juce::String(pluginlab::getVersionString()));
+            mapping->write(file);
+            note = "No mapping existed: the survey proposed one, written to `" + file.getFullPathName() + "` (not confirmed; check it with \"View mapping\").";
+        }
+        const pluginlab::engine::CalibrationSettings settings;
+        const pluginlab::engine::CalibrationResult result = pluginlab::engine::calibrate(subject, *mapping, settings, [&progress, share](double fraction, const juce::String& step) {
+            progress(share + (1.0 - share) * fraction, "calibration: " + step);
+        });
+        report += pluginlab::engine::signReport("# Calibration: " + description.name + " " + description.version + "\n\n" + note + "\n\n"
+                                                    + pluginlab::engine::createCalibrationReport(result) + "\n"
+                                                    + pluginlab::engine::createCalibrationReportFooter(settings),
+                                                "PluginLabHost, calibration")
+                  + "\n";
+    }
+    if (report.isEmpty())
+    {
+        return false;
+    }
+    pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
+    return reportFile.replaceWithText(report);
 }
 }

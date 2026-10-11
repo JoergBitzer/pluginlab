@@ -107,8 +107,8 @@
         {
           "value": 1.0,
           "text": "Lagrange (FIR)",
-          "description": "high shelf 15382 Hz -7.4 dB Q 0.49 (RBJ cookbook)",
-          "type": "high shelf",
+          "description": "low shelf 16092 Hz +3.9 dB Q 0.60 (RBJ cookbook)",
+          "type": "low shelf",
           "family": "RBJ cookbook",
           "band": true
         }

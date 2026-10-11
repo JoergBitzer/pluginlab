@@ -439,26 +439,33 @@ double growGreedily(EqModel& model, double cost, const std::vector<double>& freq
     return cost;
 }
 
-// removes bands without which the model stays good (the greedy search may have used two bands for one feature)
+// removes bands without which the model stays good: the greedy search may have used two bands for one feature, and it goes on below the good
+// residual, where extra bands only imitate the small difference between the plugin's design and the model's (two shelves at -30 dB and an output
+// gain fitted a high-pass of an analogue model better than the high-pass itself: 0.010 against 0.026 dB)
 double prune(EqModel& model, double cost, const std::vector<double>& frequencies, const std::vector<double>& measuredDb, const FitSettings& settings)
 {
-    bool removed = true;
-    while (removed && model.bands.size() > 1)
+    // each round removes the band whose removal costs least (not the first that may go: that could be the main band, the rest imitating it)
+    while (model.bands.size() > 1)
     {
-        removed = false;
+        EqModel best;
+        double bestCost = -1.0;
         for (size_t index = 0; index < model.bands.size(); ++index)
         {
             EqModel trial = model;
             trial.bands.erase(trial.bands.begin() + static_cast<std::ptrdiff_t>(index));
             const double trialCost = refine(trial, frequencies, measuredDb, settings.sampleRate);
-            if (trialCost < std::max(0.1 * settings.goodResidualDb, 1.1 * cost))
+            if (bestCost < 0.0 || trialCost < bestCost)
             {
-                model = trial;
-                cost = trialCost;
-                removed = true;
-                break;
+                best = trial;
+                bestCost = trialCost;
             }
         }
+        if (bestCost >= std::max(settings.goodResidualDb, 1.1 * cost))
+        {
+            break;
+        }
+        model = best;
+        cost = bestCost;
     }
     return cost;
 }

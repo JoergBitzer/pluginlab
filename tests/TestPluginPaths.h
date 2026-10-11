@@ -55,6 +55,12 @@ inline juce::File getEqPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestEq.vst3");
 }
 
+// knobs that show something else than they do (calibration, W8.6): frequency 5 % high, "Q" a bandwidth in octaves, gain half the dB shown
+inline juce::File getEqKnobFaultPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestEqKnobs.vst3");
+}
+
 inline juce::File getEqFsFaultPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestEqFs.vst3");

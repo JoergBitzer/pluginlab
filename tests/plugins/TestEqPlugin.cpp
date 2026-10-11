@@ -9,6 +9,8 @@
 //   PLUGINLAB_TEST_EQ_ENABLE_SWITCH=1  the band has a switch "Enabled" that is off by default (like the bands of Venn Audio Free EQ)
 //   PLUGINLAB_TEST_EQ_DRIVE=1        an "analogue" EQ for the parameter survey: "Drive" (tanh(g x) / g before the band, off at 0 dB), "Output" (a
 //                                    level after it) and "Display" (a switch of the editor that changes nothing in the audio)
+//   PLUGINLAB_TEST_EQ_KNOB_FAULTS=1  knobs that show something else than they do (the calibration of W8.6): the band sits 5 % above the frequency
+//                                    shown, the "Q" knob is a bandwidth in octaves (range 0.1 ... 3), the gain is half the dB shown
 namespace
 {
 constexpr int kParameterVersion = 1;
@@ -28,6 +30,9 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kDbPerGainStep = 40.0;
 constexpr float kMaxDriveDb = 24.0f;
 constexpr float kMaxOutputDb = 12.0f;
+constexpr double kFaultFrequencyFactor = 1.05;
+constexpr double kFaultGainFactor = 0.5;
+constexpr float kFaultMaxBandwidth = 3.0f;
 }
 
 class TestEqProcessor : public juce::AudioProcessor
@@ -42,7 +47,7 @@ public:
                                                juce::NormalisableRange<float>(kMinGainDb, kMaxGainDb, 0.0f), 0.0f);
         m_frequency = new juce::AudioParameterFloat(juce::ParameterID{"frequency", kParameterVersion}, "Frequency",
                                                     juce::NormalisableRange<float>(kMinFrequencyHz, kMaxFrequencyHz, 0.0f, kFrequencySkew), 1000.0f);
-        m_q = new juce::AudioParameterFloat(juce::ParameterID{"q", kParameterVersion}, "Q", juce::NormalisableRange<float>(kMinQ, kMaxQ, 0.0f), 1.0f);
+        m_q = new juce::AudioParameterFloat(juce::ParameterID{"q", kParameterVersion}, "Q", juce::NormalisableRange<float>(kMinQ, PLUGINLAB_TEST_EQ_KNOB_FAULTS ? kFaultMaxBandwidth : kMaxQ, 0.0f), 1.0f);
         addParameter(m_gain);
         addParameter(m_frequency);
         addParameter(m_q);
@@ -214,6 +219,13 @@ private:
     // RBJ audio EQ cookbook, peaking filter
     void design(double gainDb, double frequency, double q)
     {
+        if (PLUGINLAB_TEST_EQ_KNOB_FAULTS)
+        {
+            frequency *= kFaultFrequencyFactor;
+            gainDb *= kFaultGainFactor;
+            const double ratio = std::pow(2.0, q); // the knob is a bandwidth in octaves: Q = sqrt(2^N) / (2^N - 1)
+            q = std::sqrt(ratio) / (ratio - 1.0);
+        }
         const double a = std::pow(10.0, gainDb / kDbPerGainStep);
         const double w0 = 2.0 * kPi * frequency / m_sampleRate;
         const double alpha = std::sin(w0) / (2.0 * q);

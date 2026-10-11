@@ -29,6 +29,7 @@ target_sources(PluginLabTests
         OracleTests.cpp
         ParameterSurveyTests.cpp
         BandFitTests.cpp
+        CalibrationTests.cpp
         BrowserTests.cpp
         CatalogTests.cpp
         EngineTests.cpp
@@ -76,15 +77,24 @@ if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
 
-add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint")
+add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)")
 # a hanging test (a dialog nobody can click, a plugin that never returns) must fail soon, not after the default 25 minutes
 set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 600 RESOURCE_LOCK display)
 # the fingerprint measures many test plugins (with the system class at A and B since 0.49.0): a test with a limit of its own; not at the same
-# time as PluginLabTests (the lock), because its real-time checks compare wall-clock timing, which a second heavy test in parallel disturbs
+# time as PluginLabTests (the lock: both are long and render much)
 add_test(NAME PluginLabFingerprint COMMAND PluginLabTests --only "PluginFingerprint")
 set_tests_properties(PluginLabFingerprint PROPERTIES TIMEOUT 1200 RESOURCE_LOCK display)
+# the real-time plugins of the fingerprint (timer, offline flag, wall clock): their checks compare wall-clock timing, so they run alone
+add_test(NAME PluginLabFingerprintRealTime COMMAND PluginLabTests --only "Real-time fingerprint")
+set_tests_properties(PluginLabFingerprintRealTime PROPERTIES TIMEOUT 600 RUN_SERIAL TRUE)
 # the parameter survey (W8.4) renders some hundred times per plugin: one entry per plugin with its own limit (Debug: 1 ... 9 minutes each), so
 # that "ctest -j" runs them side by side
+# the calibration (W8.6) measures every band parameter at three sample rates: one entry per plugin
+foreach(CALIBRATED "Test EQ" "Test EQ Fs Fault" "Test EQ Knob Faults" "Reference EQ")
+    string(REPLACE " " "" CALIBRATION_TEST_NAME "${CALIBRATED}")
+    add_test(NAME PluginLabCalibration_${CALIBRATION_TEST_NAME} COMMAND PluginLabTests --only "Calibration (W8.6): ${CALIBRATED}")
+    set_tests_properties(PluginLabCalibration_${CALIBRATION_TEST_NAME} PROPERTIES TIMEOUT 1800)
+endforeach()
 foreach(SURVEYED "Test EQ Drive" "Test EQ Switch" "Reference EQ" "Reference Utility" "Reference Nonlinear")
     string(REPLACE " " "" SURVEY_TEST_NAME "${SURVEYED}")
     add_test(NAME PluginLabParameterSurvey_${SURVEY_TEST_NAME} COMMAND PluginLabTests --only "Parameter survey (W8.4): ${SURVEYED}")

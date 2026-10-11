@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "plugin": {
+    "name": "PluginLab Test EQ Knob Faults",
+    "manufacturer": "Jade_Hochschule",
+    "version": "0.49.0",
+    "format": "VST3",
+    "identifier": "VST3:PluginLab Test EQ Knob Faults:828d6ab6"
+  },
+  "sampleRates": [
+    48000.0
+  ],
+  "date": "2026-10-11",
+  "proposedBy": "PluginLabHost 0.49.0",
+  "confirmedBy": "tests against the plugin code (tests/CalibrationTests.cpp); not yet reviewed by the author",
+  "notes": "",
+  "bands": 1,
+  "parameters": [
+    {
+      "index": 0,
+      "name": "Gain",
+      "role": "band gain",
+      "quantity": "gain",
+      "band": 0,
+      "default": 0.5,
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -24.000000055387314,
+        "max": 23.999999962317997,
+        "rmsError": 2.028026139433751e-08,
+        "points": 101
+      },
+      "measuredLaw": {
+        "kind": "linear",
+        "min": -11.999954503322218,
+        "max": 11.999954895885331,
+        "rmsError": 8.827834463179234e-08,
+        "points": 5
+      }
+    },
+    {
+      "index": 1,
+      "name": "Frequency",
+      "role": "band frequency",
+      "quantity": "frequency",
+      "band": 0,
+      "default": 0.404752135276794,
+      "requires": [
+        {
+          "parameter": 0,
+          "name": "Gain",
+          "value": 0.949999988079071,
+          "text": "21.6"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "power",
+        "min": 20.00005230938239,
+        "max": 20000.000374518186,
+        "skew": 0.300000001090475,
+        "rmsError": 2.902132081781314e-08,
+        "points": 101
+      },
+      "measuredLaw": {
+        "kind": "power",
+        "min": 20.999362544039286,
+        "max": 20999.99947186375,
+        "skew": 0.300000074580864,
+        "rmsError": 1.862180010274103e-08,
+        "points": 4
+      }
+    },
+    {
+      "index": 2,
+      "name": "Q",
+      "role": "band width (Q)",
+      "quantity": "q",
+      "band": 0,
+      "default": 0.310344815254211,
+      "requires": [
+        {
+          "parameter": 0,
+          "name": "Gain",
+          "value": 0.949999988079071,
+          "text": "21.6"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "linear",
+        "min": 0.100000038497379,
+        "max": 3.000000024868957,
+        "rmsError": 2.418955937726771e-08,
+        "points": 101
+      },
+      "measuredLaw": {
+        "kind": "power",
+        "min": 41.29123790186302,
+        "max": -0.204210331556212,
+        "skew": 20.301828074449116,
+        "rmsError": 0.087705831927919,
+        "points": 5
+      }
+    },
+    {
+      "index": 3,
+      "name": "Bypass",
+      "role": "switch",
+      "quantity": "band on/off",
+      "band": 0,
+      "default": 0.0,
+      "requires": [
+        {
+          "parameter": 0,
+          "name": "Gain",
+          "value": 0.949999988079071,
+          "text": "21.6"
+        }
+      ],
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Off",
+          "description": "peak 1050 Hz +10.8 dB Q 1.41 (RBJ cookbook)",
+          "type": "peak",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 1.0,
+          "text": "On",
+          "description": "flat",
+          "band": false
+        }
+      ]
+    }
+  ]
+}

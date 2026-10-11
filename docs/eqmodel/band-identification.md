@@ -19,7 +19,7 @@ of a Hammerstein system (W8.1 says which).
 | 4 | flat model: the output gain alone |
 | 5 | candidates for the largest remaining feature: pass filters at a steep end (RBJ; Butterworth of the order estimated from the level one octave beyond the -3 dB point, 6.02 dB per order, and its neighbours, 1 ... 8), a peak or dip (RBJ, Orfanidis; start: the half-gain width), shelves at either end |
 | 6 | one start per candidate for the first band; then greedily the best candidate for the next feature, all bands refitted |
-| 7 | pruning: a band is removed if the model stays as good without it |
+| 7 | pruning: the band whose removal costs least is removed while the model stays good (residual below 0.05 dB) without it (0.50.0: before, bands that only imitated the last hundredths of a dB stayed, and two shelves at -30 dB beat the high-pass of an analogue model) |
 | 8 | of the starts: the good one with the fewest bands, else the smallest residual |
 | 9 | linear phase: a few final iterations with the real FIR |
 | 10 | "no good description" if the rms residual is above 0.5 dB |

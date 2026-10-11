@@ -2,6 +2,7 @@
 # measurement and compensation, gapless switching, offline rendering. No GUI code, no audio device.
 add_library(pluginlab_engine STATIC
     AudioFileSource.cpp
+    Calibration.cpp
     ChannelAdapter.cpp
     Fingerprint.cpp
     FingerprintSettings.cpp

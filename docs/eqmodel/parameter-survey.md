@@ -46,7 +46,7 @@ Decided in this order:
 | does nothing | no change in any measurement, in any context tried |
 | idle output (noise, hum, DC) | the stationary idle output changes by more than 3 dB (above -140 dBFS). First, because added noise or hum also makes two sweeps differ, which the class test calls time-variant |
 | modulation (time-variant) | the system class at an end is time-variant |
-| distortion | the harmonics change by more than 1 dB (above -100 dB) **and** the class at an end is non-linear |
+| distortion | the harmonics change by more than 1 dB (above -100 dB) **and** the class at an end is non-linear **and** (0.50.0) the harmonics reach -60 dB re H_1 somewhere or nothing else changes; below that the harmonic change is a side effect ("also") and the frequency response decides |
 | stereo (cross path) | the cross path changes by more than 0.01 dB (above -100 dB) |
 | polarity | the magnitude is unchanged, H_k = -H_0 |
 | latency | the magnitude is unchanged, the delay changes |
@@ -120,6 +120,9 @@ Time per plugin (Debug, one process): Test EQ Switch 83 s, Reference Utility
   level one octave beyond the -3 dB point (6.02 dB per order) and tried with
   its neighbours (1 ... 8); below 90 dB under the largest level the residual
   is clamped (a test case for order 7 added).
+- A slightly non-linear plugin (ACM-3SA, an analogue console model with harmonics near -80 dB everywhere) changes its harmonic ratio
+  with every filter that moves the pass band: its low cut and its trim were "distortion" and never reached the band analysis. Since
+  0.50.0 distortion decides only if the harmonics are audible (-60 dB) or nothing else changes.
 - A fit may add a small band at the edge of the band (a shelf at 10 Hz next to
   a peak at 28 Hz); for a continuous parameter the dominant band decides and
   the small bands are listed.

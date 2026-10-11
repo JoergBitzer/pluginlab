@@ -1,6 +1,6 @@
 # W8: system classification, EQ band model, parameter mapping and calibration (plan)
 
-Status: **plan v2, W8.1 ... W8.5 done** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
+Status: **plan v2, W8.1 ... W8.6 done** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
 and comments, kept verbatim in the appendix). Planning §8, W8: "EQ band model + parameter mapping, calibration of knobs by measurement. Done when:
 mapping data validated for the test EQs." Lessons of the prototype (planning §5 item 4, `docs/prototype/LESSONS_LEARNED.md`): the model of "one peaking
 band" was too narrow; every plugin needed an hour of manual exploration for its mapping file; a tool that lists all parameters and proposes a mapping is
@@ -212,3 +212,13 @@ a section, a finding, a column "Class" on the Developer page). On the author's r
 the survey and the GUI review (the child writes `<report>.progress`: the fraction and the step; a strip above the table and the running cell show
 it with the elapsed time; `--map` and `--fingerprint` print each step).
 
+### W8.6 calibration, myth and reality (0.50.0, done)
+`calibrate` (`src/engine/Calibration.cpp`), `PluginLabHost --calibrate`, document `docs/eqmodel/calibration.md`, tests `tests/CalibrationTests.cpp`
+(one CTest per plugin). For each band parameter of the mapping: 7 knob positions (every step of a discrete one) at 44.1, 48 and 96 kHz, the band fit
+of W8.3 against the number shown; only the deviations, with their pattern (a factor, a factor that follows the sample rate, an offset, a scale, a
+"Q" that is a bandwidth). The PeakEQ case is reproduced from the calibration alone (Test EQ Fs Fault: x 1.089 / 2.177, "designed for 44.1 kHz");
+the new Test EQ Knob Faults (frequency x 1.05, gain x 0.5, Q a bandwidth in octaves) shows exactly its three faults; the Test EQ and the Reference
+EQ none. Corrections on the way, from the author's ACM-3SA (local): distortion decides in the survey only if the harmonics reach -60 dB or nothing
+else changes (its low cut and trim had been "distortion"); the band fit prunes to the good residual, the cheapest band first (two shelves at
+-30 dB had beaten its high-pass). Open: the author's test objects with `--calibrate`; a Nyquist-matched low-pass family for analogue-modelled
+pass filters (ACM-3SA's high cut gets an extra peak near 21 kHz).

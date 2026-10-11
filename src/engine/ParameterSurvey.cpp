@@ -833,8 +833,12 @@ private:
         {
             effects.add("idle output " + rangeText([](const SurveyPoint& p) { return p.idleDbfs; }, result.points, s.idleFloorDbfs, "dBFS"));
         }
-        const bool distortion = largest.harmonicDb > s.harmonicChangeDb && nonLinear;
-        if (distortion)
+        // distortion is the role only if the harmonics are audible somewhere or nothing else changes: a slightly non-linear plugin (an analogue
+        // model with harmonics near -80 dB) changes its harmonic ratio with every filter that moves the pass band; that is a side effect
+        const bool harmonicsChange = largest.harmonicDb > s.harmonicChangeDb && nonLinear;
+        const bool audible = std::any_of(result.points.begin(), result.points.end(), [&s](const SurveyPoint& p) { return p.harmonicDb >= s.audibleHarmonicDb; });
+        const bool distortion = harmonicsChange && (audible || largest.magnitudeDb <= s.nothingDb);
+        if (harmonicsChange)
         {
             effects.add("harmonics " + rangeText([](const SurveyPoint& p) { return p.harmonicDb; }, result.points, s.harmonicFloorDb, "dB"));
         }

@@ -15,17 +15,24 @@ constexpr int kLinearPhaseDelay = 127;
 }
 
 // The fingerprint against plugins with known behavior: it must find the faults that were built in and none in the correct plugins.
+// Two objects: the fingerprint, and the real-time plugins (timer, offline flag, wall clock), whose checks compare wall-clock timing and must not run
+// beside heavy tests (CTest runs that part alone: PluginLabFingerprintRealTime, RUN_SERIAL).
 class FingerprintTests : public juce::UnitTest
 {
 public:
-    FingerprintTests()
-        : juce::UnitTest("PluginFingerprint", "pluginlab")
+    explicit FingerprintTests(bool realTimePlugins)
+        : juce::UnitTest(realTimePlugins ? "Real-time fingerprint" : "PluginFingerprint", "pluginlab"), m_realTimePlugins(realTimePlugins)
     {
     }
 
     void runTest() override
     {
         pluginlab::hosting::addHeadlessFormats(m_formats);
+        if (m_realTimePlugins)
+        {
+            testRealTimePlugins();
+            return;
+        }
         testSettings();
 
         beginTest("the gain plugin: a clean fingerprint, the gain changes the audio, steps and contexts are named");
@@ -144,42 +151,6 @@ public:
             expectWithinAbsoluteError(realTime.changeReachedFastMs, 0.0, 0.001);
             expectWithinAbsoluteError(realTime.changeReachedPacedMs, 0.0, 0.001);
             expect(pluginlab::engine::createReport(gain).contains("## Real-time behaviour"));
-        }
-
-        beginTest("real-time behaviour: a gain applied by a 100 ms timer is missed by the fast render and found at real-time pace");
-        {
-            const pluginlab::engine::PluginFingerprint timer = measure(testpaths::getTimerGainPlugin());
-            const pluginlab::engine::RealTimeFingerprint& realTime = timer.realTime;
-            logMessage("timer gain: change reached fast " + juce::String(realTime.changeReachedFastMs) + " ms, paced " + juce::String(realTime.changeReachedPacedMs)
-                       + " ms; paced against fast " + juce::String(realTime.pacedDifference.relativeDb, 1) + " dB");
-            expect(realTime.changeJudged);
-            expect(realTime.changeReachedFastMs < 0.0, "the fast render never sees the change");
-            expect(realTime.changeReachedPacedMs >= 0.0 && realTime.changeReachedPacedMs < 150.0, "at real-time pace the 100 ms timer brings it");
-            expect(realTime.ownSettingB, "the fast scan finds no reacting parameter, so the real-time test makes its own B");
-            expect(! realTime.changeTimingAlike && ! realTime.sameWhenPaced);
-            expect(realTime.sameOffline);
-            bool mentioned = false;
-            for (const juce::String& finding : timer.findings)
-            {
-                mentioned = mentioned || finding.contains("message thread");
-            }
-            expect(mentioned, "the finding names the message thread");
-        }
-
-        beginTest("real-time behaviour: a plugin that is louder when rendering offline is found");
-        {
-            const pluginlab::engine::PluginFingerprint offline = measure(testpaths::getOfflineSwitchPlugin());
-            logMessage("offline switch: offline against real time " + juce::String(offline.realTime.offlineDifference.relativeDb, 1) + " dB");
-            expect(! offline.realTime.sameOffline);
-            expect(offline.realTime.sameWhenPaced && offline.realTime.changeTimingAlike);
-        }
-
-        beginTest("real-time behaviour: a tremolo on the system clock differs at real-time pace (the fast render hides most of it)");
-        {
-            const pluginlab::engine::PluginFingerprint clock = measure(testpaths::getWallClockPlugin());
-            logMessage("wall clock: two fast renders " + juce::String(clock.realTime.baseline.relativeDb, 1) + " dB, paced against fast "
-                       + juce::String(clock.realTime.pacedDifference.relativeDb, 1) + " dB");
-            expect(! clock.realTime.sameWhenPaced);
         }
 
         beginTest("parameters that act only together: the EQ band is off by default, the scan flips the switch and finds gain, frequency and Q");
@@ -305,6 +276,47 @@ private:
         expectEquals(pluginlab::engine::describeSteps(14), juce::String("14"));
     }
 
+    // the plugins whose behaviour depends on real time: a gain applied by a timer, a plugin that reads the offline flag, a tremolo on the system clock
+    void testRealTimePlugins()
+    {
+        beginTest("real-time behaviour: a gain applied by a 100 ms timer is missed by the fast render and found at real-time pace");
+        {
+            const pluginlab::engine::PluginFingerprint timer = measure(testpaths::getTimerGainPlugin());
+            const pluginlab::engine::RealTimeFingerprint& realTime = timer.realTime;
+            logMessage("timer gain: change reached fast " + juce::String(realTime.changeReachedFastMs) + " ms, paced " + juce::String(realTime.changeReachedPacedMs)
+                       + " ms; paced against fast " + juce::String(realTime.pacedDifference.relativeDb, 1) + " dB");
+            expect(realTime.changeJudged);
+            expect(realTime.changeReachedFastMs < 0.0, "the fast render never sees the change");
+            expect(realTime.changeReachedPacedMs >= 0.0 && realTime.changeReachedPacedMs < 150.0, "at real-time pace the 100 ms timer brings it");
+            expect(realTime.ownSettingB, "the fast scan finds no reacting parameter, so the real-time test makes its own B");
+            expect(! realTime.changeTimingAlike && ! realTime.sameWhenPaced);
+            expect(realTime.sameOffline);
+            bool mentioned = false;
+            for (const juce::String& finding : timer.findings)
+            {
+                mentioned = mentioned || finding.contains("message thread");
+            }
+            expect(mentioned, "the finding names the message thread");
+        }
+
+        beginTest("real-time behaviour: a plugin that is louder when rendering offline is found");
+        {
+            const pluginlab::engine::PluginFingerprint offline = measure(testpaths::getOfflineSwitchPlugin());
+            logMessage("offline switch: offline against real time " + juce::String(offline.realTime.offlineDifference.relativeDb, 1) + " dB");
+            expect(! offline.realTime.sameOffline);
+            expect(offline.realTime.sameWhenPaced && offline.realTime.changeTimingAlike);
+        }
+
+        beginTest("real-time behaviour: a tremolo on the system clock differs at real-time pace (the fast render hides most of it)");
+        {
+            const pluginlab::engine::PluginFingerprint clock = measure(testpaths::getWallClockPlugin());
+            logMessage("wall clock: two fast renders " + juce::String(clock.realTime.baseline.relativeDb, 1) + " dB, paced against fast "
+                       + juce::String(clock.realTime.pacedDifference.relativeDb, 1) + " dB");
+            expect(! clock.realTime.sameWhenPaced);
+        }
+
+    }
+
     pluginlab::engine::PluginFingerprint measure(const juce::File& file)
     {
         const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner::scanFileInProcess(m_formats, file);
@@ -317,6 +329,8 @@ private:
     }
 
     juce::AudioPluginFormatManager m_formats;
+    bool m_realTimePlugins = false;
 };
 
-static FingerprintTests fingerprintTests;
+static FingerprintTests fingerprintTests(false);
+static FingerprintTests realTimeFingerprintTests(true);

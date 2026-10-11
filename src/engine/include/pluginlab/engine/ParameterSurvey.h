@@ -112,6 +112,7 @@ struct SurveySettings
     double flatDb = 0.02;               // a change of the direct path flat within this: a level
     double harmonicChangeDb = 1.0;      // harmonics above harmonicFloorDb that change by more
     double harmonicFloorDb = -100.0;
+    double audibleHarmonicDb = -60.0;   // distortion is the role only if the harmonics reach this somewhere (or nothing else changes)
     double idleChangeDb = 3.0;          // the idle output above idleFloorDbfs that changes by more
     double idleFloorDbfs = -140.0;
     double crossFloorDb = -100.0;       // the cross path counts above this (re the direct path)
