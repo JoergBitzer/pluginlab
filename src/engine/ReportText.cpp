@@ -122,6 +122,11 @@ juce::String alignMarkdownTables(const juce::String& markdown)
     return result;
 }
 
+juce::String formatFrequency(double hertz)
+{
+    return std::abs(hertz) < 100.0 ? juce::String(hertz, 1) : juce::String(juce::roundToInt(hertz));
+}
+
 juce::String wrapText(const juce::String& text, int width)
 {
     juce::StringArray lines;

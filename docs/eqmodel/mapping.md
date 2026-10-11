@@ -66,7 +66,8 @@ inverse of their measured laws, and then what these parameters need to act
 - All other plugins (also the author's two test objects): the user's settings
   folder, `mappings/` (Linux `~/.config/pluginlab/mappings`; overridden by
   `PLUGINLAB_SETTINGS_FOLDER`). In the host: the Developer page, button
-  "Survey + mapping" (a process of its own, minutes per plugin; "View mapping"
+  "Survey + mapping" (a process of its own, minutes per plugin, with a
+  progress bar: parameter i of n and the elapsed time; "View mapping"
   shows the report, the column "Mapping" the state; `--developer <plugin file>
   --mapping [--view]` does the same from the command line). Without the
   window: `PluginLabHost --map <plugin file> <report>`. Both survey the plugin,
@@ -74,6 +75,22 @@ inverse of their measured laws, and then what these parameters need to act
   next to it (`.proposal.json`) and the report lists the differences.
 - Confirming: open the JSON, check the rows against the report, correct what
   is wrong, and write your name into `confirmedBy`.
+
+## The report
+The survey and mapping report (`--map`, the Developer page) is built of
+tables (0.49.0):
+
+| Section | Content |
+|---|---|
+| Parameter survey | one row per parameter: range shown, role, measured effect, acts only when, system class at the two ends (LTI, time-variant, non-linear with the kind) |
+| Steps of the switches | one row per step: the other parameters set, the step's text, the measured response in the band model |
+| Side effects | what a parameter changes besides its role (proportional Q, small bands of the fit left out) |
+| Mapping | one row per parameter: band, quantity, law as shown, law as measured, needs |
+| Steps of the switches (mapping) | one row per step: measured response, band type, family (what `makeSettingForBand` chooses by) |
+| About this report | why the mapping exists, what the survey and the mapping do, the columns, what to do with the proposal |
+
+Frequencies are written without false precision (one decimal below 100 Hz,
+whole hertz above).
 
 ## Results
 From the survey tests and `MappingTests` (2026-10-11, 0.47.0), 48 kHz, Debug.

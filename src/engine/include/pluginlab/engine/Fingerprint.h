@@ -1,10 +1,12 @@
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include <juce_audio_processors_headless/juce_audio_processors_headless.h>
 
 #include "pluginlab/engine/FingerprintSettings.h"
+#include "pluginlab/measure/SystemClass.h"
 
 namespace pluginlab::engine
 {
@@ -115,6 +117,15 @@ struct RealTimeFingerprint
     std::vector<double> longDifferentSeconds; // the starts of the 1 s segments of the long run that differ
 };
 
+// The system class (W8.1) at the settings A (defaults) and B: LTI, time-variant or non-linear, and for a non-linear system which kind
+struct SystemClassFingerprint
+{
+    bool measured = false;
+    measure::SystemClassResult atA;
+    bool measuredB = false;                 // B differs from A
+    measure::SystemClassResult atB;
+};
+
 struct PluginFingerprint
 {
     juce::PluginDescription description;
@@ -160,14 +171,18 @@ struct PluginFingerprint
     bool discreteJumped = false;              // there were switches or choices to jump
     bool silenceStaysSilent = true;
     double idleLevelDb = -200.0;
+    SystemClassFingerprint systemClass;
     RealTimeFingerprint realTime;
     std::vector<juce::String> findings;       // what is noteworthy, in words, with the numbers
 };
 
 // Measures the fingerprint of a plugin with the measurements of docs/reference/fingerprint-report-explained.md. Loads the plugin many times.
 // A plugin that crashes ends the process: run it in a process of its own (PluginLabHost --fingerprint).
+// What a long measurement is doing: the fraction done (0 ... 1, approximate) and the step in words
+using MeasurementProgress = std::function<void(double fraction, const juce::String& step)>;
+
 PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
-                                     const FingerprintSettings& settings = FingerprintSettings());
+                                     const FingerprintSettings& settings = FingerprintSettings(), const MeasurementProgress& progress = {});
 
 // One line of the summary: a single result of the fingerprint.
 struct SummaryItem

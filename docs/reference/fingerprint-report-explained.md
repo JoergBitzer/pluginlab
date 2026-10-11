@@ -10,7 +10,7 @@ algorithm (EQ, compressor, ...) or a linear, time-invariant plugin; frequency re
 
 ## 1. Overview: what happens when a report is made
 
-`PluginLabHost --fingerprint <plugin file> <report> [<plugin id>]` (the Developer page starts it in a process of its own) reads the settings (2.5), scans the file in
+`PluginLabHost --fingerprint <plugin file> <report> [<plugin id>]` (the Developer page starts it in a process of its own and shows its progress: the child writes the fraction and the step to `<report>.progress`, prints each step, and the page draws a bar above the table and in the cell; 0.49.0) reads the settings (2.5), scans the file in
 its own process, takes the plugin (the one with the identifier, or every plugin of the file), and runs these steps in this order. Every **render** (2.3) loads a
 **new instance**; a report needs about 50 instances plus two per parameter (and two more for every parameter that did not react in the first pass).
 
@@ -105,7 +105,8 @@ determinism = bit exact.
 
 ### 3.0 Summary (first section, R5)
 One row per single result: the test, the result, and the number behind it. **Bold** results are worth a look; each has a finding with the details. The rows, in
-order (key in the JSON in brackets): loads and runs with mono or stereo (`loads`); channel layouts (`channels`); parameters / changing the audio (`parameters`); latency at
+order (key in the JSON in brackets): loads and runs with mono or stereo (`loads`); channel layouts (`channels`); parameters / changing the audio (`parameters`); the system class at the defaults: LTI, time-variant or non-linear, with
+the kind and a first guess what processing it is in the detail, and the class at the setting B if it differs (`systemClass`, never bold: a property; 0.49.0); latency at
 48 kHz reported / measured, all rates in the detail (`latency`); reported latency = measured at all rates (`latencyAgrees`); output before the peak (`outputBeforePeak`, never
 bold: it is a property, not a fault); output before the impulse (`ownSignal`); delivery: how many of the four ways work, the most careful one in the detail (`delivery`);
 block size independent, the largest steady-state difference in the detail (`blockSizes`); deterministic (`deterministic`); output stays finite (`finite`); recovers
@@ -197,6 +198,24 @@ A plugin that smooths its parameters once per block differs in "whole" (the ramp
 "Block Smoothing"); a plugin whose processing depends on the block size differs in both (the test plugin "Block Fault": a low-pass whose state is reset in every block).
 The poke block is 512 samples for every block size. (Before 0.13.0 it was one block long, so the input history differed between block sizes; that gave the small
 differences of the BL gain plugins, which are now identical.)
+
+### 3.6b System class (W8.1, 0.49.0)
+The class of [system-class.md](../measurements/system-class.md) at the setting A (defaults) and at B: synchronized sweeps at -40, -20 and -6 dBFS and one
+started later, channel 1, 48 kHz. The table gives per setting the group (LTI, time-variant, non-linear), the class, a first guess and the evidence (the test
+that decided, the largest harmonic). The guess comes from the class alone:
+
+| Class | Group | First guess |
+|---|---|---|
+| LTI | LTI | a linear filter, gain or delay (an EQ) |
+| time-variant | time-variant | a modulation (tremolo, chorus, flanger, phaser, vibrato) or added noise |
+| memoryless non-linear | non-linear | a static curve without filtering (waveshaper, clipper, bit crusher) |
+| Hammerstein | non-linear | a curve followed by a filter (a saturator with a tone control or cabinet after it) |
+| Wiener | non-linear | a filter followed by a curve (a pre-emphasis or tone stack before a saturator) |
+| generalized Hammerstein | non-linear | several curves with their own filters (a tube, tape or amplifier model) |
+| other | non-linear | level-dependent without a simple model: dynamics (compressor, limiter, gate, expander) or a clipping that starts only at high levels |
+
+B matters: a drive or a curve often does nothing at the defaults. A class other than LTI (at A or B) is also listed in the findings. The Developer page shows the
+group in the column "Class". The class at A decides what the other measurements mean (the sentence below the table).
 
 ### 3.7 Other
 - **time-invariant** (R6): one instance: poke, setting B, **settled for `longSettleSeconds` (2 s)**, noise → first output; `timeInvarianceGapSeconds` (0.5 s) of silence;

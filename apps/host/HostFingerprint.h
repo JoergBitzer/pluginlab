@@ -21,4 +21,17 @@ bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& repo
 // (HostSettings::getMappingFolder). A confirmed mapping there is never overwritten: the proposal is then written next to it
 // (<name>.proposal.json) and the report lists how it differs. Returns false if there is no such plugin or a file cannot be written.
 bool writeMappingProposal(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier = {});
+
+// While --fingerprint and --map run, they write what they are doing to <report file>.progress: the fraction done (0 ... 1) on the first line, the
+// step on the second (the Developer page draws a progress bar from it), and print each new step. The file is removed at the end.
+juce::File getProgressFile(const juce::File& reportFile);
+
+struct JobProgress
+{
+    double fraction = -1.0; // negative: unknown
+    juce::String step;
+};
+
+// Reads such a file (fraction -1 and an empty step if there is none)
+JobProgress readProgressFile(const juce::File& progressFile);
 }

@@ -1,5 +1,7 @@
 #include "HostFingerprint.h"
 
+#include <cstdio>
+
 #include "HostSettings.h"
 #include "pluginlab/PluginLabVersion.h"
 #include "pluginlab/engine/Fingerprint.h"
@@ -15,10 +17,60 @@ namespace pluginlab::host
 {
 namespace
 {
+constexpr double kFingerprintShare = 0.75; // of a report: the fingerprint; the measurement units the rest
+constexpr double kSurveyShare = 0.97;      // of a mapping: the survey; the proposal the rest
+
 double getMeasurementRate()
 {
     return pluginlab::engine::MeasurementOptions().sampleRate;
 }
+
+// writes the progress file and prints each new step; removes the file when it goes out of scope
+class ProgressWriter
+{
+public:
+    explicit ProgressWriter(const juce::File& reportFile)
+        : m_file(getProgressFile(reportFile))
+    {
+    }
+
+    ~ProgressWriter()
+    {
+        m_file.deleteFile();
+    }
+
+    void operator()(double fraction, const juce::String& step)
+    {
+        m_file.replaceWithText(juce::String(juce::jlimit(0.0, 1.0, fraction), 3) + "\n" + step + "\n");
+        if (step != m_lastStep)
+        {
+            std::printf("[%3d %%] %s\n", juce::roundToInt(100.0 * fraction), step.toRawUTF8());
+            std::fflush(stdout);
+            m_lastStep = step;
+        }
+    }
+
+private:
+    juce::File m_file;
+    juce::String m_lastStep;
+};
+}
+
+juce::File getProgressFile(const juce::File& reportFile)
+{
+    return juce::File(reportFile.getFullPathName() + ".progress");
+}
+
+JobProgress readProgressFile(const juce::File& progressFile)
+{
+    JobProgress progress;
+    const juce::StringArray lines = juce::StringArray::fromLines(progressFile.loadFileAsString());
+    if (lines.size() >= 2 && lines[0].containsOnly("0123456789."))
+    {
+        progress.fraction = lines[0].getDoubleValue();
+        progress.step = lines[1];
+    }
+    return progress;
 }
 
 bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier)
@@ -60,6 +112,7 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
     juce::String warning;
     const pluginlab::engine::FingerprintSettings settings =
         pluginlab::engine::FingerprintSettings::loadOrCreate(pluginlab::engine::FingerprintSettings::getDefaultFile(), warning);
+    ProgressWriter progress(reportFile);
     juce::String report;
     int measured = 0;
     for (const juce::PluginDescription& description : scan.descriptions)
@@ -68,12 +121,15 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
         {
             continue;
         }
-        pluginlab::engine::PluginFingerprint fingerprint = pluginlab::engine::measureFingerprint(formatManager, description, settings);
+        const double share = settings.measurements ? kFingerprintShare : 1.0; // the measurement units take the rest
+        pluginlab::engine::PluginFingerprint fingerprint = pluginlab::engine::measureFingerprint(
+            formatManager, description, settings, [&progress, share](double fraction, const juce::String& step) { progress(share * fraction, "fingerprint: " + step); });
         fingerprint.settingsWarning = warning;
         report += pluginlab::engine::createReport(fingerprint) + "\n";
         if (settings.measurements)
         {
             // the measurement units (W7.11) on the default setting of the plugin
+            progress(kFingerprintShare, "measurements (level, frequency response, distortion, noise)");
             const pluginlab::engine::MeasurementSummary summary = pluginlab::engine::measurePlugin(
                 formatManager, description, pluginlab::engine::getDefaultSetting(formatManager, description, getMeasurementRate()), {});
             report += pluginlab::engine::createMeasurementReport(summary) + "\n";
@@ -101,6 +157,7 @@ bool writeMappingProposal(const juce::File& pluginFile, const juce::File& report
     hosting::addHeadlessFormats(formatManager);
     const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(formatManager, pluginFile);
     const juce::File folder = HostSettings().getMappingFolder();
+    ProgressWriter progress(reportFile);
     juce::String report;
     bool written = true;
     for (const juce::PluginDescription& description : scan.descriptions)
@@ -112,7 +169,19 @@ bool writeMappingProposal(const juce::File& pluginFile, const juce::File& report
         const pluginlab::engine::SurveySubject subject = pluginlab::engine::makePluginSubject(formatManager, description, getMeasurementRate());
         pluginlab::engine::SurveySettings settings;
         settings.sampleRate = getMeasurementRate();
-        const pluginlab::engine::SurveyResult survey = pluginlab::engine::surveyParameters(subject, settings);
+        progress(0.0, "survey: the default setting");
+        const pluginlab::engine::SurveyResult survey = pluginlab::engine::surveyParameters(subject, settings, [&progress, &subject](int index, int total) {
+            if (index < total)
+            {
+                progress(kSurveyShare * index / std::max(total, 1),
+                         "survey: parameter " + juce::String(index + 1) + " of " + juce::String(total) + ", " + subject.parameters[static_cast<size_t>(index)].name);
+            }
+            else
+            {
+                progress(kSurveyShare, "survey: switches once more with a band that acts");
+            }
+        });
+        progress(kSurveyShare, "proposing the mapping");
         const pluginlab::engine::Mapping proposal = pluginlab::engine::proposeMapping(
             subject, survey, pluginlab::engine::makePluginIdentity(description), "PluginLabHost " + juce::String(pluginlab::getVersionString()));
         juce::File target = folder.getChildFile(pluginlab::engine::getMappingFileName(description.name));
@@ -128,7 +197,8 @@ bool writeMappingProposal(const juce::File& pluginFile, const juce::File& report
         written = proposal.write(target) && written;
         report += pluginlab::engine::signReport("# Parameter survey and mapping: " + description.name + " " + description.version + "\n\n"
                                                     + pluginlab::engine::createSurveyReport(survey, "Parameter survey") + "\n"
-                                                    + pluginlab::engine::createMappingReport(proposal) + "\n" + note + "\n",
+                                                    + pluginlab::engine::createMappingReport(proposal) + "\n" + note + "\n\n"
+                                                    + pluginlab::engine::createMappingReportFooter(),
                                                 "PluginLabHost, mapping")
                   + "\n";
     }

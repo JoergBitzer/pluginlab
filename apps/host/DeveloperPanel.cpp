@@ -1,5 +1,7 @@
 #include "DeveloperPanel.h"
 
+#include "HostFingerprint.h"
+
 #include "pluginlab/engine/OfflineRenderer.h"
 #include "pluginlab/engine/ReportText.h"
 #include "pluginlab/hosting/PluginCatalog.h"
@@ -13,6 +15,7 @@ constexpr int kMargin = 8;
 constexpr int kRowHeight = 28;
 constexpr int kHeaderHeight = 24;
 constexpr int kInfoHeight = 80; // five lines: what the jobs do and where their results are kept
+constexpr int kProgressHeight = 22; // the strip with the running job
 constexpr int kColumnNumber = 1;
 constexpr int kColumnName = 2;
 constexpr int kColumnFormat = 3;
@@ -27,15 +30,18 @@ const juce::Colour kDoubtfulColour(0xffffa040);
 constexpr int kWidthNumber = 30;
 constexpr int kWidthName = 200;
 constexpr int kWidthFormat = 60;
-constexpr int kWidthStatus = 180;
+constexpr int kWidthStatus = 240;
 constexpr int kWidthDate = 150;
 constexpr int kWidthActions = 720;
 constexpr int kWidthGui = 220;
-constexpr int kWidthMapping = 200;
+constexpr int kWidthMapping = 280;
 constexpr int kButtonWidth = 110;
 constexpr int kProcessTimeoutMs = 20 * 60 * 1000; // the measurement loads the plugin many times; a big plugin needs minutes
 constexpr int kPollMs = 200;
 constexpr int kStopTimeoutMs = 10000;
+constexpr juce::uint32 kProgressIntervalMs = 1000;           // how often the job reads the child's progress
+const juce::Colour kProgressColour(0xff3a6ea5);                  // the done part of a progress bar
+const juce::Colour kProgressBackground(0xff2a2a2a);
 constexpr int kReportWindowWidth = 1000;
 constexpr int kReportWindowHeight = 720;
 constexpr float kTextFontHeight = 14.0f;
@@ -54,7 +60,7 @@ struct SummaryColumn
     const char* key;
     const char* title;
 };
-const SummaryColumn kSummaryColumns[] = {{"parameters", "Param. / react"},  {"latency", "Latency rep. / meas."}, {"delivery", "Delivery"},
+const SummaryColumn kSummaryColumns[] = {{"parameters", "Param. / react"},  {"systemClass", "Class"}, {"latency", "Latency rep. / meas."}, {"delivery", "Delivery"},
                                          {"blockSizes", "Block size indep."}, {"deterministic", "Deterministic"},       {"finite", "Finite"},
                                          {"recovers", "Recovers"},          {"silence", "Silent"},                 {"ownSignal", "Own signal"}};
 constexpr int kNumberOfSummaryColumns = static_cast<int>(sizeof(kSummaryColumns) / sizeof(kSummaryColumns[0]));
@@ -103,8 +109,14 @@ public:
         if (process.start(arguments, 0))
         {
             const juce::int64 started = juce::Time::getMillisecondCounter();
+            juce::uint32 lastProgress = 0;
             while (process.isRunning() && ! threadShouldExit())
             {
+                if (juce::Time::getMillisecondCounter() - lastProgress >= kProgressIntervalMs)
+                {
+                    lastProgress = juce::Time::getMillisecondCounter();
+                    postProgress(temporary);
+                }
                 if (juce::Time::getMillisecondCounter() - started > static_cast<juce::uint32>(kProcessTimeoutMs))
                 {
                     break;
@@ -128,6 +140,7 @@ public:
         }
         temporary.deleteRecursively();
         getSummaryFile(temporary).deleteFile();
+        getProgressFile(temporary).deleteFile();
         const juce::Component::SafePointer<DeveloperPanel> owner(&m_owner);
         const juce::String key = m_key;
         const DeveloperPanel::JobKind kind = m_kind;
@@ -141,6 +154,30 @@ public:
     }
 
 private:
+    // the child's progress (a report or a mapping: <file>.progress with the fraction; a GUI review: the step in progress.txt) to the panel
+    void postProgress(const juce::File& temporary) const
+    {
+        JobProgress progress;
+        if (m_kind == DeveloperPanel::JobKind::GuiReview)
+        {
+            progress.step = temporary.getChildFile("progress.txt").loadFileAsString().trim();
+        }
+        else
+        {
+            progress = readProgressFile(getProgressFile(temporary));
+        }
+        const juce::Component::SafePointer<DeveloperPanel> owner(&m_owner);
+        const juce::String key = m_key;
+        const DeveloperPanel::JobKind kind = m_kind;
+        juce::MessageManager::callAsync([owner, key, kind, progress]
+                                        {
+                                            if (owner != nullptr)
+                                            {
+                                                owner->jobProgress(key, kind, progress.fraction, progress.step);
+                                            }
+                                        });
+    }
+
     // moves a complete result into place; for a GUI review that did not complete, the step it was in (progress.txt) is the message
     bool finish(const juce::File& temporary, juce::String& message) const
     {
@@ -528,7 +565,45 @@ void DeveloperPanel::resized()
     juce::Rectangle<int> area = getLocalBounds().reduced(kMargin);
     m_infoLabel.setBounds(area.removeFromTop(kInfoHeight));
     area.removeFromTop(kMargin);
+    m_progressArea = area.removeFromTop(kProgressHeight);
+    area.removeFromTop(kMargin);
     m_table.setBounds(area);
+}
+
+void DeveloperPanel::paint(juce::Graphics& g)
+{
+    if (m_job == nullptr)
+    {
+        return;
+    }
+    const Row* row = nullptr;
+    for (const Row& entry : m_rows)
+    {
+        if (entry.key == m_running.key)
+        {
+            row = &entry;
+        }
+    }
+    if (row == nullptr)
+    {
+        return;
+    }
+    const juce::Rectangle<float> bar = m_progressArea.toFloat();
+    g.setColour(kProgressBackground);
+    g.fillRoundedRectangle(bar, 4.0f);
+    if (m_running.fraction >= 0.0)
+    {
+        g.setColour(kProgressColour);
+        g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * static_cast<float>(juce::jlimit(0.0, 1.0, m_running.fraction))), 4.0f);
+    }
+    const juce::String job = m_running.kind == JobKind::Mapping ? "Survey + mapping" : m_running.kind == JobKind::GuiReview ? "GUI review" : "Report";
+    juce::String text = job + " of " + hosting::getDisplayName(row->description) + ": " + getRunningText(*row, m_running.kind);
+    if (! m_queue.empty())
+    {
+        text << " (" << static_cast<int>(m_queue.size()) << " more waiting)";
+    }
+    g.setColour(juce::Colours::white);
+    g.drawText(text, m_progressArea.reduced(kMargin / 2, 0), juce::Justification::centredLeft, true);
 }
 
 juce::File DeveloperPanel::makeReportFile(const juce::PluginDescription& description) const
@@ -643,7 +718,7 @@ juce::String DeveloperPanel::getStatusText(int row) const
         case State::Waiting:
             return "waiting ...";
         case State::Running:
-            return "measuring ...";
+            return getRunningText(entry, JobKind::Report);
         case State::Failed:
             return "failed (crash?)";
         case State::Ready:
@@ -726,6 +801,19 @@ void DeveloperPanel::paintCell(juce::Graphics& g, int rowNumber, int columnId, i
     {
         colour = juce::Colours::white;
     }
+    if (isRunningCell(row, columnId))
+    {
+        // a progress bar behind the text: the fraction the child process reported (none yet: only the text)
+        const juce::Rectangle<float> bar(static_cast<float>(kMargin) / 4.0f, 3.0f, static_cast<float>(width - kMargin / 2), static_cast<float>(height - 6));
+        g.setColour(kProgressBackground);
+        g.fillRoundedRectangle(bar, 3.0f);
+        if (m_running.fraction >= 0.0)
+        {
+            g.setColour(kProgressColour);
+            g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * static_cast<float>(juce::jlimit(0.0, 1.0, m_running.fraction))), 3.0f);
+        }
+        colour = juce::Colours::white;
+    }
     g.setColour(colour);
     g.drawText(text, kMargin / 2, 0, width - kMargin, height, juce::Justification::centredLeft, true);
 }
@@ -753,7 +841,12 @@ juce::String DeveloperPanel::getCellTooltip(int rowNumber, int columnId)
     {
         return {};
     }
-    const pluginlab::engine::SummaryItem* item = findSummaryItem(m_rows[static_cast<size_t>(rowNumber)], columnId);
+    const Row& row = m_rows[static_cast<size_t>(rowNumber)];
+    if (isRunningCell(row, columnId))
+    {
+        return getRunningText(row, m_running.kind);
+    }
+    const pluginlab::engine::SummaryItem* item = findSummaryItem(row, columnId);
     if (item == nullptr)
     {
         return {};
@@ -860,14 +953,66 @@ void DeveloperPanel::startNextJob()
         row->guiState = State::Running;
         m_job = std::make_unique<PanelJob>(*this, kind, row->pluginFile, row->key, row->guiFolder, row->key);
     }
+    m_running = RunningJob();
+    m_running.key = key;
+    m_running.kind = kind;
+    m_running.startedMs = juce::Time::getMillisecondCounter();
     m_job->startThread();
     m_table.updateContent();
     m_table.repaint();
 }
 
+void DeveloperPanel::jobProgress(const juce::String& key, JobKind kind, double fraction, const juce::String& step)
+{
+    if (m_job == nullptr || key != m_running.key || kind != m_running.kind)
+    {
+        return;
+    }
+    m_running.fraction = fraction;
+    m_running.step = step;
+    m_table.repaint(); // also when nothing new came: the elapsed time
+    repaint(m_progressArea);
+}
+
+juce::String DeveloperPanel::getRunningText(const Row& row, JobKind kind) const
+{
+    if (m_job == nullptr || row.key != m_running.key || kind != m_running.kind)
+    {
+        return {};
+    }
+    const int seconds = static_cast<int>((juce::Time::getMillisecondCounter() - m_running.startedMs) / 1000);
+    const juce::String elapsed = juce::String(seconds / 60) + ":" + juce::String(seconds % 60).paddedLeft('0', 2);
+    juce::String text;
+    if (m_running.fraction >= 0.0)
+    {
+        text << juce::roundToInt(100.0 * m_running.fraction) << " %, ";
+    }
+    if (m_running.step.isNotEmpty())
+    {
+        text << m_running.step << ", ";
+    }
+    else
+    {
+        text << (kind == JobKind::Mapping ? "surveying" : kind == JobKind::GuiReview ? "reviewing (editor windows open)" : "measuring") << ", ";
+    }
+    return text + elapsed;
+}
+
+bool DeveloperPanel::isRunningCell(const Row& row, int columnId) const
+{
+    if (m_job == nullptr || row.key != m_running.key)
+    {
+        return false;
+    }
+    return (columnId == kColumnStatus && m_running.kind == JobKind::Report) || (columnId == kColumnMapping && m_running.kind == JobKind::Mapping)
+           || (columnId == kColumnGui && m_running.kind == JobKind::GuiReview);
+}
+
 void DeveloperPanel::jobFinished(const juce::String& key, JobKind kind, bool success, const juce::String& message)
 {
     m_job.reset();
+    m_running = RunningJob();
+    repaint(m_progressArea);
     Row* row = findRow(key);
     if (row != nullptr)
     {
@@ -934,7 +1079,7 @@ juce::String DeveloperPanel::getGuiStatusText(int row) const
         case State::Waiting:
             return "waiting ...";
         case State::Running:
-            return "reviewing (editor windows open) ...";
+            return getRunningText(entry, JobKind::GuiReview);
         case State::Failed:
             return entry.guiMessage;
         case State::Ready:
@@ -1002,7 +1147,7 @@ juce::String DeveloperPanel::getMappingStatusText(int row) const
         case State::Waiting:
             return "waiting ...";
         case State::Running:
-            return "surveying (minutes) ...";
+            return getRunningText(m_rows[static_cast<size_t>(row)], JobKind::Mapping);
         case State::Failed:
             return "failed (crash or time limit)";
         case State::Ready:

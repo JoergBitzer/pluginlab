@@ -158,6 +158,41 @@ juce::String getSystemClassMeaning(SystemClass systemClass)
     return {};
 }
 
+juce::String getSystemClassGroup(SystemClass systemClass)
+{
+    switch (systemClass)
+    {
+        case SystemClass::Lti:
+            return "LTI";
+        case SystemClass::TimeVariant:
+            return "time-variant";
+        default:
+            return "non-linear";
+    }
+}
+
+juce::String getSystemClassGuess(SystemClass systemClass)
+{
+    switch (systemClass)
+    {
+        case SystemClass::Lti:
+            return "a linear filter, gain or delay (an EQ)";
+        case SystemClass::TimeVariant:
+            return "a modulation (tremolo, chorus, flanger, phaser, vibrato) or added noise";
+        case SystemClass::Memoryless:
+            return "a static curve without filtering (a waveshaper, a clipper, a bit crusher)";
+        case SystemClass::Hammerstein:
+            return "a curve followed by a filter (a saturator with a tone control or cabinet after it)";
+        case SystemClass::Wiener:
+            return "a filter followed by a curve (a pre-emphasis or tone stack before a saturator)";
+        case SystemClass::GeneralizedHammerstein:
+            return "several curves with their own filters (a tube, tape or amplifier model)";
+        case SystemClass::Other:
+            return "level-dependent without a simple model: dynamics (compressor, limiter, gate, expander) or a clipping that starts only at high levels";
+    }
+    return {};
+}
+
 SystemClassResult classifySystem(const Device& device, const SystemClassSettings& settings)
 {
     SystemClassResult result;

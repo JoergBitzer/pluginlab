@@ -353,7 +353,7 @@ juce::String describeStructure(const eqmodel::FitResult& fit)
     juce::StringArray parts;
     for (const eqmodel::Band& band : fit.model.bands)
     {
-        juce::String part = juce::String(reference::getFilterTypeName(band.type)) + " " + juce::String(band.frequencyHz, 0) + " Hz";
+        juce::String part = juce::String(reference::getFilterTypeName(band.type)) + " " + formatFrequency(band.frequencyHz) + " Hz";
         if (band.type == reference::FilterType::Peak || band.type == reference::FilterType::LowShelf || band.type == reference::FilterType::HighShelf)
         {
             part << " " << (band.gainDb >= 0.0 ? "+" : "") << juce::String(band.gainDb, 1) << " dB";
@@ -499,7 +499,7 @@ bool analyseBands(const std::vector<SurveyPoint>& points, const SurveySettings& 
         const double octaves = std::log2(highF / lowF);
         if (octaves > settings.frequencyChangeOctaves)
         {
-            changes.push_back({ParameterRole::Frequency, octaves / 0.5, bandName + " frequency " + juce::String(lowF, 0) + " ... " + juce::String(highF, 0) + " Hz"});
+            changes.push_back({ParameterRole::Frequency, octaves / 0.5, bandName + " frequency " + formatFrequency(lowF) + " ... " + formatFrequency(highF) + " Hz"});
             anyBandQuantity = true;
         }
         if (hasGain(type) && highG - lowG > settings.gainChangeDb && (gainMoves || ! discrete))
@@ -570,7 +570,7 @@ juce::StringArray keepDominantBands(std::vector<SurveyPoint>& points)
         {
             if (hasGain(band->type) && std::abs(band->gainDb) < limit)
             {
-                removed.add(point.text + ": " + reference::getFilterTypeName(band->type) + " " + juce::String(band->frequencyHz, 0) + " Hz "
+                removed.add(point.text + ": " + reference::getFilterTypeName(band->type) + " " + formatFrequency(band->frequencyHz) + " Hz "
                             + juce::String(band->gainDb, 1) + " dB");
                 band = bands.erase(band);
             }
@@ -1292,45 +1292,173 @@ SurveyResult surveyParameters(const SurveySubject& subject, const SurveySettings
     return result;
 }
 
+namespace
+{
+// the steps table names harmonics and idle output only above these (below: the floor of the short sweep, -82 dB for a plain EQ)
+constexpr double kStepHarmonicDb = -60.0;
+constexpr double kStepIdleDbfs = -120.0;
+
+// a class for a table cell: the group, and for a non-linear system the kind ("non-linear (Hammerstein)")
+juce::String getClassCell(measure::SystemClass systemClass)
+{
+    const juce::String group = measure::getSystemClassGroup(systemClass);
+    if (systemClass == measure::SystemClass::Lti || systemClass == measure::SystemClass::TimeVariant)
+    {
+        return group;
+    }
+    return group + " (" + measure::getSystemClassName(systemClass).replace(" non-linear", "") + ")";
+}
+
+// what one step of a switch gives, in one cell
+juce::String describeStep(const SurveyPoint& point)
+{
+    juce::StringArray parts;
+    if (point.fit)
+    {
+        parts.add(describeStructure(*point.fit));
+    }
+    else if (! point.direct.empty())
+    {
+        parts.add("level " + juce::String(toDb(std::abs(point.direct[point.direct.size() / 2])), 2) + " dB");
+    }
+    if (point.delaySamples > 0)
+    {
+        parts.add("delay " + juce::String(point.delaySamples) + " samples");
+    }
+    if (point.harmonicDb > kStepHarmonicDb)
+    {
+        parts.add("harmonics " + juce::String(point.harmonicDb, 1) + " dB re H_1");
+    }
+    if (point.idleDbfs > kStepIdleDbfs)
+    {
+        parts.add("idle output " + juce::String(point.idleDbfs, 1) + " dBFS");
+    }
+    return parts.joinIntoString(", ");
+}
+
+// the evidence of a switch lists its steps ("Off: flat; On: peak ..."); in the report the steps get a table of their own
+juce::String getStepList(const ContextSurvey& survey)
+{
+    if (survey.role != ParameterRole::Switch || survey.points.size() < 2)
+    {
+        return {};
+    }
+    juce::StringArray texts;
+    for (const SurveyPoint& point : survey.points)
+    {
+        if (! point.fit)
+        {
+            return {};
+        }
+        texts.add(point.text + ": " + describeStructure(*point.fit));
+    }
+    const juce::String list = texts.joinIntoString("; ");
+    return survey.detail.contains(": " + list) ? list : juce::String();
+}
+
+bool hasStepList(const ContextSurvey& survey)
+{
+    return getStepList(survey).isNotEmpty();
+}
+
+// the measured effect without the step list (a table of its own) and without the system class (a column of its own)
+juce::String getEffectCell(const ContextSurvey& survey)
+{
+    const juce::String list = getStepList(survey);
+    const juce::String detail = list.isEmpty() ? survey.detail : survey.detail.replace(": " + list, " (steps below)");
+    juce::StringArray parts;
+    parts.addTokens(detail, ";", {});
+    juce::StringArray kept;
+    for (const juce::String& part : parts)
+    {
+        if (! part.trim().startsWith("system class "))
+        {
+            kept.add(part.trim());
+        }
+    }
+    return kept.joinIntoString("; ");
+}
+}
+
 juce::String createSurveyReport(const SurveyResult& result, const juce::String& title)
 {
     juce::String text;
     text << "## " << title << "\n\n";
-    text << "Every parameter alone over its range (W8.4). Sweep " << juce::String(result.settings.levelDbfs, 0) << " dBFS on the left input, "
-         << juce::String(result.settings.sampleRate / 1000.0, 1) << " kHz";
+    text << "Each parameter moved alone over its range: what changes, and whether it needs other parameters to act (W8.4). Sweep "
+         << juce::String(result.settings.levelDbfs, 0) << " dBFS on the left input, " << juce::String(result.settings.sampleRate / 1000.0, 1) << " kHz. ";
     if (result.defaultClass)
     {
-        text << "; system class at the default setting: **" << measure::getSystemClassName(*result.defaultClass) << "**";
+        text << "At the default setting the plugin is **" << getClassCell(*result.defaultClass) << "**. ";
     }
-    text << ". " << result.renders << " renders (" << juce::String(result.renderSeconds, 0) << " s), system class "
-         << juce::String(result.classifySeconds, 0) << " s, band fits " << juce::String(result.fitSeconds, 0) << " s.\n\n";
-    text << "| # | Parameter | Role | Coupled | Class change | Range (texts) |\n|---|---|---|---|---|---|\n";
+    text << result.renders << " renders (" << juce::roundToInt(result.renderSeconds) << " s), system class " << juce::roundToInt(result.classifySeconds)
+         << " s, band fits " << juce::roundToInt(result.fitSeconds) << " s.\n\n";
+
+    text << "| # | Parameter | Range shown | Role | Measured effect | Acts only when | System class at the ends |\n|---|---|---|---|---|---|---|\n";
     for (const ParameterSurvey& survey : result.parameters)
     {
         const ContextSurvey& shown = survey.inContext ? *survey.inContext : survey.atDefault;
-        juce::String range;
+        const ContextSurvey& telling = survey.coupled ? *survey.inContext : (survey.inContext && survey.inContext->role != ParameterRole::Nothing ? *survey.inContext : survey.atDefault);
+        juce::String range = "-";
         if (! shown.points.empty())
         {
             range = shown.points.front().text + " ... " + shown.points.back().text;
         }
-        const bool classChange = survey.atDefault.changesSystemClass || (survey.inContext && survey.inContext->changesSystemClass);
-        text << "| " << (survey.index + 1) << " | " << survey.parameter.name << " | " << getRoleName(survey.role) << " | "
-             << (survey.coupled ? "when " + survey.inContext->contextText : juce::String("-")) << " | " << (classChange ? "yes" : "-") << " | " << range << " |\n";
+        juce::String effect = survey.role == ParameterRole::Nothing ? juce::String("-") : getEffectCell(telling);
+        if (! survey.coupled && survey.inContext && &telling == &survey.atDefault && survey.inContext->role != ParameterRole::Nothing)
+        {
+            effect << " (with " << survey.inContext->contextText << ": " << getEffectCell(*survey.inContext) << ")";
+        }
+        juce::String classes = "-";
+        if (! telling.classes.empty())
+        {
+            classes = getClassCell(telling.classes.front());
+            if (telling.classes.back() != telling.classes.front())
+            {
+                classes << " / " << getClassCell(telling.classes.back());
+            }
+        }
+        text << "| " << (survey.index + 1) << " | " << survey.parameter.name << " | " << range << " | " << getRoleName(survey.role) << " | "
+             << (effect.isEmpty() ? juce::String("-") : effect) << " | " << (survey.coupled ? survey.inContext->contextText : juce::String("-")) << " | " << classes << " |\n";
     }
-    text << "\n### Evidence\n\n";
+
+    // the steps of the switches, one row each
+    juce::String steps;
     for (const ParameterSurvey& survey : result.parameters)
     {
-        text << "- **" << survey.parameter.name << "**: " << survey.summary;
-        if (! survey.coupled && survey.inContext)
+        // the steps in the most telling context only (a type switch with a band that has gain, not also at the default)
+        const bool contextHasSteps = survey.inContext && hasStepList(*survey.inContext);
+        for (const ContextSurvey* context : {contextHasSteps ? nullptr : &survey.atDefault, survey.inContext ? &*survey.inContext : nullptr})
         {
-            text << " (with " << survey.inContext->contextText << ": " << survey.inContext->detail << ")";
+            if (context == nullptr || ! hasStepList(*context))
+            {
+                continue;
+            }
+            const juce::String where = context->contextText.isEmpty() || context->contextText == "default setting" ? juce::String("default") : context->contextText;
+            for (const SurveyPoint& point : context->points)
+            {
+                steps << "| " << survey.parameter.name << " | " << where << " | " << point.text << " | " << describeStep(point) << " |\n";
+            }
         }
+    }
+    if (steps.isNotEmpty())
+    {
+        text << "\n### Steps of the switches\n\nWhat each step gives, described by the band model (W8.3).\n\n";
+        text << "| Parameter | Other parameters | Step | Measured response |\n|---|---|---|---|\n" << steps;
+    }
+
+    // what else changes (a gain knob that also changes the width, small bands the fit left out)
+    juce::String side;
+    for (const ParameterSurvey& survey : result.parameters)
+    {
         const ContextSurvey& shown = survey.inContext ? *survey.inContext : survey.atDefault;
-        if (! shown.alsoChanges.isEmpty())
+        for (const juce::String& also : shown.alsoChanges)
         {
-            text << "; also: " << shown.alsoChanges.joinIntoString("; ");
+            side << "| " << survey.parameter.name << " | " << also << " |\n";
         }
-        text << "\n";
+    }
+    if (side.isNotEmpty())
+    {
+        text << "\n### Side effects\n\nWhat a parameter changes besides its role.\n\n| Parameter | Also changes |\n|---|---|\n" << side;
     }
     return wrapMarkdownProse(text);
 }

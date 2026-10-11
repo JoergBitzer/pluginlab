@@ -5,6 +5,7 @@
 
 #include "pluginlab/engine/ChannelAdapter.h"
 #include "pluginlab/engine/LatencyMeasurer.h"
+#include "pluginlab/engine/PluginDevice.h"
 #include "PluginRig.h"
 
 namespace pluginlab::engine
@@ -254,7 +255,7 @@ juce::String describeReach(double milliseconds)
     {
         return "not within the render";
     }
-    return juce::String(milliseconds, 0) + " ms";
+    return juce::String(juce::roundToInt(milliseconds)) + " ms";
 }
 
 // "fast: 0 ms, real-time pace: 21 ms"
@@ -500,6 +501,25 @@ std::vector<LayoutFingerprint> checkLayouts(juce::AudioPluginInstance& instance)
 
 namespace pluginlab::engine
 {
+namespace
+{
+// the class in words: the kind (a first guess) at A, and B if it differs
+juce::String describeSystemClass(const SystemClassFingerprint& systemClass)
+{
+    const measure::SystemClass a = systemClass.atA.systemClass;
+    juce::String text = (a == measure::SystemClass::Lti ? juce::String() : measure::getSystemClassName(a) + ": ") + "first guess " + measure::getSystemClassGuess(a);
+    if (systemClass.measuredB)
+    {
+        const measure::SystemClass b = systemClass.atB.systemClass;
+        text += b == a ? juce::String("; the same at the setting B")
+                       : "; at the setting B: " + measure::getSystemClassGroup(b) + (b == measure::SystemClass::Lti || b == measure::SystemClass::TimeVariant ? juce::String() : " (" + measure::getSystemClassName(b) + ")")
+                             + ", first guess " + measure::getSystemClassGuess(b);
+    }
+    return text;
+}
+
+}
+
 juce::String describeSteps(int numSteps)
 {
     if (numSteps >= kContinuousSteps)
@@ -514,8 +534,15 @@ juce::String describeSteps(int numSteps)
 }
 
 PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
-                                     const FingerprintSettings& settings)
+                                     const FingerprintSettings& settings, const MeasurementProgress& progress)
 {
+    const auto report = [&progress](double fraction, const juce::String& step)
+    {
+        if (progress)
+        {
+            progress(fraction, step);
+        }
+    };
     PluginFingerprint fingerprint;
     fingerprint.description = description;
     fingerprint.settings = settings;
@@ -535,6 +562,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     }
     fingerprint.loaded = true;
 
+    report(0.02, "buses and layouts");
     // ---- buses and layouts, from an instance as it is created ----
     {
         juce::String error;
@@ -578,6 +606,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     fingerprint.isInstrument = description.isInstrument;
     fingerprint.measuredChannels = first->getChannels();
 
+    report(0.04, "parameters");
     // ---- parameters ----
     std::vector<float> defaults;
     const juce::Array<juce::AudioProcessorParameter*>& parameters = first->get().getParameters();
@@ -597,6 +626,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         defaults.push_back(parameter.getDefaultValue());
     }
 
+    report(0.06, "which parameters change the audio");
     // ---- which parameters change the audio: with L = R, and (more than one channel) with L != R ----
     const bool twoSignals = fingerprint.measuredChannels > 1;
     const Signal sameNoise = makeSameNoise(kNoiseLength, settings.noiseLevel);
@@ -784,6 +814,21 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         fingerprint.settingB.push_back(setting);
     }
 
+    report(0.3, "system class");
+    // ---- system class (W8.1): sweeps at three levels, at A and at B (a drive or a curve often acts only at B) ----
+    {
+        measure::SystemClassSettings classification;
+        classification.sampleRate = kReferenceRate;
+        fingerprint.systemClass.atA = measure::classifySystem(makePluginDevice(formatManager, description, defaults), classification);
+        fingerprint.systemClass.measured = true;
+        if (settingB != defaults)
+        {
+            fingerprint.systemClass.atB = measure::classifySystem(makePluginDevice(formatManager, description, settingB), classification);
+            fingerprint.systemClass.measuredB = true;
+        }
+    }
+
+    report(0.4, "latency at 44.1, 48 and 96 kHz");
     // ---- latency at the three sample rates (default parameters, delayed impulse) ----
     LatencyOptions latencyOptions;
     latencyOptions.preDelaySamples = settings.impulsePreDelaySamples;
@@ -804,6 +849,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         fingerprint.rates.push_back(entry);
     }
 
+    report(0.45, "delivery of parameters");
     // ---- delivery: A, A, B, A in four ways ----
     Signal referenceA;
     Signal referenceB;
@@ -853,6 +899,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         }
     }
 
+    report(0.55, "block sizes");
     // ---- block size independence: a long render, decided on its end (the steady state) ----
     const int blockRenderLength = static_cast<int>(kReferenceRate * settings.blockRenderSeconds);
     const size_t steadyFrom = static_cast<size_t>(blockRenderLength - static_cast<int>(kReferenceRate * settings.blockCompareSeconds));
@@ -872,6 +919,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         fingerprint.blockSizes.push_back(result);
     }
 
+    report(0.62, "determinism");
     // ---- determinism ----
     {
         const Signal one = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
@@ -880,6 +928,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         fingerprint.deterministic = ! one.empty() && difference.absoluteDbfs <= kFloorDb;
     }
 
+    report(0.65, "time invariance");
     // ---- time invariance: the same noise twice through one instance, with silence between; settled for a long time first, so that a slow
     // parameter smoothing does not count as time-varying. The first output is also the reference for "settles in time". ----
     {
@@ -899,6 +948,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         fingerprint.timeInvariant = isBelow(fingerprint.timeInvarianceDifference, settings.sameBelowDb);
     }
 
+    report(0.7, "parameter jumps");
     // ---- robustness: the reacting parameters to both ends and back, then B again; continuous ones and switches/choices separately ----
     {
         const Signal reachedB = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
@@ -949,6 +999,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         fingerprint.recoversFromJumps = fingerprint.recoversContinuous && fingerprint.recoversDiscrete;
     }
 
+    report(0.78, "silence");
     // ---- silence ----
     {
         const std::unique_ptr<Rig> rig = bench.make(kReferenceRate, kReferenceBlock);
@@ -968,6 +1019,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         fingerprint.idleLevelDb = toDb(peak);
     }
 
+    report(0.8, "channel coupling");
     // ---- channel coupling (two channels): one input driven, the other silent, at the setting B ----
     if (fingerprint.measuredChannels == 2)
     {
@@ -994,10 +1046,22 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         }
     }
 
+    report(0.83, "real-time behaviour");
     // ---- real-time behaviour: offline flag, real-time pace, a parameter change in real time (W5c) ----
     fingerprint.realTime = measureRealTime(bench, scanBase, settingB, fingerprint.parameters, fingerprint.measuredChannels, settings);
 
+    report(0.98, "findings");
     // ---- what is noteworthy (with the numbers) ----
+    if (fingerprint.systemClass.measured)
+    {
+        const measure::SystemClass a = fingerprint.systemClass.atA.systemClass;
+        const measure::SystemClass b = fingerprint.systemClass.measuredB ? fingerprint.systemClass.atB.systemClass : a;
+        if (a != measure::SystemClass::Lti || b != measure::SystemClass::Lti)
+        {
+            fingerprint.findings.push_back("System class: " + describeSystemClass(fingerprint.systemClass) + " ("
+                                           + measure::getSystemClassGroup(a) + " at the defaults)");
+        }
+    }
     for (const RateFingerprint& rate : fingerprint.rates)
     {
         const juce::String at = "Latency at " + juce::String(rate.sampleRate, 0) + " Hz: ";
@@ -1118,7 +1182,7 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         juce::StringArray seconds;
         for (const double start : realTime.longDifferentSeconds)
         {
-            seconds.add(juce::String(start, 0));
+            seconds.add(juce::String(juce::roundToInt(start)));
         }
         fingerprint.findings.push_back("In the long run at real-time pace the output differs from the fast render in the 1 s segments starting at "
                                        + seconds.joinIntoString(", ") + " s (demo noise, a wall-clock event?)");
@@ -1204,6 +1268,11 @@ std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
     }
     add("parameters", "parameters / changing the audio", juce::String(fingerprint.numberOfParameters) + " / " + juce::String(static_cast<int>(fingerprint.reactingParameters.size())),
         {}, ! fingerprint.reactingParameters.empty());
+    if (fingerprint.systemClass.measured)
+    {
+        add("systemClass", "system class at the defaults (LTI, time-variant, non-linear)", measure::getSystemClassGroup(fingerprint.systemClass.atA.systemClass),
+            describeSystemClass(fingerprint.systemClass), true);
+    }
 
     // latency: the reference rate in the cell, all rates in the detail
     const RateFingerprint* reference = nullptr;
@@ -1602,6 +1671,28 @@ juce::String createReport(const PluginFingerprint& fingerprint)
     for (const BlockSizeResult& block : fingerprint.blockSizes)
     {
         text << "| " << block.blockSize << " | " << formatDifference(block.steadyState) << " | " << formatDifference(block.whole) << " |\n";
+    }
+
+    if (fingerprint.systemClass.measured)
+    {
+        text << "\n## System class\n";
+        text << "Synchronized sweeps at -40, -20 and -6 dBFS (and one starting later) on channel 1 at " << juce::String(kReferenceRate / 1000.0, 0)
+             << " kHz (W8.1, docs/measurements/system-class.md). LTI: a filter, every frequency response and the band model are valid. Time-variant: the same "
+                "sweep later gives another response. Non-linear: harmonics or a level-dependent response; the kind is a first guess from which model the harmonic "
+                "responses fit (memoryless curve, Hammerstein = curve then filter, Wiener = filter then curve, generalized Hammerstein = parallel curves with filters, "
+                "other = none of these, e.g. dynamics).\n\n";
+        text << "| setting | group | class | first guess | evidence |\n|---|---|---|---|---|\n";
+        const auto addRow = [&text](const juce::String& setting, const measure::SystemClassResult& result) {
+            text << "| " << setting << " | " << measure::getSystemClassGroup(result.systemClass) << " | " << measure::getSystemClassName(result.systemClass) << " | "
+                 << measure::getSystemClassGuess(result.systemClass) << " | " << result.reason << "; largest harmonic "
+                 << (result.evidence.largestHarmonicDb < -999.0 ? juce::String("none") : juce::String(result.evidence.largestHarmonicDb, 1) + " dB re H_1") << " |\n";
+        };
+        addRow("A (defaults)", fingerprint.systemClass.atA);
+        if (fingerprint.systemClass.measuredB)
+        {
+            addRow("B", fingerprint.systemClass.atB);
+        }
+        text << "\nWhat this means at the defaults: " << measure::getSystemClassMeaning(fingerprint.systemClass.atA.systemClass) << ".\n";
     }
 
     text << "\n## Other\n";

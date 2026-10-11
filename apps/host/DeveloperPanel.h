@@ -47,6 +47,7 @@ public:
     void refresh();
 
     void resized() override;
+    void paint(juce::Graphics& g) override;
 
     // juce::TableListBoxModel
     int getNumRows() override;
@@ -57,6 +58,9 @@ public:
 
     // called by the job (message thread); message: why it failed (the step of a crash)
     void jobFinished(const juce::String& key, JobKind kind, bool success, const juce::String& message);
+
+    // called by the job (message thread) about once a second: what the child process is doing (fraction < 0: unknown)
+    void jobProgress(const juce::String& key, JobKind kind, double fraction, const juce::String& step);
 
     // what the buttons of a row do
     void generateReport(int row);
@@ -99,6 +103,20 @@ private:
         State mappingState = State::NoReport;
     };
 
+    // the running job (one at a time): its row, kind, start and the progress it reported
+    struct RunningJob
+    {
+        juce::String key;
+        JobKind kind = JobKind::Report;
+        juce::uint32 startedMs = 0;
+        double fraction = -1.0;
+        juce::String step;
+    };
+
+    // "43 %, survey: parameter 3 of 7, Q, 2:15" for the running job's cell (empty if the row and kind do not run)
+    juce::String getRunningText(const Row& row, JobKind kind) const;
+    bool isRunningCell(const Row& row, int columnId) const;
+
     const pluginlab::engine::SummaryItem* findSummaryItem(const Row& row, int columnId) const;
 
     void updateRowFromDisk(Row& row) const;
@@ -112,6 +130,8 @@ private:
     std::vector<Row> m_rows;
     std::deque<std::pair<juce::String, JobKind>> m_queue; // the rows (keys) that wait for their turn, and for what
     std::unique_ptr<PanelJob> m_job;
+    RunningJob m_running;
+    juce::Rectangle<int> m_progressArea; // above the table: the running job with a progress bar (a cell can be scrolled out of view)
     std::map<juce::String, std::unique_ptr<juce::DocumentWindow>> m_windows; // report windows by key, GUI review windows by key + "#gui", mapping windows by key + "#map"
 
     juce::TableListBox m_table;

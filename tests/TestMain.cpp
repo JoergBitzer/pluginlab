@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 
 #include <juce_core/juce_core.h>
@@ -18,7 +19,7 @@ public:
 
 // Runs all registered juce::UnitTest classes; the exit code is 0 only if all tests passed.
 // The message manager is needed because the tests load plugins (VST3 hosting runs on the message thread).
-// Usage: PluginLabTests [--only <part of a test name>] [--skip <part of a test name>]   (without arguments all tests run)
+// Usage: PluginLabTests [--only <part of a test name>] [--skip <part of a test name>[|<another part>...]]   (without arguments all tests run)
 int main(int argc, char* argv[])
 {
     const juce::ScopedJuceInitialiser_GUI juceInitialiser;
@@ -32,12 +33,16 @@ int main(int argc, char* argv[])
     if ((onlyIndex >= 0 && onlyIndex + 1 < arguments.size()) || (skipIndex >= 0 && skipIndex + 1 < arguments.size()))
     {
         const juce::String only = onlyIndex >= 0 ? arguments[onlyIndex + 1] : juce::String();
-        const juce::String skip = skipIndex >= 0 ? arguments[skipIndex + 1] : juce::String();
+        juce::StringArray skip;
+        if (skipIndex >= 0)
+        {
+            skip.addTokens(arguments[skipIndex + 1], "|", {});
+        }
         juce::Array<juce::UnitTest*> selected;
         for (juce::UnitTest* test : juce::UnitTest::getAllTests())
         {
             const bool wanted = only.isEmpty() || test->getName().containsIgnoreCase(only);
-            const bool skipped = skip.isNotEmpty() && test->getName().containsIgnoreCase(skip);
+            const bool skipped = std::any_of(skip.begin(), skip.end(), [test](const juce::String& part) { return test->getName().containsIgnoreCase(part); });
             if (wanted && ! skipped)
             {
                 selected.add(test);

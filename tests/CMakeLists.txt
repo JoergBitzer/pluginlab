@@ -76,9 +76,13 @@ if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
 
-add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey")
+add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint")
 # a hanging test (a dialog nobody can click, a plugin that never returns) must fail soon, not after the default 25 minutes
 set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 600 RESOURCE_LOCK display)
+# the fingerprint measures many test plugins (with the system class at A and B since 0.49.0): a test with a limit of its own; not at the same
+# time as PluginLabTests (the lock), because its real-time checks compare wall-clock timing, which a second heavy test in parallel disturbs
+add_test(NAME PluginLabFingerprint COMMAND PluginLabTests --only "PluginFingerprint")
+set_tests_properties(PluginLabFingerprint PROPERTIES TIMEOUT 1200 RESOURCE_LOCK display)
 # the parameter survey (W8.4) renders some hundred times per plugin: one entry per plugin with its own limit (Debug: 1 ... 9 minutes each), so
 # that "ctest -j" runs them side by side
 foreach(SURVEYED "Test EQ Drive" "Test EQ Switch" "Reference EQ" "Reference Utility" "Reference Nonlinear")

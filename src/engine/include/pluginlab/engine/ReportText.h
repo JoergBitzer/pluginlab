@@ -15,6 +15,10 @@ constexpr int kReportLineLength = 78;
 // Text wrapped at word boundaries into lines of at most `width` characters (a word longer than that stays whole)
 juce::String wrapText(const juce::String& text, int width = kReportLineLength);
 
+// A frequency for a report, without false precision: one decimal below 100 Hz, whole hertz above ("20.9", "1000", "16860").
+// (juce::String(x, 0) does not round: it gives every digit.)
+juce::String formatFrequency(double hertz);
+
 // Who made a review: "Jade Benchmark, pluginlab 0.42.0 (PluginLabHost; JUCE v9.0.3; Linux), 2026-10-11 10:12", for the head of every report
 juce::String getReviewSignature(const juce::String& program);
 

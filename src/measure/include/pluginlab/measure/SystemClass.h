@@ -25,6 +25,12 @@ juce::String getSystemClassName(SystemClass systemClass);
 // What the class means for the other measurements (the first line of a report)
 juce::String getSystemClassMeaning(SystemClass systemClass);
 
+// The three groups a reader asks for first: "LTI", "time-variant" or "non-linear" (every class from memoryless to other)
+juce::String getSystemClassGroup(SystemClass systemClass);
+
+// A first guess what kind of processing gives the class (a guess from the class alone, for the fingerprint)
+juce::String getSystemClassGuess(SystemClass systemClass);
+
 struct SystemClassSettings
 {
     double sampleRate = 48000.0;

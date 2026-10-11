@@ -205,4 +205,10 @@ deep peak); a band without a frequency, gain or Q knob is a side effect. Open: t
 Brought forward from W8.8 on the author's request (0.48.0): the Developer page has a button "Survey + mapping" (runs `--map` in a process of its
 own like the report and the GUI review; "View mapping" shows the report; a column "Mapping" the state; `--developer <plugin> --mapping [--view]`).
 The confirmation step in the host stays for W8.8.
+On the author's review of the first report (0.49.0): the survey report is tables (parameters, steps of the switches, side effects; the mapping's
+switch steps likewise), it ends with "About this report" (why, what the survey and the mapping do, the columns, what to do), frequencies without
+false precision; the fingerprint has the system class at A and B (LTI, time-variant, non-linear with a first guess of the kind; a summary row,
+a section, a finding, a column "Class" on the Developer page). On the author's request: a progress bar on the Developer page for the report,
+the survey and the GUI review (the child writes `<report>.progress`: the fraction and the step; a strip above the table and the running cell show
+it with the elapsed time; `--map` and `--fingerprint` print each step).
 

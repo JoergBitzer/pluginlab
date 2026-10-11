@@ -61,6 +61,9 @@ public:
         expect(report.contains("continuous") && report.contains("switch"), "the steps are named");
         expect(! report.contains("2147483647"));
         expect(report.contains("## Settings used"));
+        expect(gain.systemClass.measured && gain.systemClass.atA.systemClass == pluginlab::measure::SystemClass::Lti, "the gain plugin is LTI at A");
+        expect(! gain.systemClass.measuredB || gain.systemClass.atB.systemClass == pluginlab::measure::SystemClass::Lti, "and at B");
+        expect(report.contains("## System class") && report.indexOf("## System class") < report.indexOf("## Other"));
         expect(! report.contains("feature"), "the response analysis is gone (it belongs to the analyzer)");
         expect(report.indexOf("## Summary") < report.indexOf("## Findings"), "the summary comes first");
         const std::vector<pluginlab::engine::SummaryItem> gainSummary = pluginlab::engine::summarize(gain);
@@ -125,6 +128,9 @@ public:
             timeVaryingMentioned = timeVaryingMentioned || finding.contains("time-varying");
         }
         expect(timeVaryingMentioned);
+        const bool classTimeVariant = tremolo.systemClass.atA.systemClass == pluginlab::measure::SystemClass::TimeVariant
+                                      || (tremolo.systemClass.measuredB && tremolo.systemClass.atB.systemClass == pluginlab::measure::SystemClass::TimeVariant);
+        expect(classTimeVariant, "the system class of the tremolo: time-variant at A or B");
         for (const pluginlab::engine::SummaryItem& item : pluginlab::engine::summarize(tremolo))
         {
             expect(item.good || item.key == "parameters", "time-varying, so not a fault: " + item.key + " = " + item.result);

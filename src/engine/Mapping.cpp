@@ -4,6 +4,8 @@
 #include <cmath>
 #include <map>
 
+#include "pluginlab/engine/ReportText.h"
+
 namespace pluginlab::engine
 {
 namespace
@@ -48,7 +50,7 @@ const eqmodel::Band* getDominantBand(const SurveyPoint& point)
 
 juce::String describeBand(const eqmodel::Band& band)
 {
-    juce::String text = juce::String(reference::getFilterTypeName(band.type)) + " " + juce::String(band.frequencyHz, 0) + " Hz";
+    juce::String text = juce::String(reference::getFilterTypeName(band.type)) + " " + formatFrequency(band.frequencyHz) + " Hz";
     if (hasGain(band.type))
     {
         text << " " << (band.gainDb >= 0.0 ? "+" : "") << juce::String(band.gainDb, 1) << " dB";
@@ -772,8 +774,10 @@ juce::String createMappingReport(const Mapping& mapping)
     juce::String text;
     text << "## Mapping: " << mapping.pluginName << " " << mapping.version << "\n\n";
     text << (mapping.confirmedBy.isEmpty() ? juce::String("**Proposal** (not confirmed)") : "Confirmed by " + mapping.confirmedBy) << "; proposed "
-         << mapping.date << " by " << mapping.proposedBy << "; " << mapping.bands << (mapping.bands == 1 ? " band" : " bands") << ".\n\n";
+         << mapping.date << " by " << mapping.proposedBy << "; " << mapping.bands << (mapping.bands == 1 ? " band" : " bands")
+         << ". Which parameter sets which quantity of which band, and how the knob position becomes the value.\n\n";
     text << "| # | Parameter | Band | Quantity | Law as shown | Law as measured | Needs |\n|---|---|---|---|---|---|---|\n";
+    juce::String steps;
     for (const MappedParameter& parameter : mapping.parameters)
     {
         const juce::String unit = getMappedQuantityUnit(parameter.quantity);
@@ -782,12 +786,13 @@ juce::String createMappingReport(const Mapping& mapping)
         if (describedSteps && (! parameter.measuredLaw || parameter.quantity == MappedQuantity::Type || parameter.quantity == MappedQuantity::Family
                                || parameter.quantity == MappedQuantity::BandOnOff))
         {
-            juce::StringArray steps;
+            measured = juce::String(static_cast<int>(parameter.steps.size())) + " steps (below)";
             for (const SwitchStep& step : parameter.steps)
             {
-                steps.add(step.text + ": " + (step.description.isNotEmpty() ? step.description : juce::String("?")));
+                steps << "| " << parameter.name << " | " << step.text << " | " << (step.description.isNotEmpty() ? step.description : juce::String("?")) << " | "
+                      << (step.type ? juce::String(reference::getFilterTypeName(*step.type)) : juce::String("-")) << " | "
+                      << (step.family ? juce::String(eqmodel::getFamilyName(*step.family)) : juce::String("-")) << " |\n";
             }
-            measured = steps.joinIntoString("; ");
         }
         juce::StringArray needs;
         for (const Requirement& requirement : parameter.requirements)
@@ -799,6 +804,44 @@ juce::String createMappingReport(const Mapping& mapping)
              << (parameter.displayedLaw ? parameter.displayedLaw->describe(unit) : juce::String("-")) << " | " << measured << " | "
              << (needs.isEmpty() ? juce::String("-") : needs.joinIntoString(", ")) << " |\n";
     }
+    if (steps.isNotEmpty())
+    {
+        text << "\n### Steps of the switches\n\nWhat the mapping uses to choose a step: the band type and the design family each step gives.\n\n";
+        text << "| Parameter | Step | Measured response | Band type | Family |\n|---|---|---|---|---|\n" << steps;
+    }
+    return text;
+}
+
+juce::String createMappingReportFooter()
+{
+    juce::String text;
+    text << "## About this report\n\n";
+    text << "**Why.** To compare equalizers, to set one EQ to the curve of another, and to check whether a knob does what it shows (does \"1 kHz\" give "
+            "1 kHz?), pluginlab has to set any plugin to a wanted band without a person turning the knobs. Every plugin names, orders and scales its "
+            "parameters differently. The mapping is the translation from \"a peak at 1 kHz, +6 dB, Q 2\" to the plugin's parameter values. Writing it by "
+            "hand took about an hour per plugin in the prototype; here the survey proposes it and a person confirms it.\n\n";
+    text << "**What the survey does.** Each parameter is moved alone over its range (5 positions of a continuous knob, every step of a switch). At "
+            "each position one render measures the frequency response from the left input to the left output, the cross path to the right output, the "
+            "delay, the harmonics and the output without input. What changes decides the role. A parameter that changes nothing is tried again with "
+            "other parameters moved (a band's frequency does nothing while its gain is 0 dB): that is \"acts only when\". The system class (LTI, "
+            "time-variant, non-linear) is measured at both ends of every parameter that acts.\n\n";
+    text << "**What the mapping does.** It turns the survey into a file a program can use: which parameter is the frequency, gain, Q or order of "
+            "which band; which switch selects the band type, the design family or the band on and off; how the normalised knob position (0 ... 1) "
+            "becomes the value (the law); and what else has to be set for the parameter to act.\n\n";
+    text << "**How to read the tables.**\n\n";
+    text << "| Column | Meaning |\n|---|---|\n";
+    text << "| Range shown | the plugin's own texts at the lowest and the highest position surveyed |\n";
+    text << "| Role | what the parameter changes: band frequency, gain, width (Q) or order; level; latency; polarity; stereo; distortion; idle "
+            "output (noise, hum, DC); modulation; a switch; other; or nothing |\n";
+    text << "| Measured effect | the numbers behind the role, from the band model fitted to the measured response (W8.3) |\n";
+    text << "| Acts only when / Needs | the values other parameters must have before this one changes anything |\n";
+    text << "| System class at the ends | LTI: a filter; time-variant: the response changes over time; non-linear: harmonics or a level-dependent "
+            "response, with the kind in brackets |\n";
+    text << "| Law as shown | from the texts the plugin shows (no audio) |\n";
+    text << "| Law as measured | from the measured responses; where the two laws differ, the knob shows something else than it does |\n";
+    text << "| Law | linear: x = min + (max - min) v; log: x = min (max / min)^v; power: x = min + (max - min) v^(1/skew); table: one value per step |\n\n";
+    text << "**What to do with the proposal.** Check each row of the mapping against the survey. Correct a wrong row in the JSON file, then write your "
+            "name into `confirmedBy`. A confirmed file is never overwritten: a new survey writes its proposal next to it and lists the differences.\n";
     return text;
 }
 

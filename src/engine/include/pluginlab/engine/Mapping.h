@@ -108,8 +108,11 @@ Mapping proposeMapping(const SurveySubject& subject, const SurveyResult& survey,
 // type and family, the band's quantities, the requirements. Starts from base; `missing` lists what the mapping cannot set.
 std::vector<float> makeSettingForBand(const Mapping& mapping, const std::vector<float>& base, int band, const eqmodel::Band& wanted, juce::StringArray& missing);
 
-// Markdown: one row per parameter
+// Markdown: one row per parameter, the steps of the switches in a table of their own
 juce::String createMappingReport(const Mapping& mapping);
+
+// Markdown: the end of a survey and mapping report: what the survey and the mapping do, why, how to read the tables, what to do with the proposal
+juce::String createMappingReportFooter();
 
 // A file name for a plugin's mapping ("PluginLab Reference EQ" -> "pluginlab_reference_eq.json")
 juce::String getMappingFileName(const juce::String& pluginName);
