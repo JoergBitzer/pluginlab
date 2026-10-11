@@ -1,5 +1,7 @@
 #include "pluginlab/engine/ReportText.h"
 
+#include "pluginlab/PluginLabVersion.h"
+
 #include <algorithm>
 #include <vector>
 
@@ -118,5 +120,104 @@ juce::String alignMarkdownTables(const juce::String& markdown)
     }
     flushTable();
     return result;
+}
+
+juce::String wrapText(const juce::String& text, int width)
+{
+    juce::StringArray lines;
+    juce::String line;
+    for (const juce::String& word : juce::StringArray::fromTokens(text, " ", ""))
+    {
+        if (word.isEmpty())
+        {
+            continue;
+        }
+        if (line.isNotEmpty() && line.length() + 1 + word.length() > width)
+        {
+            lines.add(line);
+            line.clear();
+        }
+        if (line.isNotEmpty())
+        {
+            line << " ";
+        }
+        line << word;
+    }
+    if (line.isNotEmpty())
+    {
+        lines.add(line);
+    }
+    return lines.joinIntoString("\n");
+}
+
+juce::String getReviewSignature(const juce::String& program)
+{
+    return "Jade Benchmark, pluginlab " + juce::String(pluginlab::getVersionString()) + " (" + program + "; " + juce::SystemStats::getJUCEVersion() + "; "
+           + juce::SystemStats::getOperatingSystemName() + "), " + juce::Time::getCurrentTime().formatted("%Y-%m-%d %H:%M");
+}
+
+juce::String makeReportHead(const juce::String& title, const juce::String& program)
+{
+    return "![Jade Benchmark](" + juce::String(kLogoFileName) + ")\n\n# " + title + "\n\nReviewed by " + getReviewSignature(program) + "\n";
+}
+
+juce::String wrapMarkdownProse(const juce::String& markdown, int width)
+{
+    juce::StringArray result;
+    bool inCode = false;
+    for (const juce::String& line : juce::StringArray::fromLines(markdown))
+    {
+        const juce::String trimmed = line.trimStart();
+        if (trimmed.startsWith("```"))
+        {
+            inCode = ! inCode;
+            result.add(line);
+            continue;
+        }
+        const bool keep = inCode || line.length() <= width || trimmed.startsWith("|") || trimmed.startsWith("#") || trimmed.startsWith("![")
+                          || trimmed.isEmpty();
+        if (keep)
+        {
+            result.add(line);
+            continue;
+        }
+        // a list item or a quote keeps its marker; its continuation lines are indented to the text
+        const int indent = line.length() - trimmed.length();
+        juce::String marker;
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("> "))
+        {
+            marker = trimmed.substring(0, 2);
+        }
+        const juce::String lead = juce::String::repeatedString(" ", indent);
+        const juce::String text = trimmed.substring(marker.length());
+        const juce::StringArray wrapped = juce::StringArray::fromLines(wrapText(text, width - indent - marker.length()));
+        for (int index = 0; index < wrapped.size(); ++index)
+        {
+            juce::String prefix = lead + juce::String::repeatedString(" ", marker.length());
+            if (index == 0)
+            {
+                prefix = lead + marker;
+            }
+            result.add(prefix + wrapped[index]);
+        }
+    }
+    return result.joinIntoString("\n");
+}
+
+juce::String signReport(const juce::String& markdown, const juce::String& program)
+{
+    juce::StringArray lines = juce::StringArray::fromLines(markdown);
+    for (int index = 0; index < lines.size(); ++index)
+    {
+        if (lines[index].startsWith("# "))
+        {
+            lines.insert(index + 1, "");
+            lines.insert(index + 2, "Reviewed by " + getReviewSignature(program));
+            lines.insert(index, "");
+            lines.insert(index, "![Jade Benchmark](" + juce::String(kLogoFileName) + ")");
+            break;
+        }
+    }
+    return wrapMarkdownProse(lines.joinIntoString("\n"));
 }
 }

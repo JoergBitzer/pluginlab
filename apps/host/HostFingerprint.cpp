@@ -2,6 +2,8 @@
 
 #include "pluginlab/engine/Fingerprint.h"
 #include "pluginlab/engine/PluginMeasurement.h"
+#include "pluginlab/engine/ReportText.h"
+#include "pluginlab/ui/Logo.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
 
@@ -29,12 +31,16 @@ bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& repo
         }
         const pluginlab::engine::MeasurementSummary summary = pluginlab::engine::measurePlugin(
             formatManager, description, pluginlab::engine::getDefaultSetting(formatManager, description, getMeasurementRate()), {});
-        report += "# " + description.name + " " + description.version + "\n\n" + pluginlab::engine::createMeasurementReport(summary) + "\n";
+        report += pluginlab::engine::signReport("# Measurements: " + description.name + " " + description.version + "\n\n"
+                                                    + pluginlab::engine::createMeasurementReport(summary),
+                                                "PluginLabHost, measurement")
+                  + "\n";
     }
     if (report.isEmpty())
     {
         return false;
     }
+    pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
     return reportFile.replaceWithText(report);
 }
 
@@ -81,6 +87,7 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
     {
         return false; // the identifier is not in the file
     }
-    return reportFile.replaceWithText(report);
+    pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
+    return reportFile.replaceWithText(pluginlab::engine::signReport(report, "PluginLabHost, fingerprint and measurement"));
 }
 }

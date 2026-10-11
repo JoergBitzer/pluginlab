@@ -3,6 +3,7 @@
 add_library(pluginlab_hosting_ui STATIC
     GuiFormats.cpp
     GuiReview.cpp
+    Logo.cpp
     PluginEditorFactory.cpp
     ParameterTableComponent.cpp
     PluginEditorWindow.cpp

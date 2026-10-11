@@ -12,7 +12,9 @@
 
 #include "pluginlab/hosting/PluginScanner.h"
 #include "pluginlab/ui/GuiFormats.h"
+#include "pluginlab/engine/ReportText.h"
 #include "pluginlab/ui/GuiReview.h"
+#include "pluginlab/ui/Logo.h"
 #include "pluginlab/ui/PluginEditorFactory.h"
 
 namespace pluginlab::host
@@ -32,6 +34,9 @@ constexpr int kAudioEditorOpenMs = 400;
 constexpr int kLoadMs = 3000;                // W5d.5: the idle editor
 constexpr double kLeakFlagBytes = 5.0e6;     // more growth per opening than this is reported as a probable leak
 constexpr float kNoiseLevel = 0.1f;
+constexpr double kLowContrastLook = 0.25;    // a larger share of low-contrast colour edges is marked "look"
+constexpr int kLateBlocksTolerated = 2;      // more late blocks with the editor than alone: dropouts
+constexpr double kLoadLookPercent = 10.0;    // an idle editor above this is marked "look"
 
 void runMessageLoop(int milliseconds)
 {
@@ -205,16 +210,6 @@ void closeEditor(std::unique_ptr<juce::AudioProcessorEditor>& editor)
     editor.reset();
 }
 
-juce::String formatStats(const AudioRunner::Stats& stats)
-{
-    juce::String text = juce::String(stats.late) + " of " + juce::String(stats.blocks) + " blocks late, longest " + juce::String(stats.maximumMs, 2) + " ms";
-    if (! stats.finite)
-    {
-        text << ", NON-FINITE OUTPUT";
-    }
-    return text;
-}
-
 double toMegabytes(double bytes)
 {
     return bytes / 1.0e6;
@@ -235,10 +230,55 @@ juce::String percent(double share)
     return juce::String(100.0 * share, 1) + " %";
 }
 
+struct SummaryRow
+{
+    juce::String check;
+    juce::String result;
+    juce::String verdict;
+};
+
+juce::String getScaleVerdict(pluginlab::ui::ScaleBehaviour behaviour)
+{
+    switch (behaviour)
+    {
+        case pluginlab::ui::ScaleBehaviour::Follows:
+            return "ok";
+        case pluginlab::ui::ScaleBehaviour::SizeOnly:
+            return "**size only**";
+        case pluginlab::ui::ScaleBehaviour::Ignores:
+            return "**ignores**";
+        case pluginlab::ui::ScaleBehaviour::Partly:
+            return "**partly**";
+        case pluginlab::ui::ScaleBehaviour::NotJudged:
+            return "not judged (screen)";
+        case pluginlab::ui::ScaleBehaviour::NotApplicable:
+            return "n/a (macOS)";
+    }
+    return "-";
+}
+
+// What the panels of the colour-vision sheet show (below the figure)
+juce::String getVisionExplanation()
+{
+    juce::StringArray lines;
+    lines.add("| Panel | What it simulates |");
+    lines.add("|---|---|");
+    lines.add("| original | the editor as captured |");
+    lines.add("| grayscale | luminance only: what colour alone carries is lost |");
+    lines.add("| protanopia | no red (L) cones: red-green confusion, reds look dark |");
+    lines.add("| deuteranopia | no green (M) cones: red-green confusion, the most common type |");
+    lines.add("| tritanopia | no blue (S) cones: blue-yellow confusion, rare |");
+    lines.add("| low contrast | red marks: colour edges with luminance contrast below 1.5:1 |");
+    lines.add("");
+    lines.add(pluginlab::engine::wrapText("The simulations follow Machado, Oliveira and Fernandes (2009), full severity. Red-green deficiencies "
+                                          "(mostly the milder anomalous forms) concern about 8 % of men and 0.5 % of women of European descent."));
+    return lines.joinIntoString("\n");
+}
+
 juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::PluginDescription& description, const juce::File& folder)
 {
-    juce::String text;
-    text << "# GUI review: " << description.name << " " << description.version << "\n\n";
+    juce::String text = pluginlab::engine::makeReportHead("GUI review: " + description.name + " " + description.version, "PluginLabHost, GUI review");
+    pluginlab::ui::writeLogo(folder, pluginlab::engine::kLogoFileName);
     juce::String error;
     writeProgress(folder, "creating the plugin");
     std::unique_ptr<juce::AudioPluginInstance> instance = formats.createPluginInstance(description, kSampleRate, kBlockSize, error);
@@ -264,22 +304,21 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
     runMessageLoop(kSettleMs);
 
     const bool resizable = editor->isResizable();
-    juce::String sizeText = "not resizable";
+    juce::String sizeText; // the size limits a resizable editor reports
     if (resizable)
     {
-        sizeText = "resizable";
         if (juce::ComponentBoundsConstrainer* constrainer = editor->getConstrainer())
         {
             // a hosted editor's wrapper may report no real limits (0 ... 2^30): then half and twice the default size are tried
             const bool limited = constrainer->getMinimumWidth() > 0 && constrainer->getMaximumWidth() < kNoLimit;
             if (limited)
             {
-                sizeText << ", " << constrainer->getMinimumWidth() << " x " << constrainer->getMinimumHeight() << " ... " << constrainer->getMaximumWidth() << " x "
-                         << constrainer->getMaximumHeight();
+                sizeText << "limits " << constrainer->getMinimumWidth() << " x " << constrainer->getMinimumHeight() << " ... " << constrainer->getMaximumWidth()
+                         << " x " << constrainer->getMaximumHeight();
             }
             else
             {
-                sizeText << ", no size limits reported (half and twice the default size tried)";
+                sizeText << "no limits reported";
             }
             editor->setSize(std::max(constrainer->getMinimumWidth(), baseWidth / 2), std::max(constrainer->getMinimumHeight(), baseHeight / 2));
             captures.push_back(capture(*editor, "smallest", folder));
@@ -309,34 +348,39 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
     }
     writePng(pluginlab::ui::makeContactSheet(sizes, 3), folder.getChildFile("contact_sheet_sizes.png"));
 
-    juce::String editorText = "the plugin's own";
+    juce::String editorText = "own editor";
     if (generic)
     {
-        editorText = "none (the generic editor of the host is shown)";
+        editorText = "none (the host's generic editor)";
     }
-    text << "Editor: " << editorText << "; size " << baseWidth
-         << " x " << baseHeight << "; " << sizeText << ".\n\n";
-    text << "Native capture: " << getNativeCaptureName() << ".\n\n";
-    text << "| Capture | Size | JUCE snapshot has content | native window capture has content | Used |\n|---|---|---|---|---|\n";
+    std::vector<SummaryRow> summary;
+    summary.push_back({"Editor", editorText + ", " + juce::String(baseWidth) + " x " + juce::String(baseHeight), "-"});
+    juce::String captureVerdict = "-";
+    if (Capture::getContentShare(captures.front().best()) < kEmptyShare)
+    {
+        captureVerdict = "**empty capture**";
+    }
+    summary.push_back({"Capture", getNativeCaptureName(), captureVerdict});
+
+    juce::String capturesTable = "| Capture | Size | JUCE snapshot | Native capture | Used |\n|---|---|---|---|---|\n";
     for (const Capture& item : captures)
     {
-        const double componentShare = Capture::getContentShare(item.component);
-        const double nativeShare = Capture::getContentShare(item.native);
         juce::String used = "JUCE snapshot";
         if (&item.best() == &item.native)
         {
-            used = "native window";
+            used = "native";
         }
         juce::String nativeText = "not available";
         if (item.native.isValid())
         {
-            nativeText = percent(nativeShare);
+            nativeText = percent(Capture::getContentShare(item.native));
         }
-        text << "| " << item.name << " | " << item.width << " x " << item.height << " | " << percent(componentShare) << " | " << nativeText << " | " << used << " |\n";
+        capturesTable << "| " << item.name << " | " << item.width << " x " << item.height << " | " << percent(Capture::getContentShare(item.component)) << " | "
+                      << nativeText << " | " << used << " |\n";
     }
+
     // W5d.3: the scale factor (size and content) and resizing
-    text << "\n**Scale factor** (the host asks for 1.5 and 2; content: the capture reduced to the default size against the default capture, luminance "
-            "correlation):\n\n| Factor | Size | Size ratio | Content similarity | Behaviour |\n|---|---|---|---|---|\n";
+    juce::String scaleTable = "| Factor | Size | Size ratio | Content similarity | Behaviour |\n|---|---|---|---|---|\n";
     pluginlab::ui::ScaleBehaviour behaviourAtTwo = pluginlab::ui::ScaleBehaviour::Ignores;
     double similarityAtTwo = 0.0;
     for (size_t index = 1; index <= 2; ++index)
@@ -358,23 +402,30 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
             behaviourAtTwo = behaviour;
             similarityAtTwo = similarity;
         }
-        text << "| " << factor << " | " << captures[index].width << " x " << captures[index].height << " | " << juce::String(ratio, 3) << " | "
-             << juce::String(similarity, 3) << " | " << pluginlab::ui::describe(behaviour) << " |\n";
+        scaleTable << "| " << factor << " | " << captures[index].width << " x " << captures[index].height << " | " << juce::String(ratio, 3) << " | "
+                   << juce::String(similarity, 3) << " | " << pluginlab::ui::describe(behaviour) << " |\n";
+        summary.push_back({"Host scale factor " + juce::String(factor), juce::String(captures[index].width) + " x " + juce::String(captures[index].height)
+                                                                         + ", similarity " + juce::String(similarity, 2),
+                           getScaleVerdict(behaviour)});
     }
-    juce::String resizeText = "not resizable";
-    if (captures.size() > 4)
+    // free resizing: whether the plugin lets the host drag its window to any size (VST3 canResize); a plugin can still change its own size
+    if (resizable && captures.size() > 4)
     {
         const Capture& largest = captures.back();
         const double similarity = pluginlab::ui::getImageSimilarity(base, largest.best());
-        juce::String layout = "the layout changes (re-laid out or stretched: compare contact_sheet_sizes.png)";
+        juce::String layout = "the layout changes";
         if (similarity >= pluginlab::ui::kSameContentSimilarity)
         {
-            layout = "the content zooms with the window";
+            layout = "the content zooms";
         }
-        resizeText = "resized to " + juce::String(largest.width) + " x " + juce::String(largest.height) + ": content similarity " + juce::String(similarity, 3) + ", "
-                     + layout + "; the smallest size reached is " + juce::String(captures[3].width) + " x " + juce::String(captures[3].height);
+        summary.push_back({"Free resizing (drag)", "offered (" + sizeText + "); at " + juce::String(largest.width) + " x " + juce::String(largest.height) + " " + layout
+                                                       + "; smallest reached " + juce::String(captures[3].width) + " x " + juce::String(captures[3].height),
+                           "-"});
     }
-    text << "\n**Resizing**: " << resizeText << ".\n";
+    else
+    {
+        summary.push_back({"Free resizing (drag)", "not offered by the plugin (canResize: no)", "-"});
+    }
 
     // the single results for programs (the Developer page, W5d.7)
     auto json = std::make_unique<juce::DynamicObject>();
@@ -387,10 +438,12 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
     json->setProperty("lowContrastShare", lowContrastShare);
     json->setProperty("componentSnapshotEmpty", Capture::getContentShare(captures.front().component) < kEmptyShare);
     folder.getChildFile("gui_review.json").replaceWithText(juce::JSON::toString(juce::var(json.release())));
-    text << "Low-contrast edges (colour changes with a luminance contrast below " << kLowContrastRatio << ":1): " << percent(lowContrastShare)
-         << " of the colour edges (a hint, not a verdict; see low_contrast_map.png).\n";
-    text << "\nImages: contact_sheet_vision.png (original, grayscale, protanopia, deuteranopia, tritanopia, low-contrast map), contact_sheet_sizes.png, and the "
-            "single captures.\n";
+    juce::String contrastVerdict = "hint";
+    if (lowContrastShare > kLowContrastLook)
+    {
+        contrastVerdict = "**look**";
+    }
+    summary.push_back({"Low-contrast colour edges", percent(lowContrastShare) + " of the colour edges", contrastVerdict});
 
     // leave the editor as it was opened: many plugins store their editor size, the review must not change it
     editor->setScaleFactor(1.0f);
@@ -456,24 +509,75 @@ juce::String reviewPlugin(juce::AudioPluginFormatManager& formats, const juce::P
     instance->releaseResources();
     writeProgress(folder, "done");
 
-    text << "\n**Robustness** (W5d.4): " << kOpenCloseCycles << " openings and closings without a crash; resident memory after the first opening ";
+    summary.push_back({"Crash in " + juce::String(kOpenCloseCycles) + " openings", "none", "ok"});
+    juce::String memoryVerdict = "ok";
+    if (growthPerOpening > kLeakFlagBytes)
+    {
+        memoryVerdict = "**probable leak**";
+    }
+    juce::String memoryResult = "not measured on this platform";
     if (memoryAfterFirst > 0)
     {
-        text << juce::String(toMegabytes(static_cast<double>(memoryAfterFirst)), 1) << " MB, then " << juce::String(toMegabytes(growthPerOpening), 2)
-             << " MB per opening";
-        if (growthPerOpening > kLeakFlagBytes)
-        {
-            text << " (**probable leak**)";
-        }
+        memoryResult = juce::String(toMegabytes(growthPerOpening), 2) + " MB per opening";
+    }
+    summary.push_back({"Memory per opening", memoryResult, memoryVerdict});
+    juce::String audioVerdict = "ok";
+    if (withEditor.late > alone.late + kLateBlocksTolerated)
+    {
+        audioVerdict = "**dropouts**";
+    }
+    if (! alone.finite || ! withEditor.finite)
+    {
+        audioVerdict = "**non-finite output**";
+    }
+    summary.push_back({"Audio while the editor opens", juce::String(withEditor.late) + " of " + juce::String(withEditor.blocks) + " blocks late", audioVerdict});
+    juce::String loadVerdict = "ok";
+    if (loadPercent > kLoadLookPercent)
+    {
+        loadVerdict = "**look**";
+    }
+    summary.push_back({"Idle GUI load", juce::String(loadPercent, 1) + " % of one core", loadVerdict});
+
+    text << "\n## Summary\n\n| Check | Result | Verdict |\n|---|---|---|\n";
+    for (const SummaryRow& row : summary)
+    {
+        text << "| " << row.check << " | " << row.result << " | " << row.verdict << " |\n";
+    }
+
+    text << "\n## Colour vision\n\n![colour vision](contact_sheet_vision.png)\n\n" << getVisionExplanation() << "\n";
+
+    text << "\n## Sizes and scale factors\n\n![sizes](contact_sheet_sizes.png)\n\n"
+         << pluginlab::engine::wrapText("Top row: the host's scale factors 1, 1.5 and 2. Bottom row (only if the plugin offers free resizing): half and twice the "
+                                        "default size. Content similarity: the capture reduced to the default size against the default capture (luminance "
+                                        "correlation; 1 = the same picture, 0.7 or more counts as scaled).")
+         << "\n\n" << scaleTable << "\n" << capturesTable;
+
+    text << "\n## Memory footprint\n\n| Moment | Resident memory |\n|---|---|\n";
+    if (memoryAfterFirst > 0)
+    {
+        text << "| after the first opening | " << juce::String(toMegabytes(static_cast<double>(memoryAfterFirst)), 1) << " MB |\n"
+             << "| after " << kOpenCloseCycles << " openings | " << juce::String(toMegabytes(static_cast<double>(memoryAfterAll)), 1) << " MB |\n"
+             << "| growth per opening | " << juce::String(toMegabytes(growthPerOpening), 2) << " MB |\n";
     }
     else
     {
-        text << "not measured on this platform";
+        text << "| - | not measured on this platform |\n";
     }
-    text << ".\nAudio at real-time pace (blocks of " << kBlockSize << " at " << kSampleRate << " Hz, " << juce::String(1000.0 * kBlockSize / kSampleRate, 2)
-         << " ms each): alone " << formatStats(alone) << "; while the editor opens and closes " << formatStats(withEditor) << ".\n";
-    text << "\n**GUI load** (W5d.5): the idle editor costs " << juce::String(loadPercent, 1) << " % of one core (process CPU time over "
-         << juce::String(kLoadMs / 1000.0, 0) << " s with the editor open minus the same without it).\n";
+
+    text << "\n## Audio while the editor opens and closes\n\n| Phase | Blocks | Late | Longest block |\n|---|---|---|---|\n"
+         << "| audio alone | " << alone.blocks << " | " << alone.late << " | " << juce::String(alone.maximumMs, 2) << " ms |\n"
+         << "| editor opening and closing | " << withEditor.blocks << " | " << withEditor.late << " | " << juce::String(withEditor.maximumMs, 2) << " ms |\n\n"
+         << pluginlab::engine::wrapText("Noise through processBlock at real-time pace in a thread of its own, blocks of " + juce::String(kBlockSize) + " at "
+                                        + juce::String(kSampleRate, 0) + " Hz (" + juce::String(1000.0 * kBlockSize / kSampleRate, 2)
+                                        + " ms each); a block is late if it took longer than it lasts. The editor runs on the same instance, as in a DAW.")
+         << "\n";
+    text << "\n## Notes\n\n"
+         << pluginlab::engine::wrapText("Idle GUI load: the process CPU time over " + juce::String(kLoadMs / 1000.0, 0)
+                                        + " s with the editor open and nothing changing, minus the same time without it. Free resizing means that the "
+                                          "plugin lets the host drag its window to any size; a plugin may still change its own size (a zoom menu, its own "
+                                          "corner, the host's scale factor). The low-contrast share is a hint: it counts colour edges whose luminance "
+                                          "contrast is below 1.5:1, decoration included.")
+         << "\n";
     {
         auto robustness = std::make_unique<juce::DynamicObject>();
         robustness->setProperty("memoryGrowthPerOpeningBytes", growthPerOpening);
@@ -504,7 +608,7 @@ bool writeGuiSnapshots(const juce::File& pluginFile, const juce::File& folder, c
         {
             continue;
         }
-        report += reviewPlugin(formats, description, folder) + "\n";
+        report += pluginlab::engine::wrapMarkdownProse(reviewPlugin(formats, description, folder)) + "\n";
     }
     if (report.isEmpty())
     {

@@ -173,12 +173,23 @@ private:
 class ReportView : public juce::Component
 {
 public:
-    explicit ReportView(const juce::String& markdown)
+    // folder: where the images of the report (lines "![text](file)": the logo, contact sheets) are
+    ReportView(const juce::String& markdown, const juce::File& folder)
     {
         bool inFindings = false;
         for (const juce::String& line : juce::StringArray::fromLines(pluginlab::engine::alignMarkdownTables(markdown)))
         {
             Line entry;
+            if (line.startsWith("!["))
+            {
+                const juce::String file = line.fromFirstOccurrenceOf("](", false, false).upToLastOccurrenceOf(")", false, false);
+                entry.image = juce::ImageFileFormat::loadFrom(folder.getChildFile(file));
+                if (entry.image.isValid())
+                {
+                    m_lines.push_back(entry);
+                    continue;
+                }
+            }
             if (line.startsWith("# ") || line.startsWith("## "))
             {
                 entry.text = line.fromFirstOccurrenceOf(" ", false, false);
@@ -193,11 +204,19 @@ public:
         }
         const juce::Font font = makeFont(true);
         int widest = 0;
+        int height = 2 * kViewMargin;
         for (const Line& entry : m_lines)
         {
+            if (entry.image.isValid())
+            {
+                widest = juce::jmax(widest, entry.image.getWidth());
+                height += entry.image.getHeight() + kImageGap;
+                continue;
+            }
             widest = juce::jmax(widest, static_cast<int>(juce::GlyphArrangement::getStringWidth(font, entry.text)));
+            height += kLineHeight;
         }
-        setSize(widest + 2 * kViewMargin, static_cast<int>(m_lines.size()) * kLineHeight + 2 * kViewMargin);
+        setSize(widest + 2 * kViewMargin, height);
     }
 
     void paint(juce::Graphics& g) override
@@ -206,6 +225,12 @@ public:
         int y = kViewMargin;
         for (const Line& entry : m_lines)
         {
+            if (entry.image.isValid())
+            {
+                g.drawImageAt(entry.image, kViewMargin, y);
+                y += entry.image.getHeight() + kImageGap;
+                continue;
+            }
             if (entry.heading)
             {
                 g.setFont(makeFont(true));
@@ -226,6 +251,7 @@ private:
         juce::String text;
         bool heading = false;
         bool finding = false;
+        juce::Image image;
     };
 
     static juce::Font makeFont(bool bold)
@@ -280,6 +306,7 @@ private:
     }
 
     static constexpr int kViewMargin = 10;
+    static constexpr int kImageGap = 6;
     static constexpr int kLineHeight = 18;
     static constexpr int kBaseline = 14;
     static constexpr float kBackgroundDarker = 0.3f;
@@ -298,13 +325,13 @@ private:
 class ReportWindow : public juce::DocumentWindow
 {
 public:
-    ReportWindow(DeveloperPanel& owner, const juce::String& key, const juce::String& title, const juce::String& markdown)
+    ReportWindow(DeveloperPanel& owner, const juce::String& key, const juce::String& title, const juce::String& markdown, const juce::File& folder)
         : juce::DocumentWindow(title, juce::Desktop::getInstance().getDefaultLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId),
                                juce::DocumentWindow::allButtons),
           m_owner(owner),
           m_key(key),
           m_markdown(markdown),
-          m_view(markdown)
+          m_view(markdown, folder)
     {
         m_viewport.setViewedComponent(&m_view, false);
         m_viewport.setScrollBarsShown(true, true);
@@ -360,7 +387,7 @@ private:
     Content m_content;
 };
 
-// A window with the GUI review: its summary (as the report) and the two contact sheets (vision variants, sizes and scale factors) below it
+// A window with the GUI review: its Markdown with the logo and the contact sheets drawn where the review puts them
 class GuiReviewWindow : public juce::DocumentWindow
 {
 public:
@@ -369,28 +396,9 @@ public:
                                juce::DocumentWindow::allButtons),
           m_owner(owner),
           m_key(key),
-          m_view(folder.getChildFile(kGuiReviewFile).loadFileAsString())
+          m_view(folder.getChildFile(kGuiReviewFile).loadFileAsString(), folder)
     {
-        m_content.addAndMakeVisible(m_view);
-        int width = m_view.getWidth();
-        int height = m_view.getHeight();
-        for (const char* name : {"contact_sheet_vision.png", "contact_sheet_sizes.png"})
-        {
-            const juce::Image image = juce::ImageFileFormat::loadFrom(folder.getChildFile(name));
-            if (! image.isValid())
-            {
-                continue;
-            }
-            auto sheet = std::make_unique<juce::ImageComponent>();
-            sheet->setImage(image, juce::RectanglePlacement(juce::RectanglePlacement::xLeft | juce::RectanglePlacement::yTop | juce::RectanglePlacement::doNotResize));
-            sheet->setBounds(0, height + kMargin, image.getWidth(), image.getHeight());
-            height += image.getHeight() + kMargin;
-            width = juce::jmax(width, image.getWidth());
-            m_content.addAndMakeVisible(*sheet);
-            m_sheets.push_back(std::move(sheet));
-        }
-        m_content.setSize(width, height);
-        m_viewport.setViewedComponent(&m_content, false);
+        m_viewport.setViewedComponent(&m_view, false);
         m_viewport.setScrollBarsShown(true, true);
         m_viewport.setSize(kReportWindowWidth, kReportWindowHeight);
         setUsingNativeTitleBar(true);
@@ -409,8 +417,6 @@ private:
     DeveloperPanel& m_owner;
     juce::String m_key;
     ReportView m_view;
-    juce::Component m_content;
-    std::vector<std::unique_ptr<juce::ImageComponent>> m_sheets;
     juce::Viewport m_viewport;
 };
 
@@ -922,7 +928,7 @@ void DeveloperPanel::viewReport(int row)
         return;
     }
     const juce::String title = "Report: " + hosting::getDisplayName(entry.description) + " (" + entry.reportTime.formatted(kDateFormat) + ")";
-    m_windows[entry.key] = std::make_unique<ReportWindow>(*this, entry.key, title, entry.reportFile.loadFileAsString());
+    m_windows[entry.key] = std::make_unique<ReportWindow>(*this, entry.key, title, entry.reportFile.loadFileAsString(), entry.reportFile.getParentDirectory());
 }
 
 void DeveloperPanel::closeWindow(const juce::String& key)

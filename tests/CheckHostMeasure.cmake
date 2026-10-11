@@ -15,7 +15,7 @@ if(NOT EXISTS "${REPORT_FILE}")
 endif()
 
 file(READ "${REPORT_FILE}" REPORT)
-foreach(EXPECTED "# PluginLab Test Gain" "## Measurements (AES17)" "AES17 6.2.2" "AES17 6.4.1" "maximum input level")
+foreach(EXPECTED "# Measurements: PluginLab Test Gain" "Reviewed by Jade Benchmark, pluginlab" "## Measurements (AES17)" "AES17 6.2.2" "AES17 6.4.1" "maximum input level")
     string(FIND "${REPORT}" "${EXPECTED}" POSITION)
     if(POSITION EQUAL -1)
         message(FATAL_ERROR "The report does not contain '${EXPECTED}'")

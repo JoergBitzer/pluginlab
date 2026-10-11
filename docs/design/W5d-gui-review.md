@@ -162,6 +162,18 @@ Every wrong editor is found on both systems. Differences to note: on macOS the a
 sleep of the pacing loop is coarse there), and the busy editors cost less CPU (their repaints are throttled); the memory of correct editors grows by
 about 1 MB per opening on macOS (below the flag). Absolute numbers are therefore platform-dependent; the findings are not.
 
+### Report format and signature (0.42.0, the author's comments of 2026-10-11)
+- Both reviews (the audio report: fingerprint and AES17 measurements; the GUI review) start with the **Jade Benchmark** logo (a "JB" monogram
+  with a sine, in the red and gray of the Jade Hochschule as in the author's `TGMTools/JadeLookAndFeel.h`; drawn in `src/ui/Logo.cpp`, written as
+  `jade_benchmark_logo.png` next to the report) and the line **"Reviewed by Jade Benchmark, pluginlab X.Y.Z (program; JUCE version; operating
+  system), date"** (`engine::signReport`). The report windows of the Developer page draw the logo and the figures inline.
+- Running text is wrapped at 78 characters (`engine::wrapMarkdownProse`; tables, headings and images unchanged).
+- The GUI review is now table-first: a summary table (check, result, verdict), the colour-vision figure with a table that explains every panel
+  directly below it (protanopia: no red cones, red-green; deuteranopia: no green cones, red-green, the most common type; tritanopia: no blue
+  cones, blue-yellow, rare), the sizes figure with the scale-factor table, a memory-footprint table and an audio table.
+- **Fix** (the author's test of TAL-Reverb-3): the review said "not resizable" for an editor that follows the host's scale factor correctly. The
+  two things are separate rows now: "Host scale factor 1.5 / 2" (follows) and "Free resizing (drag): not offered by the plugin (canResize: no)".
+
 ### Open
 - Plugins that draw with Metal/OpenGL (macOS) or DirectX (Windows): not tried yet.
 - The leak test editor shows twice the memory it keeps per opening (probably two editor instances per opening): not verified.
