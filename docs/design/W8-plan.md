@@ -165,3 +165,13 @@ algorithm: a 2047-tap FIR with the RBJ magnitude, latency 1023 samples reported 
 within 0.046 dB of RBJ; through the host the plugin's linear-phase band equals the model (0.00000 dB), delay 1023 = reported latency, deviation from
 linear phase 0.0000 degrees. Note: the Algorithm parameter now has 7 entries, so its normalised values moved (automation of the old 6 entries of
 this test plugin would point elsewhere).
+
+### W8.3 band identification (0.45.0, done)
+`fitEqModel` (`src/eqmodel/BandFit.cpp`): Levenberg-Marquardt on the dB residual, a greedy search over candidates (pass filters, peaks in RBJ and
+Orfanidis, shelves) with one start per first-band candidate and pruning, linear phase from the phase without the delay. Document
+`docs/eqmodel/band-identification.md`. Tests `tests/BandFitTests.cpp`: eight known models with 1 ... 4 bands at 44.1 / 48 / 96 kHz recovered
+exactly (frequency, gain, Q, family incl. Orfanidis and linear phase, Butterworth order 3), a measured response (sweep) recovered, a comb filter
+"no good description". Corrections on the way: a very broad peak imitated a shelf (peak Q at least 0.2); Orfanidis is a candidate in every step;
+the delay estimate wrapped at mid band (now from the lowest frequencies); a multi-start over the first band and pruning against local minima; two
+shelves imitate a 3rd-order high-pass within 0.004 dB, so the search stops early only when one band suffices. Equivalences (RBJ / Zoelzer peaks,
+RBJ Q 0.707 / Butterworth 2) are reported in RBJ's terms. Debug test time about 100 s.

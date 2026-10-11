@@ -26,6 +26,7 @@ target_sources(PluginLabTests
         PluginMeasurementTests.cpp
         NonlinearReferenceTests.cpp
         OracleTests.cpp
+        BandFitTests.cpp
         BrowserTests.cpp
         CatalogTests.cpp
         EngineTests.cpp

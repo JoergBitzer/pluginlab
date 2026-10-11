@@ -2,6 +2,7 @@
 # responses from the designs of pluginlab_reference, models of several bands, Q / bandwidth / shelf-slope conversions. Used by the Reference EQ
 # plugin and (W8.3) by the band identification. No GUI, no hosting.
 add_library(pluginlab_eqmodel STATIC
+    BandFit.cpp
     EqModel.cpp)
 
 target_include_directories(pluginlab_eqmodel
