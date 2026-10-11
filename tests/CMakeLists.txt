@@ -22,6 +22,7 @@ target_sources(PluginLabTests
         MeasureNullTests.cpp
         MeasurePhaseTests.cpp
         MeasureResponseTests.cpp
+        MeasureSystemClassTests.cpp
         PluginMeasurementTests.cpp
         NonlinearReferenceTests.cpp
         OracleTests.cpp

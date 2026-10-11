@@ -14,6 +14,7 @@ add_library(pluginlab_measure STATIC
     Gain.cpp
     Phase.cpp
     SweptImpulse.cpp
+    SystemClass.cpp
     Weighting.cpp)
 
 target_include_directories(pluginlab_measure

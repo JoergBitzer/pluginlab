@@ -118,4 +118,114 @@ public:
         }
     }
 };
+
+// A Wiener system: a linear filter, then a memoryless polynomial (W8.1)
+class Wiener : public reference::Processor
+{
+public:
+    Wiener(std::vector<reference::BiquadCoefficients> sections, std::vector<double> coefficients, double sampleRate)
+        : m_filter(std::move(sections), sampleRate), m_shaper(reference::Waveshaper::makePolynomial(std::move(coefficients)))
+    {
+    }
+
+    void reset() override
+    {
+        m_filter.reset();
+    }
+
+    void process(juce::AudioBuffer<float>& buffer) override
+    {
+        m_filter.process(buffer);
+        m_shaper.process(buffer);
+    }
+
+private:
+    reference::BiquadCascade m_filter;
+    reference::Waveshaper m_shaper;
+};
+
+// A generalized Hammerstein system (W8.1): y = x + G2(a2 x^2) + G3(a3 x^3), each power through a filter of its own
+class GeneralizedHammerstein : public reference::Processor
+{
+public:
+    GeneralizedHammerstein(double a2, std::vector<reference::BiquadCoefficients> second, double a3, std::vector<reference::BiquadCoefficients> third,
+                           double sampleRate)
+        : m_a2(a2), m_a3(a3), m_second(std::move(second), sampleRate), m_third(std::move(third), sampleRate)
+    {
+    }
+
+    void reset() override
+    {
+        m_second.reset();
+        m_third.reset();
+    }
+
+    void process(juce::AudioBuffer<float>& buffer) override
+    {
+        juce::AudioBuffer<float> square(buffer.getNumChannels(), buffer.getNumSamples());
+        juce::AudioBuffer<float> cube(buffer.getNumChannels(), buffer.getNumSamples());
+        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        {
+            for (int index = 0; index < buffer.getNumSamples(); ++index)
+            {
+                const double x = buffer.getSample(channel, index);
+                square.setSample(channel, index, static_cast<float>(m_a2 * x * x));
+                cube.setSample(channel, index, static_cast<float>(m_a3 * x * x * x));
+            }
+        }
+        m_second.process(square);
+        m_third.process(cube);
+        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        {
+            buffer.addFrom(channel, 0, square, channel, 0, buffer.getNumSamples());
+            buffer.addFrom(channel, 0, cube, channel, 0, buffer.getNumSamples());
+        }
+    }
+
+private:
+    double m_a2;
+    double m_a3;
+    reference::BiquadCascade m_second;
+    reference::BiquadCascade m_third;
+};
+
+// A simple compressor (W8.1, "other"): an rms envelope (time constant 50 ms); above the threshold the gain reduces the level by the ratio
+class Compressor : public reference::Processor
+{
+public:
+    Compressor(double thresholdDbfs, double ratio, double sampleRate)
+        : m_threshold(std::pow(10.0, thresholdDbfs / 20.0)), m_ratio(ratio), m_coefficient(std::exp(-1.0 / (0.05 * sampleRate)))
+    {
+    }
+
+    void reset() override
+    {
+        m_power = 0.0;
+    }
+
+    void process(juce::AudioBuffer<float>& buffer) override
+    {
+        for (int index = 0; index < buffer.getNumSamples(); ++index)
+        {
+            const double x = buffer.getSample(0, index);
+            m_power = m_coefficient * m_power + (1.0 - m_coefficient) * x * x;
+            const double level = std::sqrt(2.0 * m_power); // the amplitude of a sine with this power
+            double gain = 1.0;
+            if (level > m_threshold)
+            {
+                gain = std::pow(level / m_threshold, 1.0 / m_ratio - 1.0);
+            }
+            for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+            {
+                buffer.setSample(channel, index, static_cast<float>(gain * buffer.getSample(channel, index)));
+            }
+        }
+    }
+
+private:
+    double m_threshold;
+    double m_ratio;
+    double m_coefficient;
+    double m_power = 0.0;
+};
 }

@@ -120,7 +120,17 @@ downloaded with his own credentials**, which are **not part of the repository** 
    hysteresis and the like as "other"). → section 2, W8.1.
 
 ## Progress
-(none yet)
+### W8.1 system classification (0.43.0, done)
+`classifySystem` (`src/measure/SystemClass.cpp`), document `docs/measurements/system-class.md`, tests `tests/MeasureSystemClassTests.cpp`: all nine
+devices of known class are classified correctly (gain and RBJ peak LTI, tremolo time-variant, polynomial and tanh memoryless, polynomial then a
+low-pass Hammerstein, a low-pass then a polynomial Wiener, parallel branches with own filters generalized Hammerstein, a compressor "other"). New test
+devices `Wiener`, `GeneralizedHammerstein`, `Compressor` in `tests/MeasureTestDevices.h`. The class is the first row of the AES17 measurement report.
+`getHarmonicResponse` (complex H_n) is public now; harmonics above the reference's band are no longer divided by it.
+Corrections on the way: (1) aliased harmonics of the full-band sweep spoil H_1 and H_n at high frequencies: the grid stops at 0.9 Nyquist / 5;
+(2) a band-limited sweep instead rings into the harmonic windows (-46 dB for a gain): rejected; (3) the dynamics bound has to use the largest
+harmonic ratios over frequency (a filter after the curve lowers H_3 at 3f); (4) points near the noise floor (-105 dB) left out, each test at its own
+level; (5) the shape tolerance 1.0 dB (0.8 dB near the floor). Not done: the full generalized-Hammerstein identification of Novak et al. (2010); the
+twelve real EQs not classified yet (the planned first real check; the author's two test objects later).
 
 ## Appendix: the author's comments (2026-10-09, verbatim)
 Answers in the question list:

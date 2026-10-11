@@ -1,5 +1,6 @@
 #pragma once
 
+#include <complex>
 #include <vector>
 
 #include "pluginlab/measure/Analyzer.h"
@@ -66,4 +67,8 @@ struct HarmonicResponse
 };
 
 HarmonicResponse measureSweptHarmonics(const Device& device, const SweepResponseSettings& settings, int maximumHarmonic, const std::vector<double>& frequencies);
+
+// The complex n-th harmonic response H_n(f) of a channel (order 1: the linear response H_1): the spectrum of the n-th harmonic impulse response
+// at n f divided by the reference channel's, i.e. the amplitude of the n-th harmonic relative to the input amplitude, for the input frequency f
+std::vector<std::complex<double>> getHarmonicResponse(const SweptImpulses& impulses, int channel, int order, const std::vector<double>& inputFrequencies);
 }

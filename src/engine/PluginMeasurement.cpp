@@ -12,6 +12,7 @@
 #include "pluginlab/measure/Linearity.h"
 #include "pluginlab/measure/Noise.h"
 #include "pluginlab/measure/Phase.h"
+#include "pluginlab/measure/SystemClass.h"
 
 namespace pluginlab::engine
 {
@@ -77,6 +78,15 @@ MeasurementSummary measureDevice(const measure::Device& device, int channels, co
     const int used = summary.channels;
     Rows rows(summary.rows);
     const double fs = options.sampleRate;
+
+    // the system class first (W8.1): which of the following measurements mean what
+    measure::SystemClassSettings classification;
+    classification.sampleRate = fs;
+    const measure::SystemClassResult systemClass = measure::classifySystem(device, classification);
+    rows.add("system class", "system class (channel 1)", static_cast<double>(static_cast<int>(systemClass.systemClass)),
+             measure::getSystemClassName(systemClass.systemClass) + ": " + measure::getSystemClassMeaning(systemClass.systemClass) + " (" + systemClass.reason
+                 + ")",
+             "W8.1");
 
     // level and gain (W7.1)
     measure::GainSettings gain;

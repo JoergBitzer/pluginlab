@@ -164,6 +164,57 @@ double getHarmonicWindow(int offset, int before, int after)
 }
 }
 
+// The windowed n-th harmonic impulse response of a channel: it lies L ln(n) before the linear one; its window reaches half way to the neighbouring
+// harmonics
+std::vector<double> getHarmonicSegment(const SweptImpulses& impulses, const SweptChannel& swept, int order, int& firstTime)
+{
+    const int size = static_cast<int>(swept.impulse.size());
+    const double rate = impulses.rateSeconds;
+    const double sampleRate = impulses.sampleRate;
+    const double centre = swept.peak - rate * std::log(static_cast<double>(order)) * sampleRate;
+    const int before = static_cast<int>(0.5 * rate * std::log((order + 1.0) / order) * sampleRate);
+    const int after = static_cast<int>(0.5 * rate * std::log(order / (order - 1.0)) * sampleRate);
+    const int first = static_cast<int>(std::round(centre)) - before;
+    std::vector<double> segment;
+    const int total = before + after;
+    for (int offset = 0; offset <= total; ++offset)
+    {
+        const int index = ((first + offset) % size + size) % size;
+        segment.push_back(getHarmonicWindow(offset, before, after) * swept.impulse[static_cast<size_t>(index)]);
+    }
+    firstTime = first;
+    return segment;
+}
+
+std::vector<std::complex<double>> getHarmonicResponse(const SweptImpulses& impulses, int channel, int order, const std::vector<double>& inputFrequencies)
+{
+    std::vector<std::complex<double>> response;
+    const SweptChannel& swept = impulses.channels[static_cast<size_t>(channel)];
+    if (order == 1)
+    {
+        for (const double frequency : inputFrequencies)
+        {
+            response.push_back(getSweptResponse(impulses, channel, frequency));
+        }
+        return response;
+    }
+    int firstTime = 0;
+    const std::vector<double> segment = getHarmonicSegment(impulses, swept, order, firstTime);
+    for (const double frequency : inputFrequencies)
+    {
+        const double harmonicFrequency = order * frequency;
+        // the inverse filter of the deconvolution is analytic over the whole band, so the harmonic pulse is right up to n x the stop frequency;
+        // the reference channel (the stimulus itself) corrects the band-edge ripple only inside its own band
+        std::complex<double> reference = 1.0;
+        if (harmonicFrequency <= impulses.validToHz)
+        {
+            reference = getDtft(impulses.referenceSegment, impulses.referenceFirstTime, harmonicFrequency, impulses.sampleRate);
+        }
+        response.push_back(getDtft(segment, firstTime, harmonicFrequency, impulses.sampleRate) / reference);
+    }
+    return response;
+}
+
 HarmonicResponse measureSweptHarmonics(const Device& device, const SweepResponseSettings& settings, int maximumHarmonic, const std::vector<double>& frequencies)
 {
     HarmonicResponse result;
@@ -171,60 +222,35 @@ HarmonicResponse measureSweptHarmonics(const Device& device, const SweepResponse
     result.maximumHarmonic = maximumHarmonic;
     const SweptImpulses impulses = measureSweptImpulses(device, settings);
     result.validToHz = impulses.validToHz;
-    const double sampleRate = impulses.sampleRate;
-    const double rate = impulses.rateSeconds;
-    for (const SweptChannel& swept : impulses.channels)
+    for (size_t channelIndex = 0; channelIndex < impulses.channels.size(); ++channelIndex)
     {
-        HarmonicResponse::Channel channel;
-        const int size = static_cast<int>(swept.impulse.size());
-        // the n-th harmonic impulse response lies L ln(n) before the linear one; its window reaches half way to the neighbouring harmonics
-        const auto harmonicSegment = [&](int order, int& firstTime)
-        {
-            const double centre = swept.peak - rate * std::log(static_cast<double>(order)) * sampleRate;
-            const int before = static_cast<int>(0.5 * rate * std::log((order + 1.0) / order) * sampleRate);
-            const int after = static_cast<int>(0.5 * rate * std::log(order / (order - 1.0)) * sampleRate);
-            const int first = static_cast<int>(std::round(centre)) - before;
-            std::vector<double> segment;
-            const int total = before + after;
-            for (int offset = 0; offset <= total; ++offset)
-            {
-                const int index = ((first + offset) % size + size) % size;
-                segment.push_back(getHarmonicWindow(offset, before, after) * swept.impulse[static_cast<size_t>(index)]);
-            }
-            firstTime = first;
-            return segment;
-        };
-        std::vector<std::vector<double>> segments;
-        std::vector<int> firstTimes;
+        const int channel = static_cast<int>(channelIndex);
+        HarmonicResponse::Channel measured;
+        measured.harmonicDb.assign(static_cast<size_t>(maximumHarmonic - 1), std::vector<double>());
+        const std::vector<std::complex<double>> linear = getHarmonicResponse(impulses, channel, 1, frequencies);
+        std::vector<std::vector<std::complex<double>>> harmonics;
         for (int order = 2; order <= maximumHarmonic; ++order)
         {
-            int firstTime = 0;
-            segments.push_back(harmonicSegment(order, firstTime));
-            firstTimes.push_back(firstTime);
+            harmonics.push_back(getHarmonicResponse(impulses, channel, order, frequencies));
         }
-        channel.harmonicDb.assign(static_cast<size_t>(maximumHarmonic - 1), std::vector<double>());
-        for (const double frequency : frequencies)
+        for (size_t index = 0; index < frequencies.size(); ++index)
         {
-            const double fundamental = std::abs(getDtft(swept.segment, swept.firstTime, frequency, sampleRate)
-                                                / getDtft(impulses.referenceSegment, impulses.referenceFirstTime, frequency, sampleRate));
+            const double fundamental = std::abs(linear[index]);
             double power = 0.0;
             for (int order = 2; order <= maximumHarmonic; ++order)
             {
-                const double harmonicFrequency = order * frequency;
                 double level = std::numeric_limits<double>::quiet_NaN();
-                if (harmonicFrequency <= result.validToHz)
+                if (order * frequencies[index] <= result.validToHz)
                 {
-                    const size_t index = static_cast<size_t>(order - 2);
-                    const double magnitude = std::abs(getDtft(segments[index], firstTimes[index], harmonicFrequency, sampleRate)
-                                                      / getDtft(impulses.referenceSegment, impulses.referenceFirstTime, harmonicFrequency, sampleRate));
-                    level = toDb(magnitude / fundamental);
-                    power += (magnitude / fundamental) * (magnitude / fundamental);
+                    const double ratio = std::abs(harmonics[static_cast<size_t>(order - 2)][index]) / fundamental;
+                    level = toDb(ratio);
+                    power += ratio * ratio;
                 }
-                channel.harmonicDb[static_cast<size_t>(order - 2)].push_back(level);
+                measured.harmonicDb[static_cast<size_t>(order - 2)].push_back(level);
             }
-            channel.thdDb.push_back(10.0 * std::log10(std::max(power, 1.0e-30)));
+            measured.thdDb.push_back(10.0 * std::log10(std::max(power, 1.0e-30)));
         }
-        result.channels.push_back(channel);
+        result.channels.push_back(measured);
     }
     return result;
 }
