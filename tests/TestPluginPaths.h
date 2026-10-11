@@ -121,6 +121,12 @@ inline juce::File getEqSwitchPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestEqSwitch.vst3");
 }
 
+// an "analogue" EQ: a drive that makes it non-linear, an output level, a display switch that does nothing (W8.4)
+inline juce::File getEqDrivePlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestEqDrive.vst3");
+}
+
 inline juce::File getCrashPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestCrash.vst3");

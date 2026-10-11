@@ -40,9 +40,12 @@ public:
         const auto lowPass = ref::designButterworth(ref::Pass::Low, 2, kSampleRate, 1500.0);
         const auto highPass = ref::designButterworth(ref::Pass::High, 2, kSampleRate, 1000.0);
         const auto peak = std::vector<ref::BiquadCoefficients>{ref::designRbj(ref::FilterType::Peak, kSampleRate, 1000.0, 6.0, 2.0)};
+        const auto steepLowPass = ref::designButterworth(ref::Pass::Low, 8, kSampleRate, 1000.0);
         const std::vector<Case> cases = {
             {"gain -6 dB", [](double) { return std::make_unique<ref::Gain>(-6.0, false); }, measure::SystemClass::Lti},
             {"RBJ peak 1 kHz +6 dB", [peak](double rate) { return std::make_unique<ref::BiquadCascade>(peak, rate); }, measure::SystemClass::Lti},
+            // a deep stop band inside the analysis band (-96 dB at 4 kHz): H_n / H_1 there is noise and must not count (W8.4)
+            {"Butterworth low-pass 1 kHz, order 8", [steepLowPass](double rate) { return std::make_unique<ref::BiquadCascade>(steepLowPass, rate); }, measure::SystemClass::Lti},
             {"tremolo 3 Hz, depth 0.3", [](double rate) { return std::make_unique<ref::Tremolo>(rate, 3.0, 0.3); }, measure::SystemClass::TimeVariant},
             {"polynomial x + 0.1x^2 + 0.05x^3", [](double) { return std::make_unique<ref::Waveshaper>(ref::Waveshaper::makePolynomial(kPolynomial)); },
              measure::SystemClass::Memoryless},

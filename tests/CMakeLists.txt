@@ -26,6 +26,7 @@ target_sources(PluginLabTests
         PluginMeasurementTests.cpp
         NonlinearReferenceTests.cpp
         OracleTests.cpp
+        ParameterSurveyTests.cpp
         BandFitTests.cpp
         BrowserTests.cpp
         CatalogTests.cpp
@@ -73,9 +74,16 @@ if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
 
-add_test(NAME PluginLabTests COMMAND PluginLabTests)
+add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey")
 # a hanging test (a dialog nobody can click, a plugin that never returns) must fail soon, not after the default 25 minutes
-set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 600)
+set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 600 RESOURCE_LOCK display)
+# the parameter survey (W8.4) renders some hundred times per plugin: one entry per plugin with its own limit (Debug: 1 ... 9 minutes each), so
+# that "ctest -j" runs them side by side
+foreach(SURVEYED "Test EQ Drive" "Test EQ Switch" "Reference EQ" "Reference Utility" "Reference Nonlinear")
+    string(REPLACE " " "" SURVEY_TEST_NAME "${SURVEYED}")
+    add_test(NAME PluginLabParameterSurvey_${SURVEY_TEST_NAME} COMMAND PluginLabTests --only "Parameter survey (W8.4): ${SURVEYED}")
+    set_tests_properties(PluginLabParameterSurvey_${SURVEY_TEST_NAME} PROPERTIES TIMEOUT 1800)
+endforeach()
 
 # Smoke test of the stand-alone app: it starts, writes its version into a file and quits; the version is the one of CMake.
 add_test(NAME PluginLabHostVersion
@@ -134,6 +142,8 @@ if(UNIX AND NOT APPLE)
             -DPLUGIN_FOLDER=${PLUGINLAB_TEST_PLUGIN_DIR}
             -DFOLDER=${CMAKE_CURRENT_BINARY_DIR}/gui_review_robustness
             -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostGuiRobustness.cmake)
+    # tests that open windows in the virtual display do not run at the same time under "ctest -j" (the captures would overlap)
+    set_tests_properties(PluginLabHostGuiSnapshot PluginLabHostGuiScaling PluginLabHostGuiRobustness PROPERTIES RESOURCE_LOCK display)
 endif()
 
 # The loader plugin is self-contained: its bundle holds the scanner (found next to the plugin binary when the plugin runs in a DAW).

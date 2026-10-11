@@ -101,6 +101,10 @@ pluginlab_add_test_plugin(PluginLabTestEditorBlocksAudio "PluginLab Test Editor 
 
 # An RBJ peaking EQ for the fingerprint tests: correct, with the 44.1 kHz fault, with the prepareToPlay fault
 function(pluginlab_add_test_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE FS_BUG PREPARE_BUG ENABLE_SWITCH)
+    set(DRIVE 0)
+    if(ARGC GREATER 6)
+        set(DRIVE ${ARGV6})
+    endif()
     juce_add_plugin(${TARGET_NAME}
         COMPANY_NAME "Jade_Hochschule"
         IS_SYNTH FALSE
@@ -125,7 +129,8 @@ function(pluginlab_add_test_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE FS_BU
             JUCE_VST3_CAN_REPLACE_VST2=0
             PLUGINLAB_TEST_EQ_FS_BUG=${FS_BUG}
             PLUGINLAB_TEST_EQ_PREPARE_BUG=${PREPARE_BUG}
-            PLUGINLAB_TEST_EQ_ENABLE_SWITCH=${ENABLE_SWITCH})
+            PLUGINLAB_TEST_EQ_ENABLE_SWITCH=${ENABLE_SWITCH}
+            PLUGINLAB_TEST_EQ_DRIVE=${DRIVE})
 
     target_link_libraries(${TARGET_NAME}
         PRIVATE
@@ -140,3 +145,6 @@ pluginlab_add_test_eq_plugin(PluginLabTestEqFs "PluginLab Test EQ Fs Fault" Teq2
 pluginlab_add_test_eq_plugin(PluginLabTestEqPrepare "PluginLab Test EQ Prepare Fault" Teq3 0 1 0)
 # a band that is off by default ("Enabled"): the gain changes the audio only together with the switch
 pluginlab_add_test_eq_plugin(PluginLabTestEqSwitch "PluginLab Test EQ Switch" Teq4 0 0 1)
+# an "analogue" EQ for the parameter survey (W8.4): a drive (tanh before the band, off at 0 dB: the EQ becomes non-linear), an output level and a
+# display switch that changes nothing in the audio
+pluginlab_add_test_eq_plugin(PluginLabTestEqDrive "PluginLab Test EQ Drive" Teq5 0 0 0 1)

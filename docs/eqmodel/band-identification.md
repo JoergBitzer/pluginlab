@@ -17,7 +17,7 @@ of a Hammerstein system (W8.1 says which).
 | 2 | delay from the phase slope at the lowest frequencies (no wrapping there) |
 | 3 | linear phase if the phase without the delay stays within 2 degrees |
 | 4 | flat model: the output gain alone |
-| 5 | candidates for the largest remaining feature: pass filters at a steep end (RBJ, Butterworth 1 ... 4), a peak or dip (RBJ, Orfanidis; start: the half-gain width), shelves at either end |
+| 5 | candidates for the largest remaining feature: pass filters at a steep end (RBJ; Butterworth of the order estimated from the level one octave beyond the -3 dB point, 6.02 dB per order, and its neighbours, 1 ... 8), a peak or dip (RBJ, Orfanidis; start: the half-gain width), shelves at either end |
 | 6 | one start per candidate for the first band; then greedily the best candidate for the next feature, all bands refitted |
 | 7 | pruning: a band is removed if the model stays as good without it |
 | 8 | of the starts: the good one with the fewest bands, else the smallest residual |
@@ -27,7 +27,10 @@ of a Hammerstein system (W8.1 says which).
 The fit: Levenberg-Marquardt on the dB residual, numerical Jacobian;
 parameters log10 frequency, gain and log10 Q per band, the output gain.
 Limits: peak Q at least 0.2 (a very broad peak imitates a shelf and an
-offset), shelf and pass Q at least 0.3.
+offset), shelf and pass Q at least 0.3. A deep stop band is noise of the measurement:
+more than 90 dB below the largest measured level, the model and the
+measurement are both clamped (W8.4: a steep low-pass reaches the floor of the
+sweep within the audio band, and the fit added bands to follow the noise).
 
 ## Equivalences
 Some designs are the same digital filter; the fit reports the first name.

@@ -38,7 +38,7 @@ pluginlab (mission: divide the myth from reality) measures, compares and matches
 ```console
 git submodule update --init                       # JUCE (pinned submodule), once
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --parallel
+cmake --build build --parallel 16              # always a job count: bare --parallel = unlimited make -j (OOM)
 tools/ctest_offscreen.sh                          # CTest in Xvfb + openbox (no windows on the desktop)
 tools/run_pluginval.sh build/plugins/loader/PluginLabLoader_artefacts/Debug/VST3/PluginLabLoader.vst3 1
 ```

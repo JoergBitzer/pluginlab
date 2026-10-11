@@ -8,6 +8,7 @@ add_library(pluginlab_engine STATIC
     LatencyMeasurer.cpp
     MeasurementEngine.cpp
     OfflineRenderer.cpp
+    ParameterSurvey.cpp
     PluginDevice.cpp
     PluginMeasurement.cpp
     ReportText.cpp
@@ -28,6 +29,7 @@ target_link_libraries(pluginlab_engine
     PUBLIC
         pluginlab_core
         pluginlab_measure
+        pluginlab_eqmodel
         juce::juce_audio_formats
     PRIVATE
         juce::juce_recommended_config_flags

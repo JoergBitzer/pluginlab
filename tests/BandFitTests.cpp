@@ -73,6 +73,7 @@ private:
             {"RBJ high shelf 8 kHz -4 dB", 48000.0, {makeBand(rbj, F::HighShelf, 8000.0, -4.0, 0.71)}},
             // (order 2 is the RBJ high-pass with Q 1/sqrt(2): the same filter; order 3 is distinguishable)
             {"Butterworth high-pass order 3, 60 Hz", 48000.0, {makeBand(eq::DesignFamily::Butterworth, F::HighPass, 60.0, 0.0, 0.71, 3)}},
+            {"Butterworth low-pass order 7, 1 kHz", 48000.0, {makeBand(eq::DesignFamily::Butterworth, F::LowPass, 1000.0, 0.0, 0.71, 7)}},
             {"four bands (shelf, two peaks, shelf), output -1 dB", 48000.0,
              {makeBand(rbj, F::LowShelf, 100.0, 4.0, 0.71), makeBand(rbj, F::Peak, 800.0, -6.0, 2.0), makeBand(rbj, F::Peak, 4000.0, 3.0, 1.0),
               makeBand(rbj, F::HighShelf, 12000.0, -3.0, 0.71)},

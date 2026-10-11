@@ -37,6 +37,7 @@ struct SystemClassSettings
     double wienerToleranceDb = 0.3;
     double shapeToleranceDb = 1.0;              // generalized Hammerstein: the shape of each H_n the same at two levels (near the noise floor: 0.8 dB)
     double timeVarianceDb = 0.1;                // H_1 of the offset sweep differs by more: time-variant
+    double stopBandDb = 60.0;                   // frequencies where H_1 is more than this below its maximum are left out (a stop band)
     double lowestHz = 50.0;
     double highestHz = 16000.0;
 };

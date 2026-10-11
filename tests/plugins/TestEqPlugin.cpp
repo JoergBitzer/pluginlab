@@ -7,6 +7,8 @@
 //   PLUGINLAB_TEST_EQ_PREPARE_BUG=1  prepareToPlay resets the filter to hard-coded values and a parameter is read again only when its
 //                                    value changes (the fault of the PeakEqualizer template)
 //   PLUGINLAB_TEST_EQ_ENABLE_SWITCH=1  the band has a switch "Enabled" that is off by default (like the bands of Venn Audio Free EQ)
+//   PLUGINLAB_TEST_EQ_DRIVE=1        an "analogue" EQ for the parameter survey: "Drive" (tanh(g x) / g before the band, off at 0 dB), "Output" (a
+//                                    level after it) and "Display" (a switch of the editor that changes nothing in the audio)
 namespace
 {
 constexpr int kParameterVersion = 1;
@@ -24,6 +26,8 @@ constexpr double kHardCodedQ = 9.0;
 constexpr int kMaximumChannels = 2;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kDbPerGainStep = 40.0;
+constexpr float kMaxDriveDb = 24.0f;
+constexpr float kMaxOutputDb = 12.0f;
 }
 
 class TestEqProcessor : public juce::AudioProcessor
@@ -46,6 +50,17 @@ public:
         {
             m_enabled = new juce::AudioParameterBool(juce::ParameterID{"enabled", kParameterVersion}, "Enabled", false);
             addParameter(m_enabled);
+        }
+        if (PLUGINLAB_TEST_EQ_DRIVE)
+        {
+            m_drive = new juce::AudioParameterFloat(juce::ParameterID{"drive", kParameterVersion}, "Drive",
+                                                    juce::NormalisableRange<float>(0.0f, kMaxDriveDb, 0.0f), 0.0f);
+            m_output = new juce::AudioParameterFloat(juce::ParameterID{"output", kParameterVersion}, "Output",
+                                                     juce::NormalisableRange<float>(-kMaxOutputDb, kMaxOutputDb, 0.0f), 0.0f);
+            m_display = new juce::AudioParameterChoice(juce::ParameterID{"display", kParameterVersion}, "Display", juce::StringArray{"Dark", "Light", "Vintage"}, 0);
+            addParameter(m_drive);
+            addParameter(m_output);
+            addParameter(m_display);
         }
     }
 
@@ -98,17 +113,23 @@ public:
             return; // the band is off: the audio passes unchanged
         }
         const int channels = juce::jmin(buffer.getNumChannels(), kMaximumChannels);
+        const double drive = m_drive != nullptr ? juce::Decibels::decibelsToGain(static_cast<double>(m_drive->get())) : 1.0;
+        const double output = m_output != nullptr ? juce::Decibels::decibelsToGain(static_cast<double>(m_output->get())) : 1.0;
         for (int channel = 0; channel < channels; ++channel)
         {
             float* data = buffer.getWritePointer(channel);
             Filter& filter = m_filters[static_cast<size_t>(channel)];
             for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
             {
-                const double input = data[sample];
-                const double output = m_b0 * input + filter.z1;
-                filter.z1 = m_b1 * input - m_a1 * output + filter.z2;
-                filter.z2 = m_b2 * input - m_a2 * output;
-                data[sample] = static_cast<float>(output);
+                double input = data[sample];
+                if (drive > 1.0)
+                {
+                    input = std::tanh(drive * input) / drive; // unity gain for small signals: the drive adds harmonics, not level
+                }
+                const double filtered = m_b0 * input + filter.z1;
+                filter.z1 = m_b1 * input - m_a1 * filtered + filter.z2;
+                filter.z2 = m_b2 * input - m_a2 * filtered;
+                data[sample] = static_cast<float>(output * filtered);
             }
         }
     }
@@ -208,6 +229,9 @@ private:
     juce::AudioParameterFloat* m_frequency = nullptr;
     juce::AudioParameterFloat* m_q = nullptr;
     juce::AudioParameterBool* m_enabled = nullptr;
+    juce::AudioParameterFloat* m_drive = nullptr;
+    juce::AudioParameterFloat* m_output = nullptr;
+    juce::AudioParameterChoice* m_display = nullptr;
     double m_sampleRate = kBuggySampleRate;
     double m_b0 = 1.0;
     double m_b1 = 0.0;

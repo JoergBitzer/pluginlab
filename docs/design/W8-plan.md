@@ -1,6 +1,6 @@
 # W8: system classification, EQ band model, parameter mapping and calibration (plan)
 
-Status: **plan v2, not started** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
+Status: **plan v2, W8.1 ... W8.4 done** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
 and comments, kept verbatim in the appendix). Planning §8, W8: "EQ band model + parameter mapping, calibration of knobs by measurement. Done when:
 mapping data validated for the test EQs." Lessons of the prototype (planning §5 item 4, `docs/prototype/LESSONS_LEARNED.md`): the model of "one peaking
 band" was too narrow; every plugin needed an hour of manual exploration for its mapping file; a tool that lists all parameters and proposes a mapping is
@@ -175,3 +175,16 @@ exactly (frequency, gain, Q, family incl. Orfanidis and linear phase, Butterwort
 the delay estimate wrapped at mid band (now from the lowest frequencies); a multi-start over the first band and pruning against local minima; two
 shelves imitate a 3rd-order high-pass within 0.004 dB, so the search stops early only when one band suffices. Equivalences (RBJ / Zoelzer peaks,
 RBJ Q 0.707 / Butterworth 2) are reported in RBJ's terms. Debug test time about 100 s.
+### W8.4 parameter survey (0.46.0, done)
+`surveyParameters` (`src/engine/ParameterSurvey.cpp`), document `docs/eqmodel/parameter-survey.md`, tests `tests/ParameterSurveyTests.cpp` (one CTest per
+plugin). Every parameter alone over its range: one render per point (stationary idle output, then a sweep on the left input: direct and cross path,
+delay, harmonics), the W8.3 fit when the response changes shape, the W8.1 class at both ends. Roles: does nothing, level, band frequency / gain /
+width / order, latency, polarity, stereo, distortion, idle output, modulation, switch, other. A parameter that does nothing at the default is searched
+for a context (one or two other parameters moved) and reported as coupled ("acts only when Enabled = On, Gain = 21.6"). Every parameter of the
+Reference EQ, Utility and Nonlinear plugins and of the test EQs (with an enable switch; the new **Test EQ Drive**: a drive that makes the EQ
+non-linear, an output level and a display switch that does nothing) is classified as its code says. Corrections on the way, also in earlier units:
+the idle output counts only if stationary (a resonance at 21 Hz rings for 0.4 s after the setting); distortion needs a non-linear class (a short
+sweep's harmonics are lifted by a strong bass boost); W8.1 left the stop band of a steep low-pass in its harmonic ratios (fixed: frequencies 60 dB
+below the maximum of H_1 are left out, a test case added); W8.3 knew Butterworth orders 1 ... 4 only and fitted the noise floor of a steep low-pass
+(fixed: the order from the slope, 1 ... 8, and a residual clamped 90 dB below the largest level; a test case added). Test time: the five surveys take
+1 ... 9 minutes each in Debug and run side by side with `tools/ctest_offscreen.sh -j10` (the author allows 2/3 of the 16 cores).

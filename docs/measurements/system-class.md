@@ -51,6 +51,10 @@ largest ratios over frequency.
   the better choice.
 - Harmonic values below -105 dB re H_1 are near the noise and are left out of
   the shape tests (each test checks this at the level it uses).
+- Frequencies where H_1 is more than 60 dB below its maximum (a stop band)
+  are left out of every test (W8.4: an 8th-order low-pass at 1 kHz is -96 dB
+  at 4 kHz, and H_n / H_1 there is noise; the device "Butterworth low-pass
+  1 kHz, order 8" in the tests is classified LTI).
 - The generalized Hammerstein test is the leading-order shape test, not the
   full identification of the branch filters (Novak et al. 2010). A
   Wiener-Hammerstein system also keeps its shapes at leading order, so this

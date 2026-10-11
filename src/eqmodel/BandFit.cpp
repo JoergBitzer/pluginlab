@@ -19,6 +19,8 @@ constexpr int kExactIterations = 8;
 constexpr double kStep = 1.0e-6;
 constexpr double kLinearPhaseDegrees = 2.0;   // the phase without the delay stays within this: linear phase
 constexpr double kHalf = 0.5;
+constexpr int kMaximumPassOrder = 8;
+constexpr double kStopBandFloorDb = 90.0;     // below the largest measured level: noise of the measurement, not a shape to fit         // Butterworth orders of the model
 
 double toDb(double value)
 {
@@ -129,13 +131,21 @@ double getRms(const std::vector<double>& values)
     return std::sqrt(sum / std::max<size_t>(values.size(), 1));
 }
 
+// The floor of a deep stop band: more than kStopBandFloorDb below the largest measured level the measurement is noise (a steep low-pass reaches
+// the floor of the sweep within the audio band); the model and the measurement are both clamped there
+double getFloorDb(const std::vector<double>& measuredDb)
+{
+    return *std::max_element(measuredDb.begin(), measuredDb.end()) - kStopBandFloorDb;
+}
+
 std::vector<double> getResidual(const EqModel& model, const std::vector<double>& frequencies, const std::vector<double>& measuredDb, double sampleRate,
                                 bool exact = false)
 {
     std::vector<double> residual = getModelDb(model, frequencies, sampleRate, exact);
+    const double floorDb = getFloorDb(measuredDb);
     for (size_t index = 0; index < residual.size(); ++index)
     {
-        residual[index] -= measuredDb[index];
+        residual[index] = std::max(residual[index], floorDb) - std::max(measuredDb[index], floorDb);
     }
     return residual;
 }
@@ -294,6 +304,20 @@ double findCrossing(const std::vector<double>& frequencies, const std::vector<do
     return frequencies.back();
 }
 
+// The value at a frequency (the nearest grid point on the log axis)
+double getValueAt(const std::vector<double>& frequencies, const std::vector<double>& values, double frequencyHz)
+{
+    size_t best = 0;
+    for (size_t index = 1; index < frequencies.size(); ++index)
+    {
+        if (std::abs(std::log(frequencies[index] / frequencyHz)) < std::abs(std::log(frequencies[best] / frequencyHz)))
+        {
+            best = index;
+        }
+    }
+    return values[best];
+}
+
 // Candidate bands for the largest remaining feature of the residual (measured - model)
 std::vector<Band> findCandidates(const std::vector<double>& frequencies, const std::vector<double>& difference)
 {
@@ -347,7 +371,12 @@ std::vector<Band> findCandidates(const std::vector<double>& frequencies, const s
         if (difference[end] < -6.0)
         {
             passes.push_back(pass);
-            for (int order = 1; order <= 4; ++order)
+            // the order from the slope: a Butterworth filter is 10 lg(1 + 2^(2n)) ~ 6.02 n dB down one octave beyond its -3 dB point; that
+            // order and its neighbours (1 ... 8, the orders the model has)
+            const double octaveBeyond = lowEnd ? pass.frequencyHz / 2.0 : pass.frequencyHz * 2.0;
+            const bool insideGrid = octaveBeyond >= frequencies.front() && octaveBeyond <= frequencies.back();
+            const int estimate = insideGrid ? juce::jlimit(1, kMaximumPassOrder, static_cast<int>(std::round(-getValueAt(frequencies, difference, octaveBeyond) / 6.02))) : 2;
+            for (int order = std::max(1, estimate - 1); order <= std::min(kMaximumPassOrder, estimate + 1); ++order)
             {
                 Band butterworth = pass;
                 butterworth.family = DesignFamily::Butterworth;
@@ -558,7 +587,7 @@ FitResult fitEqModel(const std::vector<double>& frequencies, const std::vector<s
     double squares = 0.0;
     for (size_t index = 0; index < modelDb.size(); ++index)
     {
-        const double residual = modelDb[index] - measuredDb[index];
+        const double residual = std::max(modelDb[index], getFloorDb(measuredDb)) - std::max(measuredDb[index], getFloorDb(measuredDb));
         squares += residual * residual;
         result.largestResidualDb = std::max(result.largestResidualDb, std::abs(residual));
     }

@@ -182,12 +182,27 @@ SystemClassResult classifySystem(const Device& device, const SystemClassSettings
     }
     const size_t middle = levels.size() / 2;
     const size_t highest = levels.size() - 1;
+    // the pass band: where H_1 is deep in a stop band, the ratios H_n / H_1 and the level comparisons are noise
+    double largestLinear = 0.0;
+    for (const std::complex<double>& value : levels[highest].linear)
+    {
+        largestLinear = std::max(largestLinear, std::abs(value));
+    }
+    std::vector<bool> passBand;
+    for (const std::complex<double>& value : levels[highest].linear)
+    {
+        passBand.push_back(toDb(std::abs(value) / largestLinear) > -settings.stopBandDb);
+    }
 
     // 1. time variance: the middle level again, the sweep starting later within the render
     const LevelResponses offset = measureLevel(makeDelayedStart(device, static_cast<int>(std::round(settings.offsetSeconds * settings.sampleRate))), settings,
                                                settings.levelsDbfs[middle], grid, linearAtHarmonic);
     for (size_t index = 0; index < grid.size(); ++index)
     {
+        if (! passBand[index])
+        {
+            continue;
+        }
         evidence.timeVarianceDb = std::max(evidence.timeVarianceDb, std::abs(toDb(std::abs(offset.linear[index])) - toDb(std::abs(levels[middle].linear[index]))));
     }
 
@@ -199,7 +214,7 @@ SystemClassResult classifySystem(const Device& device, const SystemClassSettings
         {
             for (size_t index = 0; index < grid.size(); ++index)
             {
-                if (! isUsable((order + 2) * grid[index], levels[level]))
+                if (! passBand[index] || ! isUsable((order + 2) * grid[index], levels[level]))
                 {
                     continue;
                 }
@@ -215,6 +230,10 @@ SystemClassResult classifySystem(const Device& device, const SystemClassSettings
     double largestChange = 0.0;
     for (size_t index = 0; index < grid.size(); ++index)
     {
+        if (! passBand[index])
+        {
+            continue;
+        }
         const double low = std::abs(levels.front().linear[index]);
         const double high = std::abs(levels[highest].linear[index]);
         evidence.linearLevelSpreadDb = std::max(evidence.linearLevelSpreadDb, std::abs(toDb(high / low)));
@@ -238,7 +257,7 @@ SystemClassResult classifySystem(const Device& device, const SystemClassSettings
     {
         for (size_t index = 0; index < grid.size(); ++index)
         {
-            if (isUsable((order + 2) * grid[index], levels[highest])
+            if (passBand[index] && isUsable((order + 2) * grid[index], levels[highest])
                 && toDb(std::abs(levels[highest].harmonics[order][index]) / std::abs(levels[highest].linear[index])) > settings.harmonicLimitDb)
             {
                 evidence.significantOrders.push_back(static_cast<int>(order + 2));
@@ -265,7 +284,7 @@ SystemClassResult classifySystem(const Device& device, const SystemClassSettings
             for (size_t index = 0; index < grid.size(); ++index)
             {
                 const auto o = static_cast<size_t>(order - 2);
-                above = above || (isUsable(order * grid[index], levels[level])
+                above = above || (passBand[index] && isUsable(order * grid[index], levels[level])
                                   && toDb(std::abs(levels[level].harmonics[o][index]) / std::abs(levels[level].linear[index])) > settings.harmonicLimitDb);
             }
             allAbove = allAbove && above;
@@ -285,7 +304,7 @@ SystemClassResult classifySystem(const Device& device, const SystemClassSettings
         std::vector<double> shape;
         for (size_t index = 0; index < grid.size(); ++index)
         {
-            if (! isUsable(order * grid[index], levels[highest]))
+            if (! passBand[index] || ! isUsable(order * grid[index], levels[highest]))
             {
                 continue;
             }
