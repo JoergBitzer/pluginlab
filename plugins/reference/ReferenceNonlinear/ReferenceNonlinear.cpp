@@ -23,6 +23,8 @@ constexpr double kMains60Hz = 60.0;
 constexpr int kNoiseSeed = 7;
 constexpr int kDitherSeed = 1;
 constexpr int kCaptionHeight = 18;
+constexpr int kTimerHz = 10;          // how often the GUI greys out what has no effect
+constexpr float kLayoutMargin = 10.0f; // around the signal flow, in design units
 
 double toGain(double decibels)
 {
@@ -219,19 +221,48 @@ ReferenceNonlinearGUI::ReferenceNonlinearGUI(ReferenceNonlinearAudioProcessor& p
     m_controls.addChoice(g_paramHum);
     m_controls.addKnob(g_paramHumLevel);
     addAndMakeVisible(m_controls);
+    // the order of processSynchronBlock: drive, curve, output, hum, noise, quantizer
+    m_flow = {{"Drive", {g_paramDrive.ID}, 0, {}},
+              {"Curve (memoryless)", {g_paramShaper.ID, g_paramA2.ID, g_paramA3.ID, g_paramThreshold.ID}, 0, {}},
+              {"Output", {g_paramOutput.ID}, 0, {}},
+              {"Hum (added)", {g_paramHum.ID, g_paramHumLevel.ID}, 1, {}},
+              {"Noise (added)", {g_paramNoise.ID, g_paramNoiseLevel.ID}, 1, {}},
+              {"Quantizer", {g_paramQuantizer.ID, g_paramBits.ID}, 1, {}}};
+    updateControls();
+    startTimerHz(kTimerHz);
+}
+
+void ReferenceNonlinearGUI::updateControls()
+{
+    const int shaper = pluginlab::refplugins::getChoiceIndex(m_apvts.getRawParameterValue(g_paramShaper.ID));
+    m_controls.setControlEnabled(g_paramA2.ID, shaper == kShaperPolynomial);
+    m_controls.setControlEnabled(g_paramA3.ID, shaper == kShaperPolynomial);
+    m_controls.setControlEnabled(g_paramThreshold.ID, shaper == kShaperHardClip);
+    m_controls.setControlEnabled(g_paramBits.ID, pluginlab::refplugins::getChoiceIndex(m_apvts.getRawParameterValue(g_paramQuantizer.ID)) != kQuantizerOff);
+    m_controls.setControlEnabled(g_paramNoiseLevel.ID, pluginlab::refplugins::getChoiceIndex(m_apvts.getRawParameterValue(g_paramNoise.ID)) != kNoiseOff);
+    m_controls.setControlEnabled(g_paramHumLevel.ID, pluginlab::refplugins::getChoiceIndex(m_apvts.getRawParameterValue(g_paramHum.ID)) != kHumOff);
+}
+
+void ReferenceNonlinearGUI::timerCallback()
+{
+    updateControls();
 }
 
 void ReferenceNonlinearGUI::paint(juce::Graphics& g)
 {
-    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).brighter(0.3f));
-    g.setColour(getLookAndFeel().findColour(juce::Label::textColourId));
+    const juce::Colour background = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).brighter(0.3f);
+    const juce::Colour text = getLookAndFeel().findColour(juce::Label::textColourId);
+    g.fillAll(background);
+    pluginlab::refplugins::drawFlow(g, m_flow, m_scale, background, text);
+    g.setColour(text);
     g.drawFittedText(pluginlab::refplugins::getCaption("PluginLab Reference Nonlinear"), getLocalBounds().removeFromBottom(kCaptionHeight),
                      juce::Justification::bottomLeft, 1);
 }
 
 void ReferenceNonlinearGUI::resized()
 {
-    auto r = getLocalBounds();
-    r.removeFromBottom(kCaptionHeight);
-    m_controls.setBounds(r);
+    m_scale = static_cast<float>(getWidth()) / static_cast<float>(PLUGINLAB_GUI_WIDTH);
+    m_controls.setBounds(getLocalBounds());
+    const float margin = kLayoutMargin * m_scale;
+    pluginlab::refplugins::layoutFlow(m_controls, m_flow, getLocalBounds().toFloat().reduced(margin).withTrimmedBottom(static_cast<float>(kCaptionHeight)), m_scale);
 }

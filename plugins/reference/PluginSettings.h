@@ -5,10 +5,16 @@ const float g_desired_blocksize_ms(0); // pluginlab reference plugins: 0 = no re
 const bool g_forcePowerOf2(false); // should be true for FFT Processing
 
 // -------------- GUI -----------------
-// global GUI setting for the pluginlab reference plugins (shared by all three)
-const int g_minGuiSize_x(640);
-const int g_maxGuiSize_x(1600);
-const int g_minGuiSize_y(400);
+// GUI setting for the pluginlab reference plugins: the smallest size per plugin from CMake (PLUGINLAB_GUI_WIDTH, PLUGINLAB_GUI_HEIGHT)
+#ifndef PLUGINLAB_GUI_WIDTH
+#define PLUGINLAB_GUI_WIDTH 640
+#endif
+#ifndef PLUGINLAB_GUI_HEIGHT
+#define PLUGINLAB_GUI_HEIGHT 400
+#endif
+const int g_minGuiSize_x(PLUGINLAB_GUI_WIDTH);
+const int g_maxGuiSize_x(2 * PLUGINLAB_GUI_WIDTH);
+const int g_minGuiSize_y(PLUGINLAB_GUI_HEIGHT);
 const float g_guiratio = float(g_minGuiSize_y)/g_minGuiSize_x;
 
 // ---------- presethandler ----------

@@ -20,7 +20,8 @@ if(APPLE)
     set(PLUGINLAB_USER_VST3_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/VST3")
 endif()
 
-function(pluginlab_add_reference_plugin NAME DISPLAY_NAME PLUGIN_CODE CATEGORIES)
+# GUI_WIDTH, GUI_HEIGHT: the smallest size of the editor (it scales up with a fixed aspect ratio)
+function(pluginlab_add_reference_plugin NAME DISPLAY_NAME PLUGIN_CODE CATEGORIES GUI_WIDTH GUI_HEIGHT)
     set(TARGET_NAME PluginLab${NAME})
     juce_add_plugin(${TARGET_NAME}
         COMPANY_NAME "Jade_Hochschule"
@@ -60,7 +61,9 @@ function(pluginlab_add_reference_plugin NAME DISPLAY_NAME PLUGIN_CODE CATEGORIES
         PUBLIC
             JUCE_WEB_BROWSER=0
             JUCE_USE_CURL=0
-            JUCE_VST3_CAN_REPLACE_VST2=0)
+            JUCE_VST3_CAN_REPLACE_VST2=0
+            PLUGINLAB_GUI_WIDTH=${GUI_WIDTH}
+            PLUGINLAB_GUI_HEIGHT=${GUI_HEIGHT})
 
     target_link_libraries(${TARGET_NAME}
         PRIVATE
@@ -83,6 +86,6 @@ function(pluginlab_add_reference_plugin NAME DISPLAY_NAME PLUGIN_CODE CATEGORIES
     endif()
 endfunction()
 
-pluginlab_add_reference_plugin(ReferenceEq "PluginLab Reference EQ" Rfeq "Fx;EQ")
-pluginlab_add_reference_plugin(ReferenceNonlinear "PluginLab Reference Nonlinear" Rfnl "Fx;Distortion")
-pluginlab_add_reference_plugin(ReferenceUtility "PluginLab Reference Utility" Rfut "Fx;Tools")
+pluginlab_add_reference_plugin(ReferenceEq "PluginLab Reference EQ" Rfeq "Fx;EQ" 820 540)
+pluginlab_add_reference_plugin(ReferenceNonlinear "PluginLab Reference Nonlinear" Rfnl "Fx;Distortion" 900 400)
+pluginlab_add_reference_plugin(ReferenceUtility "PluginLab Reference Utility" Rfut "Fx;Tools" 900 400)

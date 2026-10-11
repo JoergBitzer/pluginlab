@@ -172,7 +172,9 @@ private:
     std::unique_ptr<pluginlab::reference::DcOffset> m_dc;
 };
 
-class ReferenceUtilityGUI : public juce::Component
+// The controls in the order of the processing (gain and polarity, delay, stereo matrix, tremolo, DC offset), grouped in boxes and joined by
+// arrows; the interpolation is greyed out for a whole-sample delay, the tremolo rate at depth 0
+class ReferenceUtilityGUI : public juce::Component, private juce::Timer
 {
 public:
     ReferenceUtilityGUI(ReferenceUtilityAudioProcessor& p, juce::AudioProcessorValueTreeState& apvts);
@@ -181,7 +183,12 @@ public:
     void resized() override;
 
 private:
+    void timerCallback() override;
+    void updateControls();
+
     ReferenceUtilityAudioProcessor& m_processor;
     juce::AudioProcessorValueTreeState& m_apvts;
     pluginlab::refplugins::ReferenceControls m_controls;
+    std::vector<pluginlab::refplugins::FlowGroup> m_flow;
+    float m_scale = 1.0f;
 };

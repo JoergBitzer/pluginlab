@@ -194,7 +194,9 @@ private:
     std::unique_ptr<pluginlab::reference::HumAdder> m_hum;
 };
 
-class ReferenceNonlinearGUI : public juce::Component
+// The controls in the order of the processing (drive, curve, output, hum, noise, quantizer), grouped in boxes and joined by arrows; a
+// parameter that has no effect in the current setting is greyed out (a2 and a3 without the polynomial, the threshold without the hard clip, ...)
+class ReferenceNonlinearGUI : public juce::Component, private juce::Timer
 {
 public:
     ReferenceNonlinearGUI(ReferenceNonlinearAudioProcessor& p, juce::AudioProcessorValueTreeState& apvts);
@@ -203,7 +205,12 @@ public:
     void resized() override;
 
 private:
+    void timerCallback() override;
+    void updateControls();
+
     ReferenceNonlinearAudioProcessor& m_processor;
     juce::AudioProcessorValueTreeState& m_apvts;
     pluginlab::refplugins::ReferenceControls m_controls;
+    std::vector<pluginlab::refplugins::FlowGroup> m_flow;
+    float m_scale = 1.0f;
 };

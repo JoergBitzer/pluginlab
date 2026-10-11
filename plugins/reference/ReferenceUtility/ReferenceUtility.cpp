@@ -18,6 +18,8 @@ constexpr double kShortestThiranOrder3 = 2.5;    // Thiran of order N needs a de
 constexpr double kShortestOrder1 = 0.5;          // below this even Thiran order 1 is not possible: Lagrange order 1 (linear interpolation)
 constexpr double kShortestLagrangeOrder3 = 1.0;  // Lagrange of odd order N needs (N - 1) / 2 samples
 constexpr int kCaptionHeight = 18;
+constexpr int kTimerHz = 10;          // how often the GUI greys out what has no effect
+constexpr float kLayoutMargin = 10.0f; // around the signal flow, in design units
 
 // The delay line for a delay in samples: integer, or Thiran / Lagrange of order 3 (order 1 for very short delays); nullptr for no delay
 std::unique_ptr<ref::DirectFormFilter> makeDelay(double samples, int interpolation, double sampleRate)
@@ -189,19 +191,43 @@ ReferenceUtilityGUI::ReferenceUtilityGUI(ReferenceUtilityAudioProcessor& p, juce
     m_controls.addKnob(g_paramRate);
     m_controls.addKnob(g_paramDepth);
     addAndMakeVisible(m_controls);
+    // the order of processSynchronBlock: gain (with the polarity), delay, channel matrix, tremolo, DC offset
+    m_flow = {{"Gain", {g_paramGain.ID, g_paramPolarity.ID}, 0, {}},
+              {"Delay", {g_paramDelay.ID, g_paramInterpolation.ID}, 0, {}},
+              {"Stereo (M/S matrix)", {g_paramWidth.ID, g_paramCrosstalk.ID}, 0, {}},
+              {"Tremolo", {g_paramDepth.ID, g_paramRate.ID}, 1, {}},
+              {"DC offset (added)", {g_paramDc.ID}, 1, {}}};
+    updateControls();
+    startTimerHz(kTimerHz);
+}
+
+void ReferenceUtilityGUI::updateControls()
+{
+    const double delay = m_apvts.getRawParameterValue(g_paramDelay.ID)->load();
+    m_controls.setControlEnabled(g_paramInterpolation.ID, std::abs(delay - std::round(delay)) > kWholeSample);
+    m_controls.setControlEnabled(g_paramRate.ID, m_apvts.getRawParameterValue(g_paramDepth.ID)->load() > 0.0f);
+}
+
+void ReferenceUtilityGUI::timerCallback()
+{
+    updateControls();
 }
 
 void ReferenceUtilityGUI::paint(juce::Graphics& g)
 {
-    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).brighter(0.3f));
-    g.setColour(getLookAndFeel().findColour(juce::Label::textColourId));
+    const juce::Colour background = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).brighter(0.3f);
+    const juce::Colour text = getLookAndFeel().findColour(juce::Label::textColourId);
+    g.fillAll(background);
+    pluginlab::refplugins::drawFlow(g, m_flow, m_scale, background, text);
+    g.setColour(text);
     g.drawFittedText(pluginlab::refplugins::getCaption("PluginLab Reference Utility"), getLocalBounds().removeFromBottom(kCaptionHeight),
                      juce::Justification::bottomLeft, 1);
 }
 
 void ReferenceUtilityGUI::resized()
 {
-    auto r = getLocalBounds();
-    r.removeFromBottom(kCaptionHeight);
-    m_controls.setBounds(r);
+    m_scale = static_cast<float>(getWidth()) / static_cast<float>(PLUGINLAB_GUI_WIDTH);
+    m_controls.setBounds(getLocalBounds());
+    const float margin = kLayoutMargin * m_scale;
+    pluginlab::refplugins::layoutFlow(m_controls, m_flow, getLocalBounds().toFloat().reduced(margin).withTrimmedBottom(static_cast<float>(kCaptionHeight)), m_scale);
 }

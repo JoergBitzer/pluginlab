@@ -182,11 +182,19 @@ New questions from W3 and the Bitwig tests:
 
 ### Comments to the reference plugins
 
-Reference EQ: It would be great if the types that are not available for a specific design cannot be selected.
+Reference EQ: 1) It would be good, if the controls that will not work or change anything for a design a greyed out as well e.g. for butterworth only the order is relevantt, but this is irrelevant for RBJ and PEak design.
+2) the drawn transfer function should be drawn exactly to Nyquist, since this is to learn about the different designs. And the x-axis needs xticks, so that people know exactly what they see.
+3) extend the xwidth of the plugin a little so that all 4 parameter are in one row and increase the transfer function plot.
 
-The bad results for Orfanidis for low Q is known and can be adjusted by changing the Q in the design process. I wrote a paper about this and another design routine called frequency domain least squares (FDLS). [text](../../Research/Paper/OldFiles/AESConv2010_London/TextSVN/EQPaper_128th_aes_London.pdf)
+Nonlinear: 1) these are different tools and some will not parameter will have no effect, so these should be grayed out. 2) The different tools and the parameter should be grouped together, this can be done by a simple box (background color slightly brighter than the plugin background) and a label for the group. 3) Is the output parameter before the quantizer or after. The GUI could show the exact signal flow by drawing small arrows between the blocks and in the correct order. (e.g Drive is before the curve, so drive is the first parameter, or is it something else)
 
-and you find all material for this paper, especially the matlab code here.
- /home/bitzer/Research/Paper/OldFiles/AESConv2010_London_SchmidtBitzer/
+Utilities: More or less the same as non-linear. Is the order correct in the GUI and glue together parameter that are together by background blocks.
 
- I asked myself if the fminsearch procedure to find the best Q for the Orfanidis design (in th epaper with pre-computed correction matrix of 127 frequencies and 10 Q-factors.), can be approximated by a simple 2D - polynomial function or separated for Q and frequency. This could be a nice side project for the pluginlab. Check this out in python in a separate thread with low priority. Give a report as a md file in the docs/design folder. 
+Answers (0.51.0): Reference EQ: the knobs a design ignores are greyed out (gain without a peak or shelf; Q for Butterworth, Linkwitz-Riley
+and the Zoelzer shelves; order only for these), the types it does not offer stay greyed out in the list; the response is drawn from 20 Hz
+exactly to Nyquist (24 kHz at the plot's 48 kHz) with 1-2-5 labels per decade and lines at every whole multiple; the editor is 820 x 540
+with the design box (algorithm, type) and the band box (frequency, gain, Q, order) in one row. Nonlinear and Utility: the controls in boxes
+per block, in the order of the processing, joined by arrows (in, ..., out); what has no effect is greyed out (a2 and a3 without the
+polynomial, the threshold without the hard clip, bits, noise and hum level when off; the interpolation for a whole-sample delay, the
+tremolo rate at depth 0). The order of the Nonlinear: drive, curve, output, then hum, noise and the quantizer (the output gain is before
+the quantizer). Utility: gain with polarity, delay, stereo matrix, tremolo, DC offset.

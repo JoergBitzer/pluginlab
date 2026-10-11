@@ -140,11 +140,16 @@ private:
     EqSetting readSetting() const;
     // Greys out the types the algorithm does not offer and moves an unavailable type to the algorithm's default
     void updateTypeChoice(const EqSetting& setting);
+    // Greys out the knobs the design ignores (gain without a peak or shelf, Q of Butterworth, order of RBJ, ...)
+    void updateKnobs(const EqSetting& setting);
 
     ReferenceEqAudioProcessor& m_processor;
     juce::AudioProcessorValueTreeState& m_apvts;
     pluginlab::refplugins::ReferenceControls m_controls;
     juce::Rectangle<int> m_plotArea;
+    juce::Rectangle<float> m_designBox;
+    juce::Rectangle<float> m_bandBox;
+    float m_scale = 1.0f;
     EqSetting m_shownSetting;
     bool m_typesShown = false;
     EqAlgorithm m_typesAlgorithm = EqAlgorithm::Rbj;

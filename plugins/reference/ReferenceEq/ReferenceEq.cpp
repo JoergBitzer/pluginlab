@@ -12,12 +12,21 @@ namespace ref = pluginlab::reference;
 
 constexpr double kPlotSampleRate = 48000.0;       // the GUI shows the response at 48 kHz
 constexpr double kPlotLowestHz = 20.0;
-constexpr double kPlotHighestHz = 20000.0;
+constexpr double kPlotHighestHz = 0.5 * kPlotSampleRate; // exactly to Nyquist: there the designs differ most
 constexpr double kPlotRangeDb = 30.0;             // the plot shows +-30 dB
-constexpr int kPlotPoints = 300;
-constexpr int kControlsHeight = 230;
+constexpr int kPlotPoints = 600;
 constexpr int kCaptionHeight = 18;
 constexpr int kTimerHz = 20;
+// the layout in design units (the editor's smallest width, PLUGINLAB_GUI_WIDTH); scaled with the editor
+constexpr float kDesignWidth = static_cast<float>(PLUGINLAB_GUI_WIDTH);
+constexpr float kMargin = 8.0f;
+constexpr float kRowHeight = 132.0f;             // the boxes with the controls
+constexpr float kTitleHeight = 18.0f;            // of a box
+constexpr float kDesignBoxWidth = 210.0f;
+constexpr float kCellGap = 4.0f;
+constexpr float kAxisLabelHeight = 16.0f;        // the frequency labels below the plot
+constexpr float kLevelLabelWidth = 44.0f;        // the dB labels left of the plot
+constexpr float kNyquistLabelWidth = 80.0f;      // "24k (Nyquist)" at the right end of the frequency axis
 
 const ref::FilterType kTypes[] = {ref::FilterType::LowPass,  ref::FilterType::HighPass, ref::FilterType::BandPass,
                                   ref::FilterType::BandPassUnity, ref::FilterType::Notch, ref::FilterType::AllPass,
@@ -171,6 +180,7 @@ ReferenceEqGUI::ReferenceEqGUI(ReferenceEqAudioProcessor& p, juce::AudioProcesso
     addAndMakeVisible(m_controls);
     m_shownSetting = readSetting();
     updateTypeChoice(m_shownSetting);
+    updateKnobs(m_shownSetting);
     startTimerHz(kTimerHz);
 }
 
@@ -216,10 +226,24 @@ void ReferenceEqGUI::updateTypeChoice(const EqSetting& setting)
     }
 }
 
+void ReferenceEqGUI::updateKnobs(const EqSetting& setting)
+{
+    using Family = pluginlab::eqmodel::DesignFamily;
+    const bool available = pluginlab::eqmodel::isTypeAvailable(setting.family, setting.type);
+    const bool shelf = setting.type == ref::FilterType::LowShelf || setting.type == ref::FilterType::HighShelf;
+    const bool passFamily = setting.family == Family::Butterworth || setting.family == Family::LinkwitzRiley;
+    const bool zoelzerShelf = setting.family == Family::Zoelzer && shelf;
+    m_controls.setControlEnabled(g_paramFrequency.ID, available);
+    m_controls.setControlEnabled(g_paramGain.ID, available && (setting.type == ref::FilterType::Peak || shelf));
+    m_controls.setControlEnabled(g_paramQ.ID, available && ! passFamily && ! zoelzerShelf);
+    m_controls.setControlEnabled(g_paramOrder.ID, available && (passFamily || zoelzerShelf));
+}
+
 void ReferenceEqGUI::timerCallback()
 {
     const EqSetting setting = readSetting();
     updateTypeChoice(setting);
+    updateKnobs(setting);
     if (!(setting == m_shownSetting))
     {
         m_shownSetting = setting;
@@ -229,26 +253,58 @@ void ReferenceEqGUI::timerCallback()
 
 void ReferenceEqGUI::paint(juce::Graphics& g)
 {
-    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).brighter(0.3f));
+    const juce::Colour background = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).brighter(0.3f);
+    g.fillAll(background);
     const juce::Colour text = getLookAndFeel().findColour(juce::Label::textColourId);
+    pluginlab::refplugins::drawGroup(g, m_designBox, "Design", kTitleHeight * m_scale, background, text);
+    pluginlab::refplugins::drawGroup(g, m_bandBox, "Band", kTitleHeight * m_scale, background, text);
 
-    // the exact magnitude response at 48 kHz, 20 Hz ... 20 kHz, +-30 dB
+    // the exact magnitude response at 48 kHz, 20 Hz ... Nyquist (24 kHz), +-30 dB, logarithmic frequency axis
     const EqDesign design = pluginlab::eqmodel::designBand(m_shownSetting, kPlotSampleRate);
     const juce::Rectangle<float> area = m_plotArea.toFloat();
+    const auto toX = [&area](double frequency) {
+        return area.getX() + static_cast<float>(std::log(frequency / kPlotLowestHz) / std::log(kPlotHighestHz / kPlotLowestHz)) * area.getWidth();
+    };
+    const auto toY = [&area](double decibels) { return area.getCentreY() - static_cast<float>(decibels / kPlotRangeDb) * area.getHeight() / 2.0f; };
+    g.setFont(juce::FontOptions(12.0f * std::max(m_scale, 0.8f)));
     g.setColour(text.withAlpha(0.3f));
     g.drawRect(area);
     for (const double decibels : {-24.0, -12.0, 0.0, 12.0, 24.0})
     {
-        const float y = area.getCentreY() - static_cast<float>(decibels / kPlotRangeDb) * area.getHeight() / 2.0f;
+        const float y = toY(decibels);
+        g.setColour(text.withAlpha(juce::exactlyEqual(decibels, 0.0) ? 0.5f : 0.25f));
         g.drawHorizontalLine(juce::roundToInt(y), area.getX(), area.getRight());
-        g.drawText(juce::String(static_cast<int>(decibels)) + " dB", juce::Rectangle<float>(area.getX() + 2.0f, y - 14.0f, 60.0f, 14.0f),
-                   juce::Justification::left);
+        g.setColour(text.withAlpha(0.8f));
+        g.drawText(juce::String(static_cast<int>(decibels)) + " dB", juce::Rectangle<float>(area.getX() - kLevelLabelWidth * m_scale, y - 7.0f, kLevelLabelWidth * m_scale - 4.0f, 14.0f),
+                   juce::Justification::centredRight);
     }
-    for (const double frequency : {100.0, 1000.0, 10000.0})
+    // frequency ticks: 1-2-5 per decade (labelled) and the other whole multiples (lines only), and Nyquist at the right edge
+    for (double decade = 10.0; decade < kPlotHighestHz; decade *= 10.0)
     {
-        const float x = area.getX() + static_cast<float>(std::log(frequency / kPlotLowestHz) / std::log(kPlotHighestHz / kPlotLowestHz)) * area.getWidth();
-        g.drawVerticalLine(juce::roundToInt(x), area.getY(), area.getBottom());
+        for (int multiple = 1; multiple <= 9; ++multiple)
+        {
+            const double frequency = decade * multiple;
+            if (frequency < kPlotLowestHz || frequency > kPlotHighestHz)
+            {
+                continue;
+            }
+            const bool labelled = multiple == 1 || multiple == 2 || multiple == 5;
+            const float x = toX(frequency);
+            g.setColour(text.withAlpha(labelled ? 0.25f : 0.1f));
+            g.drawVerticalLine(juce::roundToInt(x), area.getY(), area.getBottom());
+            if (labelled && area.getRight() - x > kNyquistLabelWidth * m_scale) // the last label before the edge gives way to Nyquist's
+            {
+                const juce::String label = frequency >= 1000.0 ? juce::String(juce::roundToInt(frequency / 1000.0)) + "k" : juce::String(juce::roundToInt(frequency));
+                g.setColour(text.withAlpha(0.8f));
+                g.drawText(label, juce::Rectangle<float>(x - 20.0f, area.getBottom() + 2.0f, 40.0f, kAxisLabelHeight * m_scale - 2.0f), juce::Justification::centredTop);
+            }
+        }
     }
+    g.setColour(text.withAlpha(0.8f));
+    g.drawText(juce::String(kPlotHighestHz / 1000.0, 0) + "k (Nyquist)",
+               juce::Rectangle<float>(area.getRight() - kNyquistLabelWidth * m_scale, area.getBottom() + 2.0f, kNyquistLabelWidth * m_scale + kMargin * m_scale,
+                                      kAxisLabelHeight * m_scale - 2.0f),
+               juce::Justification::topRight);
     juce::Path curve;
     for (int point = 0; point < kPlotPoints; ++point)
     {
@@ -257,7 +313,7 @@ void ReferenceEqGUI::paint(juce::Graphics& g)
         const double magnitude = std::abs(pluginlab::eqmodel::getBandResponse(design, m_shownSetting, frequency, kPlotSampleRate));
         const double decibels = juce::jlimit(-kPlotRangeDb, kPlotRangeDb, 20.0 * std::log10(std::max(magnitude, 1.0e-10)));
         const float x = area.getX() + static_cast<float>(position) * area.getWidth();
-        const float y = area.getCentreY() - static_cast<float>(decibels / kPlotRangeDb) * area.getHeight() / 2.0f;
+        const float y = toY(decibels);
         if (point == 0)
         {
             curve.startNewSubPath(x, y);
@@ -267,18 +323,43 @@ void ReferenceEqGUI::paint(juce::Graphics& g)
             curve.lineTo(x, y);
         }
     }
+    g.saveState();
+    g.reduceClipRegion(m_plotArea);
     g.setColour(getLookAndFeel().findColour(juce::Slider::thumbColourId));
     g.strokePath(curve, juce::PathStrokeType(2.0f));
+    g.restoreState();
 
     g.setColour(text);
-    g.drawText(design.description + "  (exact response at 48 kHz)", m_plotArea.reduced(4).removeFromTop(16), juce::Justification::right);
+    g.drawText(design.description + "  (exact response at 48 kHz, 20 Hz ... Nyquist)", m_plotArea.reduced(6).removeFromTop(16), juce::Justification::right);
     g.drawFittedText(pluginlab::refplugins::getCaption("PluginLab Reference EQ"), getLocalBounds().removeFromBottom(kCaptionHeight), juce::Justification::bottomLeft, 1);
 }
 
 void ReferenceEqGUI::resized()
 {
+    // one row: the design box (algorithm over type) and the band box (frequency, gain, Q, order side by side); the plot below
+    m_scale = static_cast<float>(getWidth()) / kDesignWidth;
+    const float s = m_scale;
+    m_controls.setBounds(getLocalBounds());
+    const juce::Rectangle<float> row(kMargin * s, kMargin * s, static_cast<float>(getWidth()) - 2.0f * kMargin * s, kRowHeight * s);
+    juce::Rectangle<float> rest = row;
+    m_designBox = rest.removeFromLeft(kDesignBoxWidth * s);
+    rest.removeFromLeft(kMargin * s);
+    m_bandBox = rest;
+    juce::Rectangle<float> design = m_designBox.reduced(kCellGap * s).withTrimmedTop(kTitleHeight * s);
+    const float half = design.getHeight() / 2.0f;
+    m_controls.placeCell(g_paramAlgorithm.ID, design.removeFromTop(half).toNearestInt());
+    m_controls.placeCell(g_paramType.ID, design.toNearestInt());
+    juce::Rectangle<float> band = m_bandBox.reduced(kCellGap * s).withTrimmedTop(kTitleHeight * s);
+    const float cellWidth = band.getWidth() / 4.0f;
+    for (const std::string* id : {&g_paramFrequency.ID, &g_paramGain.ID, &g_paramQ.ID, &g_paramOrder.ID})
+    {
+        m_controls.placeCell(*id, band.removeFromLeft(cellWidth).reduced(kCellGap * s, 0.0f).toNearestInt());
+    }
     auto r = getLocalBounds();
-    m_controls.setBounds(r.removeFromTop(kControlsHeight));
+    r.removeFromTop(juce::roundToInt((2.0f * kMargin + kRowHeight) * s));
     r.removeFromBottom(kCaptionHeight);
-    m_plotArea = r.reduced(8);
+    r.removeFromBottom(juce::roundToInt(kAxisLabelHeight * s));
+    r.removeFromLeft(juce::roundToInt(kLevelLabelWidth * s));
+    r.removeFromRight(juce::roundToInt(kMargin * s));
+    m_plotArea = r.reduced(0, juce::roundToInt(kMargin * s / 2.0f));
 }
