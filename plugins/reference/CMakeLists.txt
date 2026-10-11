@@ -65,6 +65,7 @@ function(pluginlab_add_reference_plugin NAME DISPLAY_NAME PLUGIN_CODE CATEGORIES
     target_link_libraries(${TARGET_NAME}
         PRIVATE
             pluginlab_reference
+            pluginlab_eqmodel
             juce::juce_audio_utils
         PUBLIC
             juce::juce_recommended_config_flags

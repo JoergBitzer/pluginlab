@@ -14,6 +14,8 @@
 #include "pluginlab/measure/Distortion.h"
 #include "pluginlab/measure/FrequencyResponse.h"
 #include "pluginlab/measure/Gain.h"
+#include "pluginlab/measure/Phase.h"
+#include "pluginlab/eqmodel/EqModel.h"
 #include "pluginlab/reference/Delays.h"
 #include "pluginlab/reference/Designs.h"
 #include "pluginlab/reference/Nonlinear.h"
@@ -49,6 +51,7 @@ public:
         m_formatManager = std::make_unique<juce::AudioPluginFormatManager>();
         pluginlab::hosting::addHeadlessFormats(*m_formatManager);
         testEq();
+        testLinearPhaseEq();
         testUtility();
         testNonlinear();
         testReport();
@@ -113,7 +116,7 @@ private:
         {
             return;
         }
-        setChoice(*eq.instance, "Algorithm", 0, 6);
+        setChoice(*eq.instance, "Algorithm", 0, 7);
         setChoice(*eq.instance, "Type", 6, 9);
         setText(*eq.instance, "Frequency", "1000 Hz");
         setText(*eq.instance, "Gain", "6.0 dB");
@@ -142,6 +145,51 @@ private:
         const double expectedGain = toDb(std::abs(ref::getBiquadResponse(peak, 997.0, kSampleRate)));
         expectWithinAbsoluteError(gainResult.channels[0].selectiveGainDb, expectedGain, 0.001, "selective gain at 997 Hz");
         expectWithinAbsoluteError(gainResult.matchingDb, 0.0, 1.0e-4, "gain matching");
+    }
+
+    void testLinearPhaseEq()
+    {
+        beginTest("Reference EQ, linear phase (RBJ magnitude, W8.2): the response equals the band model, the delay is the reported latency, the phase is linear");
+        Loaded eq = load("Eq");
+        if (eq.instance == nullptr)
+        {
+            return;
+        }
+        setChoice(*eq.instance, "Algorithm", 6, 7);
+        setChoice(*eq.instance, "Type", 6, 9);
+        setText(*eq.instance, "Frequency", "1000 Hz");
+        setText(*eq.instance, "Gain", "6.0 dB");
+        setText(*eq.instance, "Q", "2.00");
+        eq.instance->prepareToPlay(kSampleRate, kBlockSize);
+        expectEquals(eq.instance->getLatencySamples(), 1023, "reported latency");
+        eq.instance->releaseResources();
+        const measure::Device device = engine::makePluginDevice(formats(), eq.description, engine::getSetting(*eq.instance));
+
+        pluginlab::eqmodel::Band band;
+        band.family = pluginlab::eqmodel::DesignFamily::LinearPhase;
+        band.frequencyHz = 1000.0;
+        band.gainDb = 6.0;
+        band.q = 2.0;
+        const pluginlab::eqmodel::BandDesign design = pluginlab::eqmodel::designBand(band, kSampleRate);
+        measure::SweepResponseSettings sweep;
+        sweep.frequencies = measure::getStandardThirdOctaveFrequencies();
+        const measure::FrequencyResponse response = measure::measureSweptResponse(device, sweep);
+        double largest = 0.0;
+        for (size_t index = 0; index < sweep.frequencies.size(); ++index)
+        {
+            const double expected = toDb(std::abs(pluginlab::eqmodel::getBandResponse(design, band, sweep.frequencies[index], kSampleRate)));
+            largest = std::max(largest, std::abs(response.channels[0].magnitudeDb[index] - expected));
+        }
+        expect(largest < 0.01, "swept response against the model " + juce::String(largest));
+
+        const measure::DelayResult delay = measure::measureDelay(device, measure::DelaySettings());
+        expectEquals(delay.channels[0].impulsePeakSamples, 1023, "impulse peak = latency");
+        const measure::PhaseResponse phase = measure::measurePhaseResponse(device, measure::PhaseSettings());
+        const double deviation = std::max(std::abs(phase.channels[0].deviationMaxDegrees), std::abs(phase.channels[0].deviationMinDegrees));
+        expect(deviation < 0.1, "deviation from linear phase " + juce::String(deviation));
+        logMessage("Reference EQ, linear-phase peak through the plugin device: response within " + juce::String(largest, 5) + " dB of the model, impulse peak "
+                   + juce::String(delay.channels[0].impulsePeakSamples) + " samples, fitted delay " + juce::String(phase.channels[0].fitDelaySamples, 3)
+                   + ", deviation from linear phase " + juce::String(deviation, 4) + " degrees");
     }
 
     void testUtility()
@@ -206,7 +254,7 @@ private:
         {
             return;
         }
-        setChoice(*eq.instance, "Algorithm", 0, 6);
+        setChoice(*eq.instance, "Algorithm", 0, 7);
         setChoice(*eq.instance, "Type", 6, 9);
         setText(*eq.instance, "Frequency", "1000 Hz");
         setText(*eq.instance, "Gain", "6.0 dB");

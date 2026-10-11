@@ -4,12 +4,12 @@
 
 #include "PluginProcessor.h"
 #include "pluginlab/reference/Designs.h"
+#include "pluginlab/eqmodel/EqModel.h"
 
 namespace
 {
 namespace ref = pluginlab::reference;
 
-constexpr double kHighestFrequencyRatio = 0.45;   // the corner stays below 0.45 fs
 constexpr double kPlotSampleRate = 48000.0;       // the GUI shows the response at 48 kHz
 constexpr double kPlotLowestHz = 20.0;
 constexpr double kPlotHighestHz = 20000.0;
@@ -18,184 +18,25 @@ constexpr int kPlotPoints = 300;
 constexpr int kControlsHeight = 230;
 constexpr int kCaptionHeight = 18;
 constexpr int kTimerHz = 20;
-constexpr int kZoelzerSecondOrder = 2;
-constexpr int kLinkwitzRileyOrders[] = {2, 4, 8};
 
 const ref::FilterType kTypes[] = {ref::FilterType::LowPass,  ref::FilterType::HighPass, ref::FilterType::BandPass,
                                   ref::FilterType::BandPassUnity, ref::FilterType::Notch, ref::FilterType::AllPass,
                                   ref::FilterType::Peak,     ref::FilterType::LowShelf, ref::FilterType::HighShelf};
 const EqAlgorithm kAlgorithms[] = {EqAlgorithm::Rbj, EqAlgorithm::Orfanidis, EqAlgorithm::Zoelzer, EqAlgorithm::StateVariable, EqAlgorithm::Butterworth,
-                                   EqAlgorithm::LinkwitzRiley};
+                                   EqAlgorithm::LinkwitzRiley, EqAlgorithm::LinearPhase};
 
-bool isPass(ref::FilterType type)
-{
-    return type == ref::FilterType::LowPass || type == ref::FilterType::HighPass;
-}
-
-ref::Pass getPass(ref::FilterType type)
-{
-    if (type == ref::FilterType::HighPass)
-    {
-        return ref::Pass::High;
-    }
-    return ref::Pass::Low;
-}
-
-int getLinkwitzRileyOrder(int order)
-{
-    for (const int allowed : kLinkwitzRileyOrders)
-    {
-        if (order <= allowed)
-        {
-            return allowed;
-        }
-    }
-    return kLinkwitzRileyOrders[2];
-}
-
-EqDesign makeUnsupported(const juce::String& reason)
-{
-    EqDesign design;
-    design.supported = false;
-    design.description = reason + " - the audio passes unchanged";
-    return design;
-}
-}
-
-bool EqSetting::operator==(const EqSetting& other) const
-{
-    return algorithm == other.algorithm && type == other.type && juce::exactlyEqual(frequencyHz, other.frequencyHz)
-           && juce::exactlyEqual(gainDb, other.gainDb) && juce::exactlyEqual(q, other.q) && order == other.order;
 }
 
 EqSetting makeEqSetting(int algorithmIndex, int typeIndex, double frequencyHz, double gainDb, double q, double order)
 {
     EqSetting setting;
-    setting.algorithm = kAlgorithms[juce::jlimit(0, static_cast<int>(std::size(kAlgorithms)) - 1, algorithmIndex)];
+    setting.family = kAlgorithms[juce::jlimit(0, static_cast<int>(std::size(kAlgorithms)) - 1, algorithmIndex)];
     setting.type = kTypes[juce::jlimit(0, static_cast<int>(std::size(kTypes)) - 1, typeIndex)];
     setting.frequencyHz = frequencyHz;
     setting.gainDb = gainDb;
     setting.q = q;
     setting.order = juce::roundToInt(order);
     return setting;
-}
-
-bool isTypeAvailable(EqAlgorithm algorithm, ref::FilterType type)
-{
-    switch (algorithm)
-    {
-        case EqAlgorithm::Rbj:
-        case EqAlgorithm::StateVariable:
-            return true;
-        case EqAlgorithm::Orfanidis:
-            return type == ref::FilterType::Peak;
-        case EqAlgorithm::Zoelzer:
-            return type == ref::FilterType::Peak || type == ref::FilterType::LowShelf || type == ref::FilterType::HighShelf;
-        case EqAlgorithm::Butterworth:
-        case EqAlgorithm::LinkwitzRiley:
-            return isPass(type);
-    }
-    return false;
-}
-
-ref::FilterType getDefaultType(EqAlgorithm algorithm)
-{
-    if (algorithm == EqAlgorithm::Butterworth || algorithm == EqAlgorithm::LinkwitzRiley)
-    {
-        return ref::FilterType::LowPass;
-    }
-    return ref::FilterType::Peak;
-}
-
-EqDesign designEq(const EqSetting& setting, double sampleRate)
-{
-    const double frequency = std::min(setting.frequencyHz, kHighestFrequencyRatio * sampleRate);
-    const juce::String typeName(ref::getFilterTypeName(setting.type));
-    EqDesign design;
-    design.frequencyHz = frequency;
-    switch (setting.algorithm)
-    {
-        case EqAlgorithm::Rbj:
-            design.sections.push_back(ref::designRbj(setting.type, sampleRate, frequency, setting.gainDb, setting.q));
-            design.description = "RBJ cookbook " + typeName;
-            return design;
-        case EqAlgorithm::Orfanidis:
-            if (!isTypeAvailable(setting.algorithm, setting.type))
-            {
-                return makeUnsupported("Orfanidis offers the peak filter only");
-            }
-            design.sections.push_back(ref::designOrfanidisPeak(sampleRate, frequency, setting.gainDb, setting.q));
-            design.description = "Orfanidis peak (prescribed Nyquist gain)";
-            return design;
-        case EqAlgorithm::Zoelzer:
-        {
-            ref::ZoelzerType zoelzer = ref::ZoelzerType::Peak;
-            if (setting.type == ref::FilterType::LowShelf)
-            {
-                zoelzer = ref::ZoelzerType::LowShelfFirstOrder;
-                if (setting.order >= kZoelzerSecondOrder)
-                {
-                    zoelzer = ref::ZoelzerType::LowShelf;
-                }
-            }
-            else if (setting.type == ref::FilterType::HighShelf)
-            {
-                zoelzer = ref::ZoelzerType::HighShelfFirstOrder;
-                if (setting.order >= kZoelzerSecondOrder)
-                {
-                    zoelzer = ref::ZoelzerType::HighShelf;
-                }
-            }
-            else if (setting.type != ref::FilterType::Peak)
-            {
-                return makeUnsupported("Zoelzer offers shelves and the peak only");
-            }
-            design.sections.push_back(ref::designZoelzer(zoelzer, sampleRate, frequency, setting.gainDb, setting.q));
-            design.description = juce::String("Zoelzer ") + ref::getZoelzerTypeName(zoelzer);
-            return design;
-        }
-        case EqAlgorithm::StateVariable:
-            design.stateVariable = true;
-            design.description = "state-variable filter (TPT) " + typeName;
-            return design;
-        case EqAlgorithm::Butterworth:
-        {
-            if (!isPass(setting.type))
-            {
-                return makeUnsupported("Butterworth offers low-pass and high-pass only");
-            }
-            const int order = juce::jlimit(1, 8, setting.order);
-            design.sections = ref::designButterworth(getPass(setting.type), order, sampleRate, frequency);
-            design.description = "Butterworth " + typeName + ", order " + juce::String(order);
-            return design;
-        }
-        case EqAlgorithm::LinkwitzRiley:
-        {
-            if (!isPass(setting.type))
-            {
-                return makeUnsupported("Linkwitz-Riley offers low-pass and high-pass only");
-            }
-            const int order = getLinkwitzRileyOrder(setting.order);
-            design.sections = ref::designLinkwitzRiley(getPass(setting.type), order, sampleRate, frequency);
-            design.description = "Linkwitz-Riley " + typeName + ", order " + juce::String(order);
-            return design;
-        }
-    }
-    return makeUnsupported("unknown algorithm");
-}
-
-std::complex<double> getEqResponse(const EqDesign& design, const EqSetting& setting, double frequencyHz, double sampleRate)
-{
-    if (!design.supported)
-    {
-        return 1.0;
-    }
-    if (design.stateVariable)
-    {
-        // the state-variable filter realises the RBJ transfer function of the same type (tested in ReferenceTests)
-        return ref::getBiquadResponse(ref::designRbj(setting.type, sampleRate, design.frequencyHz, setting.gainDb, setting.q), frequencyHz, sampleRate);
-    }
-    return ref::getCascadeResponse(design.sections, frequencyHz, sampleRate);
 }
 
 ReferenceEqAudio::ReferenceEqAudio(ReferenceEqAudioProcessor* processor)
@@ -216,6 +57,8 @@ void ReferenceEqAudio::prepareToPlay(double sampleRate, int max_samplesPerBlock,
     m_cascade->setNumChannels(max_channels);
     m_stateVariable = std::make_unique<ref::StateVariableFilter>(ref::FilterType::Peak, sampleRate, 1000.0, 0.0, 1.0);
     m_stateVariable->setNumChannels(max_channels);
+    m_channels = max_channels;
+    m_fir.reset();
     m_settingValid = false;
     applySetting(readSetting());
 }
@@ -232,21 +75,32 @@ void ReferenceEqAudio::applySetting(const EqSetting& setting)
     {
         return;
     }
-    const bool algorithmChanged = !m_settingValid || setting.algorithm != m_setting.algorithm;
+    const bool algorithmChanged = !m_settingValid || setting.family != m_setting.family;
     m_setting = setting;
     m_settingValid = true;
-    m_design = designEq(setting, m_sampleRate);
+    m_design = pluginlab::eqmodel::designBand(setting, m_sampleRate);
     // new coefficients keep the state (no smoothing: the reference changes at once); a new algorithm starts from silence
     if (algorithmChanged)
     {
         m_cascade->reset();
         m_stateVariable->reset();
     }
+    // the linear-phase family: an FIR (new taps, new filter) and its latency, reported to the host
+    if (m_design.latencySamples != m_Latency)
+    {
+        m_Latency = m_design.latencySamples;
+        m_processor->setLatencySamples(m_Latency);
+    }
+    if (! m_design.firTaps.empty())
+    {
+        m_fir = std::make_unique<ref::DirectFormFilter>(m_design.firTaps, std::vector<double>{1.0}, m_sampleRate, 0, m_design.latencySamples);
+        m_fir->setNumChannels(m_channels);
+    }
     if (m_design.stateVariable)
     {
         m_stateVariable->setParameters(setting.type, m_design.frequencyHz, setting.gainDb, setting.q);
     }
-    else
+    else if (m_design.firTaps.empty())
     {
         if (m_design.sections.size() != m_cascade->getSections().size())
         {
@@ -271,6 +125,10 @@ int ReferenceEqAudio::processSynchronBlock(juce::AudioBuffer<float>& buffer, juc
     if (m_design.stateVariable)
     {
         m_stateVariable->process(buffer);
+    }
+    else if (m_fir != nullptr && ! m_design.firTaps.empty())
+    {
+        m_fir->process(buffer);
     }
     else
     {
@@ -331,21 +189,21 @@ void ReferenceEqGUI::updateTypeChoice(const EqSetting& setting)
     {
         return;
     }
-    if (!m_typesShown || setting.algorithm != m_typesAlgorithm)
+    if (!m_typesShown || setting.family != m_typesAlgorithm)
     {
         for (int index = 0; index < static_cast<int>(std::size(kTypes)); ++index)
         {
-            box->setItemEnabled(index + 1, isTypeAvailable(setting.algorithm, kTypes[index]));
+            box->setItemEnabled(index + 1, pluginlab::eqmodel::isTypeAvailable(setting.family, kTypes[index]));
         }
         m_typesShown = true;
-        m_typesAlgorithm = setting.algorithm;
+        m_typesAlgorithm = setting.family;
     }
-    if (isTypeAvailable(setting.algorithm, setting.type))
+    if (pluginlab::eqmodel::isTypeAvailable(setting.family, setting.type))
     {
         return;
     }
     // the chosen type is not offered by the new algorithm: move it to the algorithm's default (as a user gesture, so that the host records it)
-    const ref::FilterType wanted = getDefaultType(setting.algorithm);
+    const ref::FilterType wanted = pluginlab::eqmodel::getDefaultType(setting.family);
     for (int index = 0; index < static_cast<int>(std::size(kTypes)); ++index)
     {
         if (kTypes[index] == wanted)
@@ -375,7 +233,7 @@ void ReferenceEqGUI::paint(juce::Graphics& g)
     const juce::Colour text = getLookAndFeel().findColour(juce::Label::textColourId);
 
     // the exact magnitude response at 48 kHz, 20 Hz ... 20 kHz, +-30 dB
-    const EqDesign design = designEq(m_shownSetting, kPlotSampleRate);
+    const EqDesign design = pluginlab::eqmodel::designBand(m_shownSetting, kPlotSampleRate);
     const juce::Rectangle<float> area = m_plotArea.toFloat();
     g.setColour(text.withAlpha(0.3f));
     g.drawRect(area);
@@ -396,7 +254,7 @@ void ReferenceEqGUI::paint(juce::Graphics& g)
     {
         const double position = static_cast<double>(point) / (kPlotPoints - 1);
         const double frequency = kPlotLowestHz * std::pow(kPlotHighestHz / kPlotLowestHz, position);
-        const double magnitude = std::abs(getEqResponse(design, m_shownSetting, frequency, kPlotSampleRate));
+        const double magnitude = std::abs(pluginlab::eqmodel::getBandResponse(design, m_shownSetting, frequency, kPlotSampleRate));
         const double decibels = juce::jlimit(-kPlotRangeDb, kPlotRangeDb, 20.0 * std::log10(std::max(magnitude, 1.0e-10)));
         const float x = area.getX() + static_cast<float>(position) * area.getWidth();
         const float y = area.getCentreY() - static_cast<float>(decibels / kPlotRangeDb) * area.getHeight() / 2.0f;

@@ -29,6 +29,7 @@ target_sources(PluginLabTests
         BrowserTests.cpp
         CatalogTests.cpp
         EngineTests.cpp
+        EqModelTests.cpp
         FingerprintTests.cpp
         GuiReviewTests.cpp
         ProbeTests.cpp
@@ -53,6 +54,7 @@ target_link_libraries(PluginLabTests
     PRIVATE
         pluginlab_core
         pluginlab_engine
+        pluginlab_eqmodel
         pluginlab_signals
         pluginlab_reference
         pluginlab_measure

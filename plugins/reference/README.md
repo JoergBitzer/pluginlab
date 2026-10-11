@@ -10,7 +10,7 @@ host, the fingerprint and the measurements, and teaching objects ("this is what 
 | **PluginLab Reference Nonlinear** | drive -> curve -> output -> hum -> noise -> quantizer | harmonics of a sine (closed form or numerical), SNR 6.02 N + 1.76 dB, noise and hum levels |
 | **PluginLab Reference Utility** | gain/polarity -> delay -> channel matrix -> tremolo -> DC | all exact |
 
-All three: latency 0 (no rebuffering), no parameter smoothing (a change acts at the next block: the reference is the exact algorithm, a
+All three: latency 0 (no rebuffering; the Reference EQ with the linear-phase algorithm: the FIR's latency), no parameter smoothing (a change acts at the next block: the reference is the exact algorithm, a
 click is part of the truth), mono or stereo (in = out). A new setting rebuilds the stage it belongs to (noise, hum, dither and tremolo
 start again; a new delay starts empty); this allocates memory on the audio thread at a parameter change, a compromise accepted for
 reference plugins (no allocation while the parameters stay the same).
@@ -32,7 +32,7 @@ template's float parameters in `tools/ParameterSpec.h`, and the grid of knobs an
 ### PluginLab Reference EQ
 | Control | Range | Meaning |
 |---|---|---|
-| Algorithm | RBJ cookbook, Orfanidis, Zoelzer (DAFX), State variable (TPT), Butterworth, Linkwitz-Riley | the design |
+| Algorithm | RBJ cookbook, Orfanidis, Zoelzer (DAFX), State variable (TPT), Butterworth, Linkwitz-Riley, Linear phase (RBJ magnitude) | the design (from `pluginlab_eqmodel` since 0.44.0); linear phase: a 2047-tap FIR at 48 kHz, latency 1023 samples, reported to the host |
 | Type | low-pass, high-pass, band-pass, band-pass 0 dB, notch, all-pass, peak, low shelf, high shelf | the filter type |
 | Frequency | 20 ... 20000 Hz | corner or centre (limited to 0.45 fs) |
 | Gain | -24 ... 24 dB | peak and shelves |

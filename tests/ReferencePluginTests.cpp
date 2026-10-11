@@ -178,7 +178,7 @@ private:
             const char* order;
             const char* name;
         };
-        constexpr int kAlgorithms = 6;
+        constexpr int kAlgorithms = 7;
         constexpr int kTypes = 9;
         const EqCase cases[] = {{48000.0, 0, 6, "1000", "6.0", "2.00", "2", "RBJ peak 1 kHz +6 dB Q 2, 48 kHz"},
                                 {44100.0, 3, 8, "5000", "-9.0", "0.71", "2", "SVF high shelf 5 kHz -9 dB, 44.1 kHz"},
@@ -241,7 +241,7 @@ private:
     void testEqTypeChoice()
     {
         beginTest("Reference EQ editor: a type the algorithm does not offer is moved to the algorithm's default (Orfanidis -> peak, Butterworth -> low-pass)");
-        constexpr int kAlgorithms = 6;
+        constexpr int kAlgorithms = 7;
         constexpr int kTypes = 9;
         constexpr int kWaitMs = 300;
         std::unique_ptr<juce::AudioPluginInstance> plugin = load("Eq", 48000.0, true);

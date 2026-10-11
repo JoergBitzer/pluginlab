@@ -155,3 +155,13 @@ Comments:
 And later: "I still have not decided for the final test objects". Then the decision: "Test objects for training session e.g. in the manual are only our
 own reference models and deliberately wrong test plugins. We will suggest some web-sites to download other test-objects that are open-source or free.
 With this constraint, I can download 2 test objects that are downloaded with my credentials. These are not part of the repository."
+
+### W8.2 band model (0.44.0, done)
+Library `pluginlab_eqmodel` (`src/eqmodel/`): `Band`, `DesignFamily` (RBJ, Orfanidis, Zoelzer, state variable, Butterworth, Linkwitz-Riley, **linear
+phase**), `designBand`, `getBandResponse`, `EqModel` with output gain and latency, Q / bandwidth / shelf-slope conversions. The Reference EQ plugin
+now takes its designs from this library (its own design code was moved) and offers the linear-phase family (the author's answer 3) as its 7th
+algorithm: a 2047-tap FIR with the RBJ magnitude, latency 1023 samples reported to the host. Document `docs/eqmodel/band-model.md`. Tests
+`tests/EqModelTests.cpp`: 78 bands equal their realised processors to 3.6e-7 dB; widths exact; the linear-phase band exactly linear in phase and
+within 0.046 dB of RBJ; through the host the plugin's linear-phase band equals the model (0.00000 dB), delay 1023 = reported latency, deviation from
+linear phase 0.0000 degrees. Note: the Algorithm parameter now has 7 entries, so its normalised values moved (automation of the old 6 entries of
+this test plugin would point elsewhere).

@@ -13,6 +13,8 @@
 
 #include "pluginlab/reference/Analog.h"
 #include "pluginlab/reference/Biquad.h"
+#include "pluginlab/reference/DirectFormFilter.h"
+#include "pluginlab/eqmodel/EqModel.h"
 #include "pluginlab/reference/StateVariableFilter.h"
 
 class ReferenceEqAudioProcessor;
@@ -72,55 +74,19 @@ const struct
 } g_paramOrder;
 
 const pluginlab::refplugins::ChoiceSpec g_paramAlgorithm{
-    "algorithm", "Algorithm", {"RBJ cookbook", "Orfanidis", "Zoelzer (DAFX)", "State variable (TPT)", "Butterworth", "Linkwitz-Riley"}, 0,
-    "The design. Orfanidis: peak only; Zoelzer: shelves and peak; Butterworth and Linkwitz-Riley: low-pass and high-pass; RBJ and state variable: all types."};
+    "algorithm", "Algorithm", {"RBJ cookbook", "Orfanidis", "Zoelzer (DAFX)", "State variable (TPT)", "Butterworth", "Linkwitz-Riley", "Linear phase (RBJ magnitude)"}, 0,
+    "The design. Orfanidis: peak only; Zoelzer: shelves and peak; Butterworth and Linkwitz-Riley: low-pass and high-pass; RBJ and state variable: all types; linear phase: the RBJ magnitude with linear phase (latency 21 ms), all types but the all-pass."};
 
 const pluginlab::refplugins::ChoiceSpec g_paramType{
     "type", "Type", {"Low-pass", "High-pass", "Band-pass", "Band-pass 0 dB", "Notch", "All-pass", "Peak", "Low shelf", "High shelf"}, 6,
     "The filter type. Types the algorithm does not offer are greyed out (set by automation, they pass the audio unchanged)."};
 
-enum class EqAlgorithm
-{
-    Rbj,
-    Orfanidis,
-    Zoelzer,
-    StateVariable,
-    Butterworth,
-    LinkwitzRiley
-};
-
-// One setting of the EQ, in physical units
-struct EqSetting
-{
-    EqAlgorithm algorithm = EqAlgorithm::Rbj;
-    pluginlab::reference::FilterType type = pluginlab::reference::FilterType::Peak;
-    double frequencyHz = 1000.0;
-    double gainDb = 0.0;
-    double q = 0.71;
-    int order = 2;
-
-    bool operator==(const EqSetting& other) const;
-};
-
-// What a setting becomes: biquad sections, or the state-variable structure, or nothing (combination not offered)
-struct EqDesign
-{
-    bool supported = true;
-    bool stateVariable = false;
-    double frequencyHz = 1000.0;  // after the limit to 0.45 fs
-    std::vector<pluginlab::reference::BiquadCoefficients> sections;
-    juce::String description;
-};
+// The setting and its design come from the band model (pluginlab_eqmodel, W8.2): the plugin and the model compute the same filter
+using EqAlgorithm = pluginlab::eqmodel::DesignFamily;
+using EqSetting = pluginlab::eqmodel::Band;
+using EqDesign = pluginlab::eqmodel::BandDesign;
 
 EqSetting makeEqSetting(int algorithmIndex, int typeIndex, double frequencyHz, double gainDb, double q, double order);
-
-// Whether an algorithm offers a filter type (RBJ and state variable: all; Orfanidis: peak; Zoelzer: shelves and peak; Butterworth, Linkwitz-Riley:
-// low-pass and high-pass), and the type the GUI switches to when the chosen one is not offered
-bool isTypeAvailable(EqAlgorithm algorithm, pluginlab::reference::FilterType type);
-pluginlab::reference::FilterType getDefaultType(EqAlgorithm algorithm);
-EqDesign designEq(const EqSetting& setting, double sampleRate);
-// The exact response of the design (1 for a combination that is not offered)
-std::complex<double> getEqResponse(const EqDesign& design, const EqSetting& setting, double frequencyHz, double sampleRate);
 
 class ReferenceEqAudio : public SynchronBlockProcessor
 {
@@ -157,6 +123,8 @@ private:
     EqDesign m_design;
     std::unique_ptr<pluginlab::reference::BiquadCascade> m_cascade;
     std::unique_ptr<pluginlab::reference::StateVariableFilter> m_stateVariable;
+    std::unique_ptr<pluginlab::reference::DirectFormFilter> m_fir; // the linear-phase family
+    int m_channels = 2;
 };
 
 class ReferenceEqGUI : public juce::Component, private juce::Timer
