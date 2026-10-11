@@ -19,6 +19,7 @@ signals (the numbers come from the tests); implementation.
 | all units on a hosted plugin (plugin device, summary, `--measure`, Developer page) | [plugins-and-host.md](plugins-and-host.md) | (the units' standards) | W7.11, done |
 | system class (LTI, time-variant, memoryless, Hammerstein, Wiener, generalized Hammerstein, other) | [system-class.md](system-class.md) | Novak et al. 2010, 2015 | W8.1, done |
 | parameter survey: what each parameter does, coupled parameters (band model: `docs/eqmodel/`) | [../eqmodel/parameter-survey.md](../eqmodel/parameter-survey.md) | - | W8.4, done |
+| mapping: knob laws, mapping files, a setting for a band (`--map`) | [../eqmodel/mapping.md](../eqmodel/mapping.md) | - | W8.5, done |
 | first run on twelve real EQs at their defaults (measurement and GUI review) | [real-plugins-2026-10-09.md](real-plugins-2026-10-09.md) | - | results |
 
 ## The common basis: AES17-2015

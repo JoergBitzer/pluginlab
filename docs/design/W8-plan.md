@@ -1,6 +1,6 @@
 # W8: system classification, EQ band model, parameter mapping and calibration (plan)
 
-Status: **plan v2, W8.1 ... W8.4 done** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
+Status: **plan v2, W8.1 ... W8.5 done** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
 and comments, kept verbatim in the appendix). Planning §8, W8: "EQ band model + parameter mapping, calibration of knobs by measurement. Done when:
 mapping data validated for the test EQs." Lessons of the prototype (planning §5 item 4, `docs/prototype/LESSONS_LEARNED.md`): the model of "one peaking
 band" was too narrow; every plugin needed an hour of manual exploration for its mapping file; a tool that lists all parameters and proposes a mapping is
@@ -188,3 +188,18 @@ sweep's harmonics are lifted by a strong bass boost); W8.1 left the stop band of
 below the maximum of H_1 are left out, a test case added); W8.3 knew Butterworth orders 1 ... 4 only and fitted the noise floor of a steep low-pass
 (fixed: the order from the slope, 1 ... 8, and a residual clamped 90 dB below the largest level; a test case added). Test time: the five surveys take
 1 ... 9 minutes each in Debug and run side by side with `tools/ctest_offscreen.sh -j10` (the author allows 2/3 of the 16 cores).
+
+### W8.5 mapping proposal and file (0.47.0, done)
+Knob laws (`src/engine/KnobLaw.cpp`: linear, log, power = JUCE's skew, table) fitted to the texts the plugin shows and to the survey's measurements;
+the mapping (`src/engine/Mapping.cpp`): per parameter the quantity (frequency, gain, Q, order, type, family, band on/off, output level, latency,
+other), the band, what it needs to act, both laws, the steps of a switch; JSON; `makeSettingForBand` sets a plugin to a band through the inverse
+laws. Document `docs/eqmodel/mapping.md`. Both places (the author's answer 2): the mappings of our own five surveyed plugins in `mappings/` (marked
+as checked by the tests against the plugins' code, not yet reviewed by the author); all others in the user's settings folder through
+`PluginLabHost --map <plugin file> <report>` (a confirmed file there is never overwritten). Tests: the survey tests compare each new proposal with
+the file in `mappings/` (all agree, no edits); `MappingTests`: the laws (exact for linear, log, skew 0.3), the JSON, and the files drive the Reference
+EQ (RBJ and Orfanidis peaks, a shelf, a Butterworth low-pass of order 4), the Test EQ Switch and the Test EQ Drive to requested bands within 0.02 dB;
+`PluginLabHostMap` runs `--map` on the Test EQ Switch. Corrections on the way: the measured law uses only points whose fit has the usual number of
+bands (edge ambiguity at 28 Hz); equal errors below 1e-4 (three points fit a power law exactly); stepped knobs found from their texts (order
+1 ... 8) and surveyed step by step; probes at two values; of several steps of the wanted type the one whose text names it (a notch measured as a
+deep peak); a band without a frequency, gain or Q knob is a side effect. Open: the author's two test objects (local) with `--map`.
+

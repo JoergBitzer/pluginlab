@@ -47,7 +47,7 @@ int getSteps(const SurveyParameter& parameter)
     return parameter.isBoolean ? 2 : parameter.numSteps;
 }
 
-// The values of a probe (does the parameter act at all in this context?): three points
+// The values of a probe (does the parameter act at all in this context?): the ends; every step of a knob with up to four
 std::vector<float> getProbeValues(const SurveyParameter& parameter, const SurveySettings& settings)
 {
     if (isDiscrete(parameter, settings))
@@ -62,7 +62,7 @@ std::vector<float> getProbeValues(const SurveyParameter& parameter, const Survey
             }
             return values;
         }
-        return {0.0f, getStepValue(steps / 2, steps), 1.0f};
+        return {0.0f, 1.0f}; // the first and the last step (more knobs need the search than steps that only differ in the middle)
     }
     return {0.05f, 0.95f};
 }
@@ -116,7 +116,7 @@ juce::String tidyText(const juce::String& text)
     return juce::String(value, decimals);
 }
 
-juce::String getValueText(const SurveyParameter& parameter, float value)
+juce::String makeValueText(const SurveyParameter& parameter, float value)
 {
     juce::String text = parameter.getText ? tidyText(parameter.getText(value)) : juce::String(value, 3);
     if (parameter.label.isNotEmpty() && ! text.endsWith(parameter.label))
@@ -531,7 +531,7 @@ juce::String describeContext(const std::vector<SurveyParameter>& parameters, con
     for (size_t index = 0; index < indices.size(); ++index)
     {
         const SurveyParameter& parameter = parameters[static_cast<size_t>(indices[index])];
-        parts.add(parameter.name + " = " + getValueText(parameter, values[index]));
+        parts.add(parameter.name + " = " + makeValueText(parameter, values[index]));
     }
     return parts.joinIntoString(", ");
 }
@@ -755,7 +755,7 @@ public:
         {
             SurveyPoint point = m_bench.measure(makeSetting(base, {parameterIndex}, {value}));
             point.value = value;
-            point.text = getValueText(parameter, value);
+            point.text = makeValueText(parameter, value);
             result.points.push_back(std::move(point));
         }
         decideRole(result, parameter, base, parameterIndex, baseClass);
@@ -1088,6 +1088,11 @@ juce::String makeSummary(const ParameterSurvey& survey)
 }
 }
 
+juce::String getValueText(const SurveyParameter& parameter, float value)
+{
+    return makeValueText(parameter, value);
+}
+
 juce::String getRoleName(ParameterRole role)
 {
     switch (role)
@@ -1130,6 +1135,44 @@ std::vector<float> getSurveyValues(const SurveyParameter& parameter, const Surve
     return values;
 }
 
+// A knob whose texts take only a few values, changing at equal distances (k + 1/2) / (n - 1) of the normalised range (a whole-number knob such as an
+// order 1 ... 8 that rounds), has n steps; 0 otherwise
+int getStepsFromTexts(const std::function<juce::String(float)>& getText)
+{
+    constexpr int kSamples = 400;
+    constexpr int kMaximumTextSteps = 16;
+    std::vector<float> changes;
+    juce::String previous = getText(0.0f);
+    for (int index = 1; index <= kSamples; ++index)
+    {
+        const float value = static_cast<float>(index) / kSamples;
+        const juce::String text = getText(value);
+        if (text != previous)
+        {
+            changes.push_back(value);
+            previous = text;
+            if (static_cast<int>(changes.size()) >= kMaximumTextSteps)
+            {
+                return 0;
+            }
+        }
+    }
+    const int steps = static_cast<int>(changes.size()) + 1;
+    if (steps < 2)
+    {
+        return 0;
+    }
+    for (size_t index = 0; index < changes.size(); ++index)
+    {
+        const float expected = (static_cast<float>(index) + 0.5f) / static_cast<float>(steps - 1);
+        if (std::abs(changes[index] - expected) > 2.0f / kSamples)
+        {
+            return 0; // not equally spaced (a skewed stepped knob): left continuous
+        }
+    }
+    return steps;
+}
+
 SurveySubject makePluginSubject(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, double sampleRate)
 {
     SurveySubject subject;
@@ -1151,6 +1194,10 @@ SurveySubject makePluginSubject(juce::AudioPluginFormatManager& formatManager, c
         surveyParameter.defaultValue = parameter->getValue();
         // the text the plugin shows (the instance stays alive with the subject; getText does not change the value)
         surveyParameter.getText = [instance, parameter](float value) { return parameter->getText(value, 64); };
+        if (surveyParameter.numSteps == 0 && ! surveyParameter.isBoolean)
+        {
+            surveyParameter.numSteps = getStepsFromTexts(surveyParameter.getText); // a stepped knob that the host is told is continuous
+        }
         subject.parameters.push_back(surveyParameter);
     }
     subject.channels = getPluginChannels(formatManager, description, sampleRate);

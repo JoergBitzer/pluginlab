@@ -22,6 +22,7 @@ juce::File resolveFile(const juce::String& text)
 //   --report <plugin folder> <file>     scans the folder, loads the plugins, writes a report (see HostReport.h) and quits
 //   --fingerprint <plugin file> <file> [<plugin id>]  measures the fingerprint of the plugin (see HostFingerprint.h), writes it and quits
 //   --measure <plugin file> <file> [<plugin id>]      runs the measurement units of W7 on the plugin (see HostFingerprint.h), writes them and quits
+//   --map <plugin file> <file> [<plugin id>]          parameter survey and mapping proposal (see HostFingerprint.h); JSON into the user's mapping folder
 //   --gui-snapshot <plugin file> <folder> [<plugin id>] captures the plugin's editor and writes the GUI review (see HostGuiSnapshot.h); in a virtual display
 // Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
 // after the scan, --compare <audio file> [<plugin file>] opens the Compare page with the file, a dry slot and the plugin
@@ -29,6 +30,7 @@ const juce::String kWriteVersionOption = "--write-version";
 const juce::String kReportOption = "--report";
 const juce::String kFingerprintOption = "--fingerprint"; // --fingerprint <plugin file> <report file>
 const juce::String kMeasureOption = "--measure";         // --measure <plugin file> <report file>
+const juce::String kMapOption = "--map";                 // --map <plugin file> <report file>
 const juce::String kGuiSnapshotOption = "--gui-snapshot"; // --gui-snapshot <plugin file> <folder>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
@@ -128,6 +130,21 @@ public:
                 returnValue = kExitReportFailed;
             }
             setApplicationReturnValue(returnValue);
+            quit();
+            return;
+        }
+
+        const int mapIndex = arguments.indexOf(kMapOption);
+        if (mapIndex >= 0 && mapIndex + kArgumentsOfReport < arguments.size())
+        {
+            juce::String identifier;
+            const int identifierIndex = mapIndex + kArgumentsOfReport + 1;
+            if (identifierIndex < arguments.size() && ! arguments[identifierIndex].startsWith("--"))
+            {
+                identifier = arguments[identifierIndex].unquoted();
+            }
+            const bool written = pluginlab::host::writeMappingProposal(resolveFile(arguments[mapIndex + 1]), resolveFile(arguments[mapIndex + 2]), identifier);
+            setApplicationReturnValue(written ? kExitOk : kExitReportFailed);
             quit();
             return;
         }

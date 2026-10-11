@@ -1,6 +1,10 @@
 #include "HostFingerprint.h"
 
+#include "HostSettings.h"
+#include "pluginlab/PluginLabVersion.h"
 #include "pluginlab/engine/Fingerprint.h"
+#include "pluginlab/engine/Mapping.h"
+#include "pluginlab/engine/ParameterSurvey.h"
 #include "pluginlab/engine/PluginMeasurement.h"
 #include "pluginlab/engine/ReportText.h"
 #include "pluginlab/ui/Logo.h"
@@ -89,5 +93,50 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
     }
     pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
     return reportFile.replaceWithText(pluginlab::engine::signReport(report, "PluginLabHost, fingerprint and measurement"));
+}
+
+bool writeMappingProposal(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier)
+{
+    juce::AudioPluginFormatManager formatManager;
+    hosting::addHeadlessFormats(formatManager);
+    const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(formatManager, pluginFile);
+    const juce::File folder = HostSettings().getMappingFolder();
+    juce::String report;
+    bool written = true;
+    for (const juce::PluginDescription& description : scan.descriptions)
+    {
+        if (pluginIdentifier.isNotEmpty() && description.createIdentifierString() != pluginIdentifier)
+        {
+            continue;
+        }
+        const pluginlab::engine::SurveySubject subject = pluginlab::engine::makePluginSubject(formatManager, description, getMeasurementRate());
+        pluginlab::engine::SurveySettings settings;
+        settings.sampleRate = getMeasurementRate();
+        const pluginlab::engine::SurveyResult survey = pluginlab::engine::surveyParameters(subject, settings);
+        const pluginlab::engine::Mapping proposal = pluginlab::engine::proposeMapping(
+            subject, survey, pluginlab::engine::makePluginIdentity(description), "PluginLabHost " + juce::String(pluginlab::getVersionString()));
+        juce::File target = folder.getChildFile(pluginlab::engine::getMappingFileName(description.name));
+        juce::String note = "Proposal written to `" + target.getFullPathName() + "`.";
+        juce::String error;
+        if (const std::optional<pluginlab::engine::Mapping> existing = pluginlab::engine::Mapping::read(target, error); existing && existing->confirmedBy.isNotEmpty())
+        {
+            target = target.withFileExtension(".proposal.json");
+            const juce::StringArray differences = pluginlab::engine::compareMappings(proposal, *existing);
+            note = "A confirmed mapping exists (" + existing->confirmedBy + "); the proposal was written to `" + target.getFullPathName() + "`. "
+                   + (differences.isEmpty() ? juce::String("It agrees with the confirmed one.") : "Differences:\n\n- " + differences.joinIntoString("\n- "));
+        }
+        written = proposal.write(target) && written;
+        report += pluginlab::engine::signReport("# Parameter survey and mapping: " + description.name + " " + description.version + "\n\n"
+                                                    + pluginlab::engine::createSurveyReport(survey, "Parameter survey") + "\n"
+                                                    + pluginlab::engine::createMappingReport(proposal) + "\n" + note + "\n",
+                                                "PluginLabHost, mapping")
+                  + "\n";
+    }
+    if (report.isEmpty())
+    {
+        return false;
+    }
+    pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
+    return reportFile.replaceWithText(report) && written;
 }
 }

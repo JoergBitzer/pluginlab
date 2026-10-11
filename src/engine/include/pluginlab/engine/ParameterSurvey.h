@@ -140,6 +140,9 @@ using SurveyProgress = std::function<void(int parameterIndex, int parameterCount
 
 SurveyResult surveyParameters(const SurveySubject& subject, const SurveySettings& settings, const SurveyProgress& progress = {});
 
+// The text of a value as the survey shows it (numbers with many digits rounded, the unit appended)
+juce::String getValueText(const SurveyParameter& parameter, float value);
+
 // The normalised values a parameter is surveyed at
 std::vector<float> getSurveyValues(const SurveyParameter& parameter, const SurveySettings& settings);
 

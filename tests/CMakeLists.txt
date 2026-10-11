@@ -12,6 +12,7 @@ target_sources(PluginLabTests
         HostedPluginTests.cpp
         ValidatorTests.cpp
         LoaderTests.cpp
+        MappingTests.cpp
         MeasureCrosstalkTests.cpp
         MeasureDelayTests.cpp
         MeasureDistortionTests.cpp
@@ -48,6 +49,7 @@ target_compile_definitions(PluginLabTests
         PLUGINLAB_TEST_PLUGIN_DIR="${PLUGINLAB_TEST_PLUGIN_DIR}"
         PLUGINLAB_REFERENCE_PLUGIN_DIR="${PLUGINLAB_REFERENCE_PLUGIN_DIR}"
         PLUGINLAB_ORACLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/oracle"
+        PLUGINLAB_MAPPING_DIR="${CMAKE_SOURCE_DIR}/mappings"
         PLUGINLAB_SCANNER_EXECUTABLE="$<TARGET_FILE:PluginLabScanner>"
         JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_PRODUCT_NAME>"
         JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_VERSION>")
@@ -119,6 +121,16 @@ add_test(NAME PluginLabHostMeasure
         -DPLUGIN_FILE=${PLUGINLAB_TEST_PLUGIN_DIR}/PluginLabTestGain.vst3
         -DREPORT_FILE=${CMAKE_CURRENT_BINARY_DIR}/host_measure.md
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostMeasure.cmake)
+
+# The parameter survey and mapping proposal from the command line (W8.5); the settings folder of the build, not the user's
+add_test(NAME PluginLabHostMap
+    COMMAND ${CMAKE_COMMAND}
+        -DHOST_APPLICATION=$<TARGET_FILE:PluginLabHost>
+        -DPLUGIN_FILE=${PLUGINLAB_TEST_PLUGIN_DIR}/PluginLabTestEqSwitch.vst3
+        -DREPORT_FILE=${CMAKE_CURRENT_BINARY_DIR}/host_map.md
+        -DSETTINGS_FOLDER=${CMAKE_CURRENT_BINARY_DIR}/host_map_settings
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostMap.cmake)
+set_tests_properties(PluginLabHostMap PROPERTIES TIMEOUT 1200)
 
 # The GUI review (W5d): the capture of a hosted editor needs X (xwd and ImageMagick); Linux only, in the virtual display of tools/ctest_offscreen.sh
 if(UNIX AND NOT APPLE)

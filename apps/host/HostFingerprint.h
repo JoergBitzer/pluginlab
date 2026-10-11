@@ -15,4 +15,10 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
 // Command line mode --measure <plugin file> <report file> [<plugin identifier>]: only the measurement units (W7.11) on the default setting of every
 // plugin of the file (or the one with the identifier); Markdown. Returns false if there is no such plugin or the report cannot be written.
 bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier = {});
+
+// Command line mode --map <plugin file> <report file> [<plugin identifier>]: the parameter survey (W8.4) and the mapping proposal (W8.5) of every
+// plugin of the file (or the one with the identifier). The report (Markdown) has both; the proposal goes as JSON into the user's mapping folder
+// (HostSettings::getMappingFolder). A confirmed mapping there is never overwritten: the proposal is then written next to it
+// (<name>.proposal.json) and the report lists how it differs. Returns false if there is no such plugin or a file cannot be written.
+bool writeMappingProposal(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier = {});
 }

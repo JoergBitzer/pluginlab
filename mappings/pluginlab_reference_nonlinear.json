@@ -1,0 +1,350 @@
+{
+  "schema": 1,
+  "plugin": {
+    "name": "PluginLab Reference Nonlinear",
+    "manufacturer": "Jade_Hochschule",
+    "version": "0.46.0",
+    "format": "VST3",
+    "identifier": "VST3:PluginLab Reference Nonlinear:808e67ec"
+  },
+  "sampleRates": [
+    48000.0
+  ],
+  "date": "2026-10-11",
+  "proposedBy": "pluginlab 0.46.0 (tests)",
+  "confirmedBy": "tests against the plugin code (tests/ParameterSurveyTests.cpp, tests/MappingTests.cpp); not yet reviewed by the author",
+  "notes": "Our own plugin: the code is the ground truth. Proposed by the survey (W8.4) and the mapping (W8.5) at 48 kHz.",
+  "bands": 0,
+  "parameters": [
+    {
+      "index": 0,
+      "name": "Curve",
+      "role": "switch",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.0,
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Off",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 0.333333343267441,
+          "text": "Polynomial",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 0.666666686534882,
+          "text": "Hard clip",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 1.0,
+          "text": "Soft clip (tanh)",
+          "description": "",
+          "band": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "name": "Drive",
+      "role": "level",
+      "quantity": "output level",
+      "band": -1,
+      "default": 0.5,
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -23.998835177635407,
+        "max": 23.998835177635407,
+        "rmsError": 0.000586160519458,
+        "points": 101
+      },
+      "measuredLaw": {
+        "kind": "linear",
+        "min": -24.000000884550587,
+        "max": 24.000001645596733,
+        "rmsError": 1.33992422734574e-08,
+        "points": 5
+      }
+    },
+    {
+      "index": 2,
+      "name": "a2",
+      "role": "distortion",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.550000011920929,
+      "requires": [
+        {
+          "parameter": 0,
+          "name": "Curve",
+          "value": 0.333333343267441,
+          "text": "Polynomial"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -1.0,
+        "max": 1.0,
+        "rmsError": 2.904491987855278e-17,
+        "points": 101
+      }
+    },
+    {
+      "index": 3,
+      "name": "a3",
+      "role": "distortion",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.525000035762787,
+      "requires": [
+        {
+          "parameter": 0,
+          "name": "Curve",
+          "value": 0.333333343267441,
+          "text": "Polynomial"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -1.0,
+        "max": 1.0,
+        "rmsError": 2.904491987855278e-17,
+        "points": 101
+      }
+    },
+    {
+      "index": 4,
+      "name": "Threshold",
+      "role": "distortion",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.850000023841858,
+      "requires": [
+        {
+          "parameter": 0,
+          "name": "Curve",
+          "value": 0.666666686534882,
+          "text": "Hard clip"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -40.00000000000002,
+        "max": 2.131628207280301e-14,
+        "rmsError": 3.098126018023129e-16,
+        "points": 101
+      }
+    },
+    {
+      "index": 5,
+      "name": "Output",
+      "role": "level",
+      "quantity": "output level",
+      "band": -1,
+      "default": 0.5,
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -23.998835177635407,
+        "max": 23.998835177635407,
+        "rmsError": 0.000586160519458,
+        "points": 101
+      },
+      "measuredLaw": {
+        "kind": "linear",
+        "min": -24.000000884550587,
+        "max": 24.000001645596733,
+        "rmsError": 1.33992422734574e-08,
+        "points": 5
+      }
+    },
+    {
+      "index": 6,
+      "name": "Quantizer",
+      "role": "switch",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.0,
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Off",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 0.5,
+          "text": "On",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 1.0,
+          "text": "On, TPDF dither",
+          "description": "",
+          "band": false
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "name": "Bits",
+      "role": "distortion",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.636363625526428,
+      "requires": [
+        {
+          "parameter": 6,
+          "name": "Quantizer",
+          "value": 0.5,
+          "text": "On"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "linear",
+        "min": 2.005241700640663,
+        "max": 24.014560279557358,
+        "rmsError": 0.013053358926848,
+        "points": 101
+      }
+    },
+    {
+      "index": 8,
+      "name": "Noise",
+      "role": "switch",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.0,
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Off",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 0.5,
+          "text": "White",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 1.0,
+          "text": "Pink",
+          "description": "",
+          "band": false
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "name": "Noise level",
+      "role": "idle output (noise, hum, DC)",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.571428596973419,
+      "requires": [
+        {
+          "parameter": 8,
+          "name": "Noise",
+          "value": 0.5,
+          "text": "White"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -139.99999999999991,
+        "max": -5.684341886080801e-14,
+        "rmsError": 3.190356073302529e-16,
+        "points": 101
+      }
+    },
+    {
+      "index": 10,
+      "name": "Hum",
+      "role": "switch",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.0,
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Off",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 0.5,
+          "text": "50 Hz",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 1.0,
+          "text": "60 Hz",
+          "description": "",
+          "band": false
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "name": "Hum level",
+      "role": "idle output (noise, hum, DC)",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.571428596973419,
+      "requires": [
+        {
+          "parameter": 10,
+          "name": "Hum",
+          "value": 0.5,
+          "text": "50 Hz"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -139.99999999999991,
+        "max": -5.684341886080801e-14,
+        "rmsError": 3.190356073302529e-16,
+        "points": 101
+      }
+    },
+    {
+      "index": 12,
+      "name": "Bypass",
+      "role": "switch",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.0,
+      "requires": [
+        {
+          "parameter": 0,
+          "name": "Curve",
+          "value": 0.333333343267441,
+          "text": "Polynomial"
+        }
+      ],
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Off",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 1.0,
+          "text": "On",
+          "description": "",
+          "band": false
+        }
+      ]
+    }
+  ]
+}

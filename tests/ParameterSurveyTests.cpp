@@ -5,7 +5,9 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "TestPluginPaths.h"
+#include "pluginlab/engine/Mapping.h"
 #include "pluginlab/engine/ParameterSurvey.h"
+#include "pluginlab/PluginLabVersion.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
 
@@ -59,6 +61,7 @@ private:
         const engine::SurveyResult result = engine::surveyParameters(subject, engine::SurveySettings{});
         const double seconds = (juce::Time::getMillisecondCounterHiRes() - start) / 1000.0;
         logMessage(engine::createSurveyReport(result, pluginName) + "\n(" + juce::String(seconds, 1) + " s)\n");
+        checkMapping(subject, result, scan.descriptions[0]);
         for (const engine::ParameterSurvey& survey : result.parameters)
         {
             const auto found = expected.find(survey.parameter.name);
@@ -83,6 +86,30 @@ private:
                                              [&](const engine::ParameterSurvey& survey) { return survey.parameter.name == parameterName; });
             expect(present, pluginName + ": no parameter " + parameterName);
         }
+    }
+
+    // W8.5: the mapping proposed from this survey must agree with the confirmed file in mappings/ (PLUGINLAB_WRITE_MAPPINGS=<folder> writes the
+    // proposals there, for a first file or a review)
+    void checkMapping(const engine::SurveySubject& subject, const engine::SurveyResult& result, const juce::PluginDescription& description)
+    {
+        const engine::Mapping proposal =
+            engine::proposeMapping(subject, result, engine::makePluginIdentity(description), "pluginlab " + juce::String(pluginlab::getVersionString()) + " (tests)");
+        logMessage(engine::createMappingReport(proposal));
+        const juce::String fileName = engine::getMappingFileName(description.name);
+        const juce::String writeFolder = juce::SystemStats::getEnvironmentVariable("PLUGINLAB_WRITE_MAPPINGS", {});
+        if (writeFolder.isNotEmpty())
+        {
+            expect(proposal.write(juce::File(writeFolder).getChildFile(fileName)), "cannot write the proposal");
+        }
+        juce::String error;
+        const std::optional<engine::Mapping> confirmed = engine::Mapping::read(juce::File(PLUGINLAB_MAPPING_DIR).getChildFile(fileName), error);
+        expect(confirmed.has_value(), "no confirmed mapping: " + error);
+        if (! confirmed)
+        {
+            return;
+        }
+        const juce::StringArray differences = engine::compareMappings(proposal, *confirmed);
+        expect(differences.isEmpty(), m_pluginName + ": the proposal differs from mappings/" + fileName + ":\n" + differences.joinIntoString("\n"));
     }
 
     juce::String m_pluginName;

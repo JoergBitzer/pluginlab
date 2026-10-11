@@ -1,0 +1,240 @@
+{
+  "schema": 1,
+  "plugin": {
+    "name": "PluginLab Reference Utility",
+    "manufacturer": "Jade_Hochschule",
+    "version": "0.46.0",
+    "format": "VST3",
+    "identifier": "VST3:PluginLab Reference Utility:808e6ef4"
+  },
+  "sampleRates": [
+    48000.0
+  ],
+  "date": "2026-10-11",
+  "proposedBy": "pluginlab 0.46.0 (tests)",
+  "confirmedBy": "tests against the plugin code (tests/ParameterSurveyTests.cpp, tests/MappingTests.cpp); not yet reviewed by the author",
+  "notes": "Our own plugin: the code is the ground truth. Proposed by the survey (W8.4) and the mapping (W8.5) at 48 kHz.",
+  "bands": 0,
+  "parameters": [
+    {
+      "index": 0,
+      "name": "Gain",
+      "role": "level",
+      "quantity": "output level",
+      "band": -1,
+      "default": 0.714285731315613,
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -60.00116482236464,
+        "max": 24.001164822364615,
+        "rmsError": 0.000334948868262,
+        "points": 101
+      },
+      "measuredLaw": {
+        "kind": "linear",
+        "min": -60.000001720076554,
+        "max": 24.000004146027678,
+        "rmsError": 2.018589466346927e-08,
+        "points": 5
+      }
+    },
+    {
+      "index": 1,
+      "name": "Polarity",
+      "role": "polarity",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.0,
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Normal",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 1.0,
+          "text": "Inverted",
+          "description": "",
+          "band": false
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "name": "Delay",
+      "role": "latency",
+      "quantity": "latency",
+      "band": -1,
+      "default": 0.0,
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -2.305253897563066e-12,
+        "max": 4800.000000000002,
+        "rmsError": 2.639623204622581e-16,
+        "points": 101
+      },
+      "measuredLaw": {
+        "kind": "linear",
+        "min": -3.2186505996e-05,
+        "max": 4800.000110864639,
+        "rmsError": 1.2878204068607e-08,
+        "points": 5
+      }
+    },
+    {
+      "index": 3,
+      "name": "Interpolation",
+      "role": "switch",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.0,
+      "requires": [
+        {
+          "parameter": 2,
+          "name": "Delay",
+          "value": 0.371300011873245,
+          "text": "1782.24 samples"
+        }
+      ],
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Thiran (all-pass)",
+          "description": "flat",
+          "band": false
+        },
+        {
+          "value": 1.0,
+          "text": "Lagrange (FIR)",
+          "description": "high shelf 15382 Hz -7.4 dB Q 0.49 (RBJ cookbook)",
+          "type": "high shelf",
+          "family": "RBJ cookbook",
+          "band": true
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "name": "Width",
+      "role": "stereo (cross path)",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.5,
+      "displayedLaw": {
+        "kind": "linear",
+        "min": 0.0,
+        "max": 2.0,
+        "rmsError": 0.0,
+        "points": 101
+      }
+    },
+    {
+      "index": 5,
+      "name": "Crosstalk",
+      "role": "stereo (cross path)",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.0,
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -119.99999999999994,
+        "max": -2.842170943040401e-14,
+        "rmsError": 2.459972067198691e-16,
+        "points": 101
+      }
+    },
+    {
+      "index": 6,
+      "name": "DC offset",
+      "role": "idle output (noise, hum, DC)",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.5,
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -0.5,
+        "max": 0.5,
+        "rmsError": 2.904491987855278e-17,
+        "points": 101
+      }
+    },
+    {
+      "index": 7,
+      "name": "Tremolo rate",
+      "role": "modulation (time-variant)",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.24623116850853,
+      "requires": [
+        {
+          "parameter": 8,
+          "name": "Tremolo depth",
+          "value": 0.949999988079071,
+          "text": "0.950"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "linear",
+        "min": 0.100891089108909,
+        "max": 19.99990099009901,
+        "rmsError": 0.000143684054711,
+        "points": 101
+      }
+    },
+    {
+      "index": 8,
+      "name": "Tremolo depth",
+      "role": "modulation (time-variant)",
+      "quantity": "other",
+      "band": -1,
+      "default": 0.0,
+      "displayedLaw": {
+        "kind": "linear",
+        "min": 0.0,
+        "max": 1.0,
+        "rmsError": 0.0,
+        "points": 101
+      }
+    },
+    {
+      "index": 9,
+      "name": "Bypass",
+      "role": "latency",
+      "quantity": "latency",
+      "band": -1,
+      "default": 0.0,
+      "requires": [
+        {
+          "parameter": 2,
+          "name": "Delay",
+          "value": 0.371300011873245,
+          "text": "1782.24 samples"
+        }
+      ],
+      "measuredLaw": {
+        "kind": "table",
+        "table": [
+          1782.0,
+          0.0
+        ],
+        "rmsError": 0.0,
+        "points": 2
+      },
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Off",
+          "description": "",
+          "band": false
+        },
+        {
+          "value": 1.0,
+          "text": "On",
+          "description": "",
+          "band": false
+        }
+      ]
+    }
+  ]
+}

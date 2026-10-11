@@ -32,7 +32,7 @@ of each parameter that acts, and once at the default setting.
 | Step | What |
 |---|---|
 | 1 | the default setting: one point and its system class |
-| 2 | each parameter: a probe at two values (continuous: 0.05 and 0.95 of the normalised range; discrete: every step up to 4, else first, middle, last). If nothing changes, step 3, else step 4 |
+| 2 | each parameter: a probe at two values (continuous: 0.05 and 0.95 of the normalised range; discrete: every step up to 4, else the first and the last). If nothing changes, step 3, else step 4. A knob that the host is told is continuous but whose texts take at most 16 values at equal distances (an order 1 ... 8 that rounds) is treated as discrete |
 | 3 | the search for a context in which it acts: contexts in which other parameters acted (found earlier); one other parameter moved (continuous ones first: 0.95, 0.05 and an irregular 0.3713, which gives fractional values such as a fractional delay; then every step of discrete ones); a found context with one more parameter; any two other parameters (discrete pairs first; the ends of continuous ones). At most 200 renders per parameter. Found: coupled, surveyed there. Not found: "does nothing" |
 | 4 | the survey: continuous parameters at 5 points (0.05 ... 0.95: the very ends are often outside what a band model describes), discrete ones at every step (up to 16) |
 | 5 | the role (below) |

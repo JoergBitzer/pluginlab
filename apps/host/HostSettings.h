@@ -25,6 +25,9 @@ public:
     // Where the fingerprint reports of the Developer page are kept
     juce::File getFingerprintFolder() const;
 
+    // Where the mappings of plugins that are not our own are kept (W8.5; our own plugins' mappings are in the repository, mappings/)
+    juce::File getMappingFolder() const;
+
     // A file that exists while the plugins of the last session are being loaded: if it is still there at the next start, loading them
     // did not finish (a plugin crashed the program).
     juce::File getRestoreMarker() const;

@@ -1,0 +1,394 @@
+{
+  "schema": 1,
+  "plugin": {
+    "name": "PluginLab Reference EQ",
+    "manufacturer": "Jade_Hochschule",
+    "version": "0.46.0",
+    "format": "VST3",
+    "identifier": "VST3:PluginLab Reference EQ:808e5ef1"
+  },
+  "sampleRates": [
+    48000.0
+  ],
+  "date": "2026-10-11",
+  "proposedBy": "pluginlab 0.46.0 (tests)",
+  "confirmedBy": "tests against the plugin code (tests/ParameterSurveyTests.cpp, tests/MappingTests.cpp); not yet reviewed by the author",
+  "notes": "Our own plugin: the code is the ground truth. Proposed by the survey (W8.4) and the mapping (W8.5) at 48 kHz.",
+  "bands": 1,
+  "parameters": [
+    {
+      "index": 0,
+      "name": "Algorithm",
+      "role": "switch",
+      "quantity": "family",
+      "band": 0,
+      "default": 0.0,
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "RBJ cookbook",
+          "description": "peak 1000 Hz +21.6 dB Q 0.71 (RBJ cookbook)",
+          "type": "peak",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 0.16666667163372,
+          "text": "Orfanidis",
+          "description": "peak 1000 Hz +21.6 dB Q 0.71 (Orfanidis)",
+          "type": "peak",
+          "family": "Orfanidis",
+          "band": true
+        },
+        {
+          "value": 0.333333343267441,
+          "text": "Zoelzer (DAFX)",
+          "description": "peak 1000.02 Hz +21.6 dB Q 0.20 (RBJ cookbook)",
+          "type": "peak",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 0.5,
+          "text": "State variable (TPT)",
+          "description": "peak 1000 Hz +21.6 dB Q 0.71 (RBJ cookbook)",
+          "type": "peak",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 0.666666686534882,
+          "text": "Butterworth",
+          "description": "flat",
+          "band": false
+        },
+        {
+          "value": 0.833333313465118,
+          "text": "Linkwitz-Riley",
+          "description": "flat",
+          "band": false
+        },
+        {
+          "value": 1.0,
+          "text": "Linear phase (RBJ magnitude)",
+          "description": "peak 1000.02 Hz +22.3 dB Q 0.74 (Linear phase (RBJ magnitude))",
+          "type": "peak",
+          "family": "Linear phase (RBJ magnitude)",
+          "band": true
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "name": "Type",
+      "role": "switch",
+      "quantity": "type",
+      "band": 0,
+      "default": 0.75,
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Low-pass",
+          "description": "low-pass 1000 Hz Q 0.71 (RBJ cookbook)",
+          "type": "low-pass",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 0.125,
+          "text": "High-pass",
+          "description": "high-pass 1000.27 Hz Q 0.71 (RBJ cookbook)",
+          "type": "high-pass",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 0.25,
+          "text": "Band-pass",
+          "description": "low-pass 460.174 Hz order 1 (Butterworth)",
+          "type": "low-pass",
+          "family": "Butterworth",
+          "band": true
+        },
+        {
+          "value": 0.375,
+          "text": "Band-pass 0 dB",
+          "description": "low-pass 460.16 Hz order 1 (Butterworth)",
+          "type": "low-pass",
+          "family": "Butterworth",
+          "band": true
+        },
+        {
+          "value": 0.5,
+          "text": "Notch",
+          "description": "peak 1000.06 Hz -30.0 dB Q 3.99 (RBJ cookbook)",
+          "type": "peak",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 0.625,
+          "text": "All-pass",
+          "description": "flat",
+          "band": false
+        },
+        {
+          "value": 0.75,
+          "text": "Peak",
+          "description": "peak 1000 Hz +21.6 dB Q 0.71 (RBJ cookbook)",
+          "type": "peak",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 0.875,
+          "text": "Low shelf",
+          "description": "low shelf 1000.01 Hz +21.6 dB Q 0.71 (RBJ cookbook)",
+          "type": "low shelf",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 1.0,
+          "text": "High shelf",
+          "description": "high shelf 1000.01 Hz +21.6 dB Q 0.71 (RBJ cookbook)",
+          "type": "high shelf",
+          "family": "RBJ cookbook",
+          "band": true
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "name": "Frequency",
+      "role": "band frequency",
+      "quantity": "frequency",
+      "band": 0,
+      "default": 0.566323339939117,
+      "requires": [
+        {
+          "parameter": 3,
+          "name": "Gain",
+          "value": 0.949999988079071,
+          "text": "21.6 dB"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "log",
+        "min": 19.959035009979463,
+        "max": 20016.304686664942,
+        "rmsError": 0.000180226195903,
+        "points": 101
+      },
+      "measuredLaw": {
+        "kind": "log",
+        "min": 19.970291407422188,
+        "max": 20003.14636386641,
+        "rmsError": 4.5348048486e-05,
+        "points": 3
+      }
+    },
+    {
+      "index": 3,
+      "name": "Gain",
+      "role": "band gain",
+      "quantity": "gain",
+      "band": 0,
+      "default": 0.5,
+      "displayedLaw": {
+        "kind": "linear",
+        "min": -23.998835177635407,
+        "max": 23.998835177635407,
+        "rmsError": 0.000586160519458,
+        "points": 101
+      },
+      "measuredLaw": {
+        "kind": "linear",
+        "min": -23.999468485129274,
+        "max": 23.999434068216704,
+        "rmsError": 1.626696433989809e-06,
+        "points": 5
+      }
+    },
+    {
+      "index": 4,
+      "name": "Q",
+      "role": "band width (Q)",
+      "quantity": "q",
+      "band": 0,
+      "default": 0.030653268098831,
+      "requires": [
+        {
+          "parameter": 3,
+          "name": "Gain",
+          "value": 0.949999988079071,
+          "text": "21.6 dB"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "linear",
+        "min": 0.100891089108909,
+        "max": 19.99990099009901,
+        "rmsError": 0.000143684054711,
+        "points": 101
+      },
+      "measuredLaw": {
+        "kind": "linear",
+        "min": 0.103338469886874,
+        "max": 19.996931458427458,
+        "rmsError": 0.000157888249631,
+        "points": 5
+      }
+    },
+    {
+      "index": 5,
+      "name": "Order",
+      "role": "band order",
+      "quantity": "order",
+      "band": 0,
+      "default": 0.142857149243355,
+      "requires": [
+        {
+          "parameter": 0,
+          "name": "Algorithm",
+          "value": 0.666666686534882,
+          "text": "Butterworth"
+        },
+        {
+          "parameter": 1,
+          "name": "Type",
+          "value": 0.0,
+          "text": "Low-pass"
+        }
+      ],
+      "displayedLaw": {
+        "kind": "table",
+        "table": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0,
+          7.0,
+          8.0
+        ],
+        "rmsError": 0.0,
+        "points": 8
+      },
+      "measuredLaw": {
+        "kind": "table",
+        "table": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0,
+          7.0,
+          8.0
+        ],
+        "rmsError": 0.0,
+        "points": 8
+      },
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "1.00",
+          "description": "low-pass 1000.01 Hz order 1 (Butterworth)",
+          "type": "low-pass",
+          "family": "Butterworth",
+          "band": true
+        },
+        {
+          "value": 0.142857149243355,
+          "text": "2.00",
+          "description": "low-pass 1000 Hz Q 0.71 (RBJ cookbook)",
+          "type": "low-pass",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 0.28571429848671,
+          "text": "3.00",
+          "description": "low-pass 1000.01 Hz order 3 (Butterworth)",
+          "type": "low-pass",
+          "family": "Butterworth",
+          "band": true
+        },
+        {
+          "value": 0.428571432828903,
+          "text": "4.00",
+          "description": "low-pass 1000.02 Hz order 4 (Butterworth)",
+          "type": "low-pass",
+          "family": "Butterworth",
+          "band": true
+        },
+        {
+          "value": 0.571428596973419,
+          "text": "5.00",
+          "description": "low-pass 999.999 Hz order 5 (Butterworth)",
+          "type": "low-pass",
+          "family": "Butterworth",
+          "band": true
+        },
+        {
+          "value": 0.714285731315613,
+          "text": "6.00",
+          "description": "low-pass 999.992 Hz order 6 (Butterworth)",
+          "type": "low-pass",
+          "family": "Butterworth",
+          "band": true
+        },
+        {
+          "value": 0.857142865657806,
+          "text": "7.00",
+          "description": "low-pass 1000 Hz order 7 (Butterworth)",
+          "type": "low-pass",
+          "family": "Butterworth",
+          "band": true
+        },
+        {
+          "value": 1.0,
+          "text": "8.00",
+          "description": "low-pass 1000 Hz order 8 (Butterworth)",
+          "type": "low-pass",
+          "family": "Butterworth",
+          "band": true
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "name": "Bypass",
+      "role": "switch",
+      "quantity": "band on/off",
+      "band": 0,
+      "default": 0.0,
+      "requires": [
+        {
+          "parameter": 3,
+          "name": "Gain",
+          "value": 0.949999988079071,
+          "text": "21.6 dB"
+        }
+      ],
+      "steps": [
+        {
+          "value": 0.0,
+          "text": "Off",
+          "description": "peak 1000 Hz +21.6 dB Q 0.71 (RBJ cookbook)",
+          "type": "peak",
+          "family": "RBJ cookbook",
+          "band": true
+        },
+        {
+          "value": 1.0,
+          "text": "On",
+          "description": "flat",
+          "band": false
+        }
+      ]
+    }
+  ]
+}
