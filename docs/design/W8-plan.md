@@ -202,4 +202,7 @@ EQ (RBJ and Orfanidis peaks, a shelf, a Butterworth low-pass of order 4), the Te
 bands (edge ambiguity at 28 Hz); equal errors below 1e-4 (three points fit a power law exactly); stepped knobs found from their texts (order
 1 ... 8) and surveyed step by step; probes at two values; of several steps of the wanted type the one whose text names it (a notch measured as a
 deep peak); a band without a frequency, gain or Q knob is a side effect. Open: the author's two test objects (local) with `--map`.
+Brought forward from W8.8 on the author's request (0.48.0): the Developer page has a button "Survey + mapping" (runs `--map` in a process of its
+own like the report and the GUI review; "View mapping" shows the report; a column "Mapping" the state; `--developer <plugin> --mapping [--view]`).
+The confirmation step in the host stays for W8.8.
 

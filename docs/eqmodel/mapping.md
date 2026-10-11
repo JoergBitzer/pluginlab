@@ -65,9 +65,12 @@ inverse of their measured laws, and then what these parameters need to act
   `PLUGINLAB_WRITE_MAPPINGS=<folder>` writes the proposals for a review.
 - All other plugins (also the author's two test objects): the user's settings
   folder, `mappings/` (Linux `~/.config/pluginlab/mappings`; overridden by
-  `PLUGINLAB_SETTINGS_FOLDER`). `PluginLabHost --map <plugin file> <report>`
-  surveys the plugin, writes the report (survey and mapping, Markdown) and the
-  proposal there. A confirmed file is never overwritten: the new proposal goes
+  `PLUGINLAB_SETTINGS_FOLDER`). In the host: the Developer page, button
+  "Survey + mapping" (a process of its own, minutes per plugin; "View mapping"
+  shows the report, the column "Mapping" the state; `--developer <plugin file>
+  --mapping [--view]` does the same from the command line). Without the
+  window: `PluginLabHost --map <plugin file> <report>`. Both survey the plugin,
+  write the report (survey and mapping, Markdown) and the proposal there. A confirmed file is never overwritten: the new proposal goes
   next to it (`.proposal.json`) and the report lists the differences.
 - Confirming: open the JSON, check the rows against the report, correct what
   is wrong, and write your name into `confirmedBy`.

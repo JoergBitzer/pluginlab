@@ -76,7 +76,16 @@ HostShell::HostShell(const StartupOptions& options)
         {
             m_pluginsPage->loadPlugin(scan.descriptions[0]);
             setCurrentTabIndex(2);
-            if (options.developerGui)
+            if (options.developerMapping)
+            {
+                // the survey and mapping proposal (W8.5)
+                if (options.developerView)
+                {
+                    m_developerPage->onMappingReady = [this](int row) { m_developerPage->viewMapping(row); };
+                }
+                m_developerPage->generateMapping(0);
+            }
+            else if (options.developerGui)
             {
                 // the GUI review instead of the report (W5d.7)
                 if (options.developerView)

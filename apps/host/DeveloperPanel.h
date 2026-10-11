@@ -22,7 +22,8 @@ class ReportWindow;
 // process of its own (PluginLabHost --fingerprint), so a plugin that crashes during the tests does not take the host down: the row then
 // says that no report could be made. The tests are technical only and do not depend on the kind of algorithm. The GUI review (W5d,
 // docs/design/W5d-gui-review.md: captures and vision variants of the editor, scale factor, robustness, load) runs the same way
-// (PluginLabHost --gui-snapshot); a crash names the step it happened in.
+// (PluginLabHost --gui-snapshot); a crash names the step it happened in. The parameter survey and mapping proposal (W8.4, W8.5,
+// docs/eqmodel/mapping.md) too (PluginLabHost --map): the report is shown here, the proposed JSON goes into the user's mapping folder.
 class DeveloperPanel : public juce::Component, public juce::TableListBoxModel
 {
 public:
@@ -33,12 +34,14 @@ public:
     enum class JobKind
     {
         Report,
-        GuiReview
+        GuiReview,
+        Mapping
     };
 
     // Told when a report / a GUI review is ready (the row)
     std::function<void(int row)> onReportReady;
     std::function<void(int row)> onGuiReviewReady;
+    std::function<void(int row)> onMappingReady;
 
     // The list follows the plugins of the engine (call after plugins were loaded or unloaded)
     void refresh();
@@ -60,10 +63,14 @@ public:
     void viewReport(int row);
     void generateGuiReview(int row);
     void viewGuiReview(int row);
+    void generateMapping(int row);
+    void viewMapping(int row);
     juce::String getStatusText(int row) const;
     juce::String getGuiStatusText(int row) const;
+    juce::String getMappingStatusText(int row) const;
     bool isReportReady(int row) const;
     bool isGuiReviewReady(int row) const;
+    bool isMappingReady(int row) const;
 
 private:
     enum class State
@@ -88,6 +95,8 @@ private:
         juce::File guiFolder;                                // the GUI review: a folder with gui_review.md and the images
         State guiState = State::NoReport;
         juce::String guiMessage;                             // why the last GUI review failed
+        juce::File mappingFile;                              // the survey and mapping report (Markdown)
+        State mappingState = State::NoReport;
     };
 
     const pluginlab::engine::SummaryItem* findSummaryItem(const Row& row, int columnId) const;
@@ -103,7 +112,7 @@ private:
     std::vector<Row> m_rows;
     std::deque<std::pair<juce::String, JobKind>> m_queue; // the rows (keys) that wait for their turn, and for what
     std::unique_ptr<PanelJob> m_job;
-    std::map<juce::String, std::unique_ptr<juce::DocumentWindow>> m_windows; // report windows by key, GUI review windows by key + "#gui"
+    std::map<juce::String, std::unique_ptr<juce::DocumentWindow>> m_windows; // report windows by key, GUI review windows by key + "#gui", mapping windows by key + "#map"
 
     juce::TableListBox m_table;
     juce::Label m_infoLabel;

@@ -12,7 +12,7 @@ namespace
 constexpr int kMargin = 8;
 constexpr int kRowHeight = 28;
 constexpr int kHeaderHeight = 24;
-constexpr int kInfoHeight = 48;
+constexpr int kInfoHeight = 80; // five lines: what the jobs do and where their results are kept
 constexpr int kColumnNumber = 1;
 constexpr int kColumnName = 2;
 constexpr int kColumnFormat = 3;
@@ -20,6 +20,7 @@ constexpr int kColumnStatus = 4;
 constexpr int kColumnDate = 5;
 constexpr int kColumnActions = 6;
 constexpr int kColumnGui = 7;
+constexpr int kColumnMapping = 8;
 constexpr int kFirstSummaryColumn = 10; // the columns of the single results follow, in the order of kSummaryColumns
 constexpr int kWidthSummary = 90;
 const juce::Colour kDoubtfulColour(0xffffa040);
@@ -28,8 +29,9 @@ constexpr int kWidthName = 200;
 constexpr int kWidthFormat = 60;
 constexpr int kWidthStatus = 180;
 constexpr int kWidthDate = 150;
-constexpr int kWidthActions = 480;
+constexpr int kWidthActions = 720;
 constexpr int kWidthGui = 220;
+constexpr int kWidthMapping = 200;
 constexpr int kButtonWidth = 110;
 constexpr int kProcessTimeoutMs = 20 * 60 * 1000; // the measurement loads the plugin many times; a big plugin needs minutes
 constexpr int kPollMs = 200;
@@ -41,6 +43,8 @@ const juce::String kReportExtension = ".md";
 const juce::String kGuiFolderSuffix = "_gui";
 const juce::String kGuiReviewFile = "gui_review.md";
 const juce::String kGuiWindowSuffix = "#gui";
+const juce::String kMappingWindowSuffix = "#map";
+const juce::String kMappingFileSuffix = "_mapping";
 const juce::String kDateFormat = "%Y-%m-%d %H:%M";
 }
 
@@ -60,7 +64,7 @@ juce::File getSummaryFile(const juce::File& reportFile)
     return juce::File(reportFile.getFullPathName() + ".json");
 }
 
-// Runs "PluginLabHost --fingerprint" (a report) or "PluginLabHost --gui-snapshot" (a GUI review) for one plugin in a child process and tells the
+// Runs "PluginLabHost --fingerprint" (a report), "PluginLabHost --gui-snapshot" (a GUI review) or "PluginLabHost --map" (survey and mapping) for one plugin in a child process and tells the
 // panel when it has ended. The result is written next to its place and put there only when it is complete: a half-written result is never shown.
 class PanelJob : public juce::Thread
 {
@@ -86,6 +90,10 @@ public:
         if (m_kind == DeveloperPanel::JobKind::GuiReview)
         {
             option = "--gui-snapshot";
+        }
+        else if (m_kind == DeveloperPanel::JobKind::Mapping)
+        {
+            option = "--map";
         }
         juce::ChildProcess process;
         const juce::File host = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
@@ -136,6 +144,10 @@ private:
     // moves a complete result into place; for a GUI review that did not complete, the step it was in (progress.txt) is the message
     bool finish(const juce::File& temporary, juce::String& message) const
     {
+        if (m_kind == DeveloperPanel::JobKind::Mapping)
+        {
+            return temporary.existsAsFile() && temporary.getSize() > 0 && temporary.moveFileTo(m_target);
+        }
         if (m_kind == DeveloperPanel::JobKind::Report)
         {
             const bool complete = temporary.existsAsFile() && temporary.getSize() > 0 && temporary.moveFileTo(m_target);
@@ -190,7 +202,7 @@ public:
                     continue;
                 }
             }
-            if (line.startsWith("# ") || line.startsWith("## "))
+            if (line.startsWith("# ") || line.startsWith("## ") || line.startsWith("### "))
             {
                 entry.text = line.fromFirstOccurrenceOf(" ", false, false);
                 entry.heading = true;
@@ -431,14 +443,19 @@ public:
         m_view.onClick = [this] { m_owner.viewReport(m_row); };
         m_review.onClick = [this] { m_owner.generateGuiReview(m_row); };
         m_viewGui.onClick = [this] { m_owner.viewGuiReview(m_row); };
-        for (juce::TextButton* button : {&m_generate, &m_view, &m_review, &m_viewGui})
+        m_map.onClick = [this] { m_owner.generateMapping(m_row); };
+        m_viewMap.onClick = [this] { m_owner.viewMapping(m_row); };
+        m_map.setTooltip("Parameter survey and mapping proposal (W8.4, W8.5): every parameter alone over its range; minutes per plugin");
+        for (juce::TextButton* button : {&m_generate, &m_view, &m_review, &m_viewGui, &m_map, &m_viewMap})
         {
             addAndMakeVisible(button);
         }
     }
 
-    void update(int row, bool ready, bool busy, bool guiReady, bool guiBusy)
+    void update(int row, bool ready, bool busy, bool guiReady, bool guiBusy, bool mapReady, bool mapBusy)
     {
+        m_viewMap.setEnabled(mapReady);
+        m_map.setEnabled(! mapBusy);
         m_row = row;
         m_view.setEnabled(ready);
         m_generate.setEnabled(! busy);
@@ -449,7 +466,7 @@ public:
     void resized() override
     {
         juce::Rectangle<int> area = getLocalBounds().reduced(2);
-        for (juce::TextButton* button : {&m_generate, &m_view, &m_review, &m_viewGui})
+        for (juce::TextButton* button : {&m_generate, &m_view, &m_review, &m_viewGui, &m_map, &m_viewMap})
         {
             button->setBounds(area.removeFromLeft(kButtonWidth));
             area.removeFromLeft(kMargin);
@@ -463,6 +480,8 @@ private:
     juce::TextButton m_view{"View report"};
     juce::TextButton m_review{"GUI review"};
     juce::TextButton m_viewGui{"View GUI review"};
+    juce::TextButton m_map{"Survey + mapping"};
+    juce::TextButton m_viewMap{"View mapping"};
 };
 
 DeveloperPanel::DeveloperPanel(pluginlab::engine::MeasurementEngine& engine, HostSettings& settings)
@@ -477,6 +496,7 @@ DeveloperPanel::DeveloperPanel(pluginlab::engine::MeasurementEngine& engine, Hos
     m_table.getHeader().addColumn("", kColumnActions, kWidthActions);
     m_table.getHeader().addColumn("Report", kColumnStatus, kWidthStatus);
     m_table.getHeader().addColumn("GUI review", kColumnGui, kWidthGui);
+    m_table.getHeader().addColumn("Mapping", kColumnMapping, kWidthMapping);
     for (int index = 0; index < kNumberOfSummaryColumns; ++index)
     {
         m_table.getHeader().addColumn(kSummaryColumns[index].title, kFirstSummaryColumn + index, kWidthSummary);
@@ -486,8 +506,9 @@ DeveloperPanel::DeveloperPanel(pluginlab::engine::MeasurementEngine& engine, Hos
     m_infoLabel.setText("The plugins loaded on the Plugins page. The columns show the single results of the last report (orange: worth a look; the tooltip "
                         "gives the number). A report tests a plugin technically (parameters, latency at three sample rates, block sizes, "
                         "delivery of parameters, robustness, AES17 measurements) in a process of its own; it can take a minute. The GUI review opens the plugin's "
-                        "editor in windows of its own (captures, colour-vision variants, scale factors, robustness, load). Reports are kept in "
-                        + m_settings.getFingerprintFolder().getFullPathName() + ".",
+                        "editor in windows of its own (captures, colour-vision variants, scale factors, robustness, load). Survey + mapping moves every parameter "
+                        "alone and proposes a mapping (minutes per plugin). Reports are kept in "
+                        + m_settings.getFingerprintFolder().getFullPathName() + ", proposed mappings in " + m_settings.getMappingFolder().getFullPathName() + ".",
                         juce::dontSendNotification);
     m_infoLabel.setMinimumHorizontalScale(1.0f);
     addAndMakeVisible(m_table);
@@ -549,7 +570,13 @@ void DeveloperPanel::refresh()
         row.key = row.description.createIdentifierString();
         row.reportFile = makeReportFile(row.description);
         row.guiFolder = row.reportFile.getSiblingFile(row.reportFile.getFileNameWithoutExtension() + kGuiFolderSuffix);
+        row.mappingFile = row.reportFile.getSiblingFile(row.reportFile.getFileNameWithoutExtension() + kMappingFileSuffix + kReportExtension);
         const Row* known = findRow(row.key);
+        row.mappingState = row.mappingFile.existsAsFile() ? State::Ready : State::NoReport;
+        if (known != nullptr && (known->mappingState == State::Waiting || known->mappingState == State::Running || known->mappingState == State::Failed))
+        {
+            row.mappingState = known->mappingState;
+        }
         row.guiState = State::NoReport;
         if (row.guiFolder.getChildFile(kGuiReviewFile).existsAsFile())
         {
@@ -574,7 +601,7 @@ void DeveloperPanel::refresh()
     // reports of plugins that were unloaded are not shown any more
     for (auto window = m_windows.begin(); window != m_windows.end();)
     {
-        if (findRow(window->first.upToFirstOccurrenceOf(kGuiWindowSuffix, false, false)) == nullptr)
+        if (findRow(window->first.upToFirstOccurrenceOf("#", false, false)) == nullptr) // the key without a window suffix
         {
             window = m_windows.erase(window);
             continue;
@@ -676,6 +703,10 @@ void DeveloperPanel::paintCell(juce::Graphics& g, int rowNumber, int columnId, i
     {
         text = getGuiStatusText(rowNumber);
     }
+    else if (columnId == kColumnMapping)
+    {
+        text = getMappingStatusText(rowNumber);
+    }
     else if (columnId == kColumnDate && row.reportFile.existsAsFile())
     {
         text = row.reportTime.formatted(kDateFormat);
@@ -751,7 +782,8 @@ juce::Component* DeveloperPanel::refreshComponentForCell(int rowNumber, int colu
     }
     const Row& row = m_rows[static_cast<size_t>(rowNumber)];
     cell->update(rowNumber, isReportReady(rowNumber), row.state == State::Running || row.state == State::Waiting, isGuiReviewReady(rowNumber),
-                 row.guiState == State::Running || row.guiState == State::Waiting);
+                 row.guiState == State::Running || row.guiState == State::Waiting, isMappingReady(rowNumber),
+                 row.mappingState == State::Running || row.mappingState == State::Waiting);
     return cell;
 }
 
@@ -765,6 +797,11 @@ void DeveloperPanel::generateGuiReview(int row)
     queueJob(row, JobKind::GuiReview);
 }
 
+void DeveloperPanel::generateMapping(int row)
+{
+    queueJob(row, JobKind::Mapping);
+}
+
 void DeveloperPanel::queueJob(int row, JobKind kind)
 {
     if (row < 0 || row >= static_cast<int>(m_rows.size()))
@@ -776,6 +813,10 @@ void DeveloperPanel::queueJob(int row, JobKind kind)
     if (kind == JobKind::GuiReview)
     {
         stateOfKind = &entry.guiState;
+    }
+    else if (kind == JobKind::Mapping)
+    {
+        stateOfKind = &entry.mappingState;
     }
     State& target = *stateOfKind;
     if (target == State::Running || target == State::Waiting)
@@ -809,6 +850,11 @@ void DeveloperPanel::startNextJob()
         row->state = State::Running;
         m_job = std::make_unique<PanelJob>(*this, kind, row->pluginFile, row->key, row->reportFile, row->key);
     }
+    else if (kind == JobKind::Mapping)
+    {
+        row->mappingState = State::Running;
+        m_job = std::make_unique<PanelJob>(*this, kind, row->pluginFile, row->key, row->mappingFile, row->key);
+    }
     else
     {
         row->guiState = State::Running;
@@ -839,6 +885,18 @@ void DeveloperPanel::jobFinished(const juce::String& key, JobKind kind, bool suc
             else
             {
                 row->state = State::Failed;
+            }
+        }
+        else if (kind == JobKind::Mapping)
+        {
+            row->mappingState = success ? State::Ready : State::Failed;
+            if (success)
+            {
+                m_windows.erase(key + kMappingWindowSuffix); // an open window shows the old report
+                if (onMappingReady)
+                {
+                    onMappingReady(index);
+                }
             }
         }
         else
@@ -929,6 +987,57 @@ void DeveloperPanel::viewReport(int row)
     }
     const juce::String title = "Report: " + hosting::getDisplayName(entry.description) + " (" + entry.reportTime.formatted(kDateFormat) + ")";
     m_windows[entry.key] = std::make_unique<ReportWindow>(*this, entry.key, title, entry.reportFile.loadFileAsString(), entry.reportFile.getParentDirectory());
+}
+
+juce::String DeveloperPanel::getMappingStatusText(int row) const
+{
+    if (row < 0 || row >= static_cast<int>(m_rows.size()))
+    {
+        return {};
+    }
+    switch (m_rows[static_cast<size_t>(row)].mappingState)
+    {
+        case State::NoReport:
+            return "no survey yet";
+        case State::Waiting:
+            return "waiting ...";
+        case State::Running:
+            return "surveying (minutes) ...";
+        case State::Failed:
+            return "failed (crash or time limit)";
+        case State::Ready:
+            return "ready";
+    }
+    return {};
+}
+
+bool DeveloperPanel::isMappingReady(int row) const
+{
+    if (row < 0 || row >= static_cast<int>(m_rows.size()))
+    {
+        return false;
+    }
+    const Row& entry = m_rows[static_cast<size_t>(row)];
+    return entry.mappingFile.existsAsFile() && entry.mappingState != State::Running && entry.mappingState != State::Waiting;
+}
+
+void DeveloperPanel::viewMapping(int row)
+{
+    if (! isMappingReady(row))
+    {
+        return;
+    }
+    const Row& entry = m_rows[static_cast<size_t>(row)];
+    const juce::String windowKey = entry.key + kMappingWindowSuffix;
+    const auto existing = m_windows.find(windowKey);
+    if (existing != m_windows.end())
+    {
+        existing->second->toFront(true);
+        return;
+    }
+    const juce::String title = "Survey and mapping: " + hosting::getDisplayName(entry.description) + " ("
+                               + entry.mappingFile.getLastModificationTime().formatted(kDateFormat) + ")";
+    m_windows[windowKey] = std::make_unique<ReportWindow>(*this, windowKey, title, entry.mappingFile.loadFileAsString(), entry.mappingFile.getParentDirectory());
 }
 
 void DeveloperPanel::closeWindow(const juce::String& key)
