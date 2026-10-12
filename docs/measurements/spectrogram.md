@@ -15,9 +15,12 @@ or a signal of its own after the end of the sweep.
 ## The signal
 A synchronized exponential sweep (Novak, Lotton, Simon, JAES 63(10), 2015),
 20 Hz ... 20 kHz in 3 s, peak -6 dBFS, the same on every input channel,
-followed by 0.5 s of silence; through the plugin at its default setting
-(the careful delivery of the plugin device, W7.11), 48 kHz; output channel 1
-is shown.
+followed by 0.5 s of silence; through the plugin at the setting A (its
+defaults) and at B (the parameters that change the audio moved, as in the
+fingerprint; 0.53.0), with the careful delivery of the plugin device (W7.11),
+48 kHz; output channel 1 is shown. B often shows what A hides: a drive or a
+curve that does nothing at the defaults. The parameters of B are listed above
+its picture (texts with more than two decimals rounded).
 
 ## The analysis (as JadeSpectrogram2, without its overlays)
 | Step | What |
@@ -30,10 +33,14 @@ is shown.
 | colours | plasma (matplotlib, CC0; perceptually uniform, readable with the usual forms of colour blindness), -120 dB (dark violet) ... 0 dB (yellow), colour bar in steps of 20 dB |
 
 The report gives every parameter in a table below the picture. The picture is
-a PNG next to the report (`<report>_sweep_spectrogram.png`); the report
+two PNGs next to the report (`<report>_sweep_spectrogram.png` and
+`..._b.png`; none at B if no parameter changes the audio); the report
 window of the Developer page shows it.
 
 ## Results
+The Test EQ Drive at B (Drive 18 dB, a tanh before the band): a dense series of
+harmonics, and from 2 s on their aliasing folding back from Nyquist as a web of
+lines; at A the sweep alone.
 The author's ACM-3SA (an analogue console model, local): the sweep, its third
 harmonic about 85 dB down, and that harmonic's aliasing folding back from
 Nyquist between 2.6 and 3.1 s. The tests: a sine of amplitude 0.5 on a bin

@@ -218,8 +218,8 @@ B matters: a drive or a curve often does nothing at the defaults. A class other 
 group in the column "Class". The class at A decides what the other measurements mean (the sentence below the table).
 
 ### 3.6c Spectrogram of the sweep (0.52.0)
-A synchronized sweep (20 Hz ... 20 kHz, 3 s, -6 dBFS, then 0.5 s of silence) through the plugin at its defaults, output channel 1, as a
-picture next to the report, with its parameters in a table: see [spectrogram.md](../measurements/spectrogram.md).
+A synchronized sweep (20 Hz ... 20 kHz, 3 s, -6 dBFS, then 0.5 s of silence) through the plugin at A (defaults) and at B (0.53.0), output
+channel 1, as pictures next to the report, with their parameters in a table: see [spectrogram.md](../measurements/spectrogram.md).
 
 ### 3.7 Other
 - **time-invariant** (R6): one instance: poke, setting B, **settled for `longSettleSeconds` (2 s)**, noise → first output; `timeInvarianceGapSeconds` (0.5 s) of silence;

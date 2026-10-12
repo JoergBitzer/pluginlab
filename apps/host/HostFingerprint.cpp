@@ -41,10 +41,39 @@ double getMeasurementRate()
     return pluginlab::engine::MeasurementOptions().sampleRate;
 }
 
-// the sweep through the plugin at its defaults as a spectrogram picture next to the report; the Markdown section that shows it (empty if the
-// picture cannot be written)
-juce::String writeSweepSpectrogram(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, int channels,
-                                   const juce::File& reportFile, int index)
+// a parameter's text without false precision: a number with more than two decimals rounded ("7678.3115234" -> "7678", "7.5249996" -> "7.52")
+juce::String tidyParameterText(const juce::String& text)
+{
+    const juce::String trimmed = text.trim();
+    int start = 0;
+    while (start < trimmed.length() && ! juce::CharacterFunctions::isDigit(trimmed[start]))
+    {
+        ++start;
+    }
+    int end = start;
+    int point = -1;
+    while (end < trimmed.length() && (juce::CharacterFunctions::isDigit(trimmed[end]) || (trimmed[end] == '.' && point < 0)))
+    {
+        point = trimmed[end] == '.' ? end : point;
+        ++end;
+    }
+    if (point < 0 || end - point - 1 <= 2)
+    {
+        return trimmed;
+    }
+    const double value = trimmed.substring(start, end).getDoubleValue();
+    juce::String number = std::abs(value) >= 100.0 ? juce::String(juce::roundToInt(value)) : juce::String(value, 2);
+    if (number.containsChar('.'))
+    {
+        number = number.trimCharactersAtEnd("0").trimCharactersAtEnd(".");
+    }
+    return trimmed.substring(0, start) + number + trimmed.substring(end);
+}
+
+// the sweep through the plugin at a setting as a spectrogram picture (a PNG file); false if nothing came out or the file cannot be written
+bool writeSweepPicture(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, int channels, const std::vector<float>& setting,
+                       const juce::String& title, const juce::File& file, pluginlab::measure::Spectrogram& spectrogram,
+                       pluginlab::measure::SpectrogramSettings& settings)
 {
     const double sampleRate = getMeasurementRate();
     const std::vector<float> sweep =
@@ -56,39 +85,83 @@ juce::String writeSweepSpectrogram(juce::AudioPluginFormatManager& formatManager
     {
         input.copyFrom(channel, 0, sweep.data(), static_cast<int>(sweep.size()));
     }
-    const pluginlab::measure::Device device =
-        pluginlab::engine::makePluginDevice(formatManager, description, pluginlab::engine::getDefaultSetting(formatManager, description, sampleRate));
-    const juce::AudioBuffer<float> output = device(input, sampleRate);
+    const juce::AudioBuffer<float> output = pluginlab::engine::makePluginDevice(formatManager, description, setting)(input, sampleRate);
     if (output.getNumChannels() == 0 || output.getNumSamples() == 0)
     {
-        return {};
+        return false;
     }
     const std::vector<float> left(output.getReadPointer(0), output.getReadPointer(0) + output.getNumSamples());
-    pluginlab::measure::SpectrogramSettings settings;
     settings.fftSize = kSpectrogramFftSize;
     settings.lowFrequencyFftSize = kSpectrogramLowFftSize;
     settings.overlap = kSpectrogramOverlap;
-    const pluginlab::measure::Spectrogram spectrogram = pluginlab::measure::computeSpectrogram(left, sampleRate, settings);
+    spectrogram = pluginlab::measure::computeSpectrogram(left, sampleRate, settings);
     pluginlab::ui::SpectrogramImageOptions options;
     options.floorDb = kSpectrogramFloorDb;
     options.ceilingDb = kSpectrogramCeilingDb;
-    options.title = description.name + ": synchronized sweep at the default setting, output channel 1";
-    const juce::String name = reportFile.getFileNameWithoutExtension() + "_sweep_spectrogram" + (index > 0 ? "_" + juce::String(index) : juce::String()) + ".png";
-    if (! pluginlab::ui::writeSpectrogramPng(spectrogram, options, reportFile.getSiblingFile(name)))
+    options.title = title;
+    return pluginlab::ui::writeSpectrogramPng(spectrogram, options, file);
+}
+
+// the sweep through the plugin at the setting A (defaults) and at B (the parameters that change the audio moved, as in the fingerprint): two
+// pictures next to the report; the Markdown section that shows them (empty if no picture could be written)
+juce::String writeSweepSpectrograms(juce::AudioPluginFormatManager& formatManager, const pluginlab::engine::PluginFingerprint& fingerprint,
+                                    const juce::File& reportFile, int index)
+{
+    const juce::PluginDescription& description = fingerprint.description;
+    const double sampleRate = getMeasurementRate();
+    const std::vector<float> settingA = pluginlab::engine::getDefaultSetting(formatManager, description, sampleRate);
+    std::vector<float> settingB = settingA;
+    juce::StringArray changes;
+    for (const pluginlab::engine::SettingEntry& entry : fingerprint.settingB)
+    {
+        if (entry.index >= 0 && entry.index < static_cast<int>(settingB.size()))
+        {
+            settingB[static_cast<size_t>(entry.index)] = entry.valueB;
+            changes.add(entry.name + " = " + tidyParameterText(entry.textB));
+        }
+    }
+    const juce::String stem = reportFile.getFileNameWithoutExtension() + "_sweep_spectrogram" + (index > 0 ? "_" + juce::String(index) : juce::String());
+    pluginlab::measure::Spectrogram spectrogram;
+    pluginlab::measure::SpectrogramSettings settings;
+    const juce::String nameA = stem + ".png";
+    if (! writeSweepPicture(formatManager, description, fingerprint.measuredChannels, settingA, description.name + ": synchronized sweep at A (the defaults), output channel 1",
+                            reportFile.getSiblingFile(nameA), spectrogram, settings))
     {
         return {};
+    }
+    juce::String nameB;
+    if (! changes.isEmpty())
+    {
+        pluginlab::measure::Spectrogram spectrogramB;
+        pluginlab::measure::SpectrogramSettings settingsB;
+        nameB = stem + "_b.png";
+        if (! writeSweepPicture(formatManager, description, fingerprint.measuredChannels, settingB, description.name + ": synchronized sweep at B, output channel 1",
+                                reportFile.getSiblingFile(nameB), spectrogramB, settingsB))
+        {
+            nameB.clear();
+        }
     }
     const auto describeFrame = [sampleRate](int size) {
         return juce::String(size) + " samples (" + juce::String(1000.0 * size / sampleRate, 1) + " ms, " + juce::String(sampleRate / size, 1) + " Hz per bin)";
     };
     juce::String text;
-    text << "## Spectrogram of the sweep\n\n![Spectrogram of the sweep](" << name << ")\n\n";
+    text << "## Spectrogram of the sweep\n\n";
+    text << "At A (the defaults):\n\n![Spectrogram of the sweep at A](" << nameA << ")\n\n";
+    if (nameB.isNotEmpty())
+    {
+        text << "At B (" << changes.joinIntoString(", ") << "):\n\n![Spectrogram of the sweep at B](" << nameB << ")\n\n";
+    }
+    else
+    {
+        text << "No picture at B: " << (changes.isEmpty() ? juce::String("no parameter changes the audio, so B is A") : juce::String("nothing came out")) << ".\n\n";
+    }
     text << "| Parameter | Value |\n|---|---|\n";
     text << "| signal | synchronized exponential sweep (Novak et al. 2015), " << juce::roundToInt(kSpectrogramStartHz) << " Hz ... "
          << juce::roundToInt(kSpectrogramStopHz / 1000.0) << " kHz in " << juce::String(kSpectrogramSweepSeconds, 1) << " s, peak "
          << juce::String(kSpectrogramLevelDbfs, 0) << " dBFS, the same on every input channel, then " << juce::String(kSpectrogramTailSeconds, 1)
          << " s of silence |\n";
-    text << "| plugin | the default setting, " << juce::String(sampleRate / 1000.0, 1) << " kHz; shown: output channel 1 |\n";
+    text << "| plugin | A: the default setting; B: the parameters that change the audio moved as in the fingerprint (section \"The settings A and B\"); "
+         << juce::String(sampleRate / 1000.0, 1) << " kHz; shown: output channel 1 |\n";
     text << "| analysis | two short-time Fourier transforms, " << pluginlab::measure::getSpectrogramWindowName(settings.window) << " window, "
          << describeFrame(spectrogram.fftSize) << " and " << describeFrame(spectrogram.shortFftSize) << ", centred on the same instants, hop "
          << spectrogram.hopSize << " samples (" << juce::String(1000.0 * spectrogram.hopSize / sampleRate, 1)
@@ -99,7 +172,8 @@ juce::String writeSweepSpectrogram(juce::AudioPluginFormatManager& formatManager
          << " kHz (a pixel row shows the largest bin in it); time in s |\n\n";
     text << "How to read it: the sweep is the bright rising line. Harmonics are fainter lines above it at 2, 3, ... times its frequency (a non-linear "
             "plugin); lines that fold back down at the top are aliasing; a uniform glow is noise; anything after the end of the sweep is the "
-            "plugin's latency, ringing or its own signal. A filter shows as a line that gets darker where it attenuates.\n";
+            "plugin's latency, ringing or its own signal. A filter shows as a line that gets darker where it attenuates. B often shows what A "
+            "hides: a drive or a curve that does nothing at the defaults.\n";
     return text;
 }
 
@@ -207,7 +281,7 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
         if (fingerprint.loaded)
         {
             progress(share, "spectrogram of the sweep");
-            report += writeSweepSpectrogram(formatManager, description, fingerprint.measuredChannels, reportFile, measured) + "\n";
+            report += writeSweepSpectrograms(formatManager, fingerprint, reportFile, measured) + "\n";
         }
         if (settings.measurements)
         {
