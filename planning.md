@@ -9,6 +9,11 @@ the **reference for this plan**. Nothing is decided until marked **DECIDED**. No
 ## 1. Mission and final product
 **Mission: divide the myth from reality** (what plugins really do, versus what their marketing and their knobs say).
 
+**Two main targets (DECIDED 2026-10-12, the author: "the longer I work with the prototype the more I appreciate not to work in a DAW"):**
+the **stand-alone application** (the host that grew from part A: plugins, audio files and test signals, the measurement units, the
+Developer page, the matcher, all without a DAW) and the **measurement plugin** inside a DAW. Both share the plugin-hosting core, the engine
+and the measurement units; features are built so that both can use them, and the stand-alone application is not a pre-test any more.
+
 **Final product (from the reference):** a measurement VST plugin that loads up to 4 other plugins and has measurement units for
 different plugin types (EQ, dynamics, delay, reverb). It has a pool of test signals, can also render audio from the DAW through all
 plugins in parallel, and switches between the algorithms (delay, gain etc. equalized inside). It has an automatic parameter matcher;
@@ -44,7 +49,8 @@ The project is huge and is divided into parts that can be developed and optimize
 
 **C. Measurement units** (C++, tested against the oracle and ground truth).
 
-**D. The final measurement plugin** that combines A-C, the matcher and the three-level GUI.
+**D. The final products** (2026-10-12: two main targets): the **stand-alone application** (A grown into a product: A-C, the matcher and the
+three-level GUI without a DAW) and the **measurement plugin** for the DAW (B grown into a product, with the same parts).
 
 ## 5. What the prototype taught and what changes
 Details and evidence: [docs/prototype/LESSONS_LEARNED.md](docs/prototype/LESSONS_LEARNED.md), [docs/prototype/findings.md](docs/prototype/findings.md). The prototype hosted plugins through pedalboard, so some lessons concern pedalboard; the plugin behavior itself carries over to a JUCE host.
@@ -71,6 +77,7 @@ Details and evidence: [docs/prototype/LESSONS_LEARNED.md](docs/prototype/LESSONS
 | Plugin format: VST3 first; **VST2 early in the project** (via the GPL project named in the reference; licence confirmed by the author) so that plugins can be tested as VST2 as well | **DECIDED** |
 | Name: `pluginlab` (repository and CMake project) | **DECIDED** |
 | One **plugin-hosting core** shared by the stand-alone host and the loader plugin; the loader plugin is built right after the first host part (work package W3) | **DECIDED** |
+| **Two main targets: the stand-alone application and the measurement plugin.** The stand-alone host is a product of its own, not only a pre-test (the author: working without a DAW is the more convenient way to measure); the plugin stays a target. Shared code (hosting core, engine, measurement units, matcher, report views) serves both | **DECIDED** (2026-10-12) |
 | First fingerprint test case: the open PeakEQ question (frequency knob 1.0875 too high; 44.1 kHz design?), source code available | **DECIDED** |
 | ~~Test set: at most 5 EQs: the author's own, 2 open source, 2 free but closed source. All others only for case studies. Selection later.~~ | **REPLACED** 2026-10-09 (see the row "Test objects of the project") |
 | ~~CI plugins: own + 2 open-source plugins are built from source in CI; the 2 free plugins are downloaded directly~~ | **REPLACED** 2026-10-09: CI uses only the project's own plugins (reference and test plugins) |
@@ -117,7 +124,7 @@ The loader plugin was moved forward (W3) on the author's request: the plugin-hos
 | W7 | **Measurement units** (frequency response, phase, group delay, latency, THD, THD+N, noise, SNR, crosstalk, null test with alignment), easy to add new ones | Each agrees with analytic ground truth and with the oracle files within a stated tolerance; band of validity documented. |
 | W8 | **System classification first** (LTI, time-variant, memoryless non-linear, Hammerstein, Wiener, generalized Hammerstein, other; the author's comment 2026-10-09), then the **EQ band model + parameter mapping**, calibration of knobs by measurement as a report of deviations (plan v2: `docs/design/W8-plan.md`, steps W8.1 ... W8.8) | Every test device classified correctly; mapping data validated for our own reference and test plugins and checked on the author's two (local) test objects. |
 | W9 | **Matcher** (user chooses parameters, start point, frequency range, tolerance; real-time deviation display) | Master reproduced on each test plugin or the residual quantified and attributed. |
-| W10 | **Final plugin**: 4 slots, parallel rendering, real-time transfer function display, three-level GUI, measurement presets | Persona walkthroughs succeed (musician compares a demo with an owned plugin; developer checks an algorithm). |
+| W10 | **Final products: the stand-alone application and the plugin** (two main targets since 2026-10-12): 4 slots, parallel rendering, real-time transfer function display, three-level GUI, measurement presets, in both | Persona walkthroughs succeed in the stand-alone application and in the plugin (musician compares a demo with an owned plugin; developer checks an algorithm). |
 | W11 | **Further measurement units** (dynamics, delay, reverb) | Each with ground-truth tests. |
 Later: perceptual metrics, multichannel/sidechain.
 
