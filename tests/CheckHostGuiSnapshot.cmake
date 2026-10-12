@@ -16,7 +16,7 @@ foreach(EXPECTED_FILE "gui_review.md" "contact_sheet_vision.png" "contact_sheet_
     endif()
 endforeach()
 file(READ "${FOLDER}/gui_review.md" REVIEW)
-foreach(EXPECTED "# GUI review: PluginLab Reference EQ" "Reviewed by Jade Benchmark" "| scale_1 | 640 x 400 |" "| native |" "follows (size and content)" "## Memory footprint")
+foreach(EXPECTED "# GUI review: PluginLab Reference EQ" "Reviewed by Jade Benchmark" "| scale_1 | 820 x 540 |" "| native |" "follows (size and content)" "## Memory footprint")
     string(FIND "${REVIEW}" "${EXPECTED}" POSITION)
     if(POSITION EQUAL -1)
         message(FATAL_ERROR "The review does not contain '${EXPECTED}'")

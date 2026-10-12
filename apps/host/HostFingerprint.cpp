@@ -7,10 +7,13 @@
 #include "pluginlab/engine/Calibration.h"
 #include "pluginlab/engine/Fingerprint.h"
 #include "pluginlab/engine/Mapping.h"
+#include "pluginlab/engine/PluginDevice.h"
 #include "pluginlab/engine/ParameterSurvey.h"
 #include "pluginlab/engine/PluginMeasurement.h"
 #include "pluginlab/engine/ReportText.h"
+#include "pluginlab/measure/Spectrogram.h"
 #include "pluginlab/ui/Logo.h"
+#include "pluginlab/ui/SpectrogramImage.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
 
@@ -21,10 +24,83 @@ namespace
 constexpr double kFingerprintShare = 0.75; // of a report: the fingerprint; the measurement units the rest
 constexpr double kSurveyShare = 0.97;      // of a mapping: the survey; the proposal the rest
 constexpr double kCalibrationSurveyShare = 0.5; // of a calibration without a mapping: the survey first
+// the spectrogram of the fingerprint report: a synchronized sweep through the plugin at its defaults (docs/measurements/spectrogram.md)
+constexpr double kSpectrogramStartHz = 20.0;
+constexpr double kSpectrogramStopHz = 20000.0;
+constexpr double kSpectrogramSweepSeconds = 3.0;
+constexpr double kSpectrogramLevelDbfs = -6.0;
+constexpr double kSpectrogramTailSeconds = 0.5; // silence after the sweep: latency, ringing, noise
+constexpr int kSpectrogramFftSize = 2048;          // 43 ms: fine time steps where the sweep is fast
+constexpr int kSpectrogramLowFftSize = 8192;       // 5.9 Hz per bin: the resolution the logarithmic axis needs at the low end
+constexpr double kSpectrogramOverlap = 0.75;       // of the short frame: hop 512 samples (10.7 ms) for both
+constexpr double kSpectrogramFloorDb = -120.0;
+constexpr double kSpectrogramCeilingDb = 0.0;
 
 double getMeasurementRate()
 {
     return pluginlab::engine::MeasurementOptions().sampleRate;
+}
+
+// the sweep through the plugin at its defaults as a spectrogram picture next to the report; the Markdown section that shows it (empty if the
+// picture cannot be written)
+juce::String writeSweepSpectrogram(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, int channels,
+                                   const juce::File& reportFile, int index)
+{
+    const double sampleRate = getMeasurementRate();
+    const std::vector<float> sweep =
+        pluginlab::measure::makeSynchronizedSweep(sampleRate, kSpectrogramStartHz, kSpectrogramStopHz, kSpectrogramSweepSeconds, kSpectrogramLevelDbfs);
+    const int length = static_cast<int>(sweep.size()) + static_cast<int>(kSpectrogramTailSeconds * sampleRate);
+    juce::AudioBuffer<float> input(std::max(channels, 1), length);
+    input.clear();
+    for (int channel = 0; channel < input.getNumChannels(); ++channel)
+    {
+        input.copyFrom(channel, 0, sweep.data(), static_cast<int>(sweep.size()));
+    }
+    const pluginlab::measure::Device device =
+        pluginlab::engine::makePluginDevice(formatManager, description, pluginlab::engine::getDefaultSetting(formatManager, description, sampleRate));
+    const juce::AudioBuffer<float> output = device(input, sampleRate);
+    if (output.getNumChannels() == 0 || output.getNumSamples() == 0)
+    {
+        return {};
+    }
+    const std::vector<float> left(output.getReadPointer(0), output.getReadPointer(0) + output.getNumSamples());
+    pluginlab::measure::SpectrogramSettings settings;
+    settings.fftSize = kSpectrogramFftSize;
+    settings.lowFrequencyFftSize = kSpectrogramLowFftSize;
+    settings.overlap = kSpectrogramOverlap;
+    const pluginlab::measure::Spectrogram spectrogram = pluginlab::measure::computeSpectrogram(left, sampleRate, settings);
+    pluginlab::ui::SpectrogramImageOptions options;
+    options.floorDb = kSpectrogramFloorDb;
+    options.ceilingDb = kSpectrogramCeilingDb;
+    options.title = description.name + ": synchronized sweep at the default setting, output channel 1";
+    const juce::String name = reportFile.getFileNameWithoutExtension() + "_sweep_spectrogram" + (index > 0 ? "_" + juce::String(index) : juce::String()) + ".png";
+    if (! pluginlab::ui::writeSpectrogramPng(spectrogram, options, reportFile.getSiblingFile(name)))
+    {
+        return {};
+    }
+    const auto describeFrame = [sampleRate](int size) {
+        return juce::String(size) + " samples (" + juce::String(1000.0 * size / sampleRate, 1) + " ms, " + juce::String(sampleRate / size, 1) + " Hz per bin)";
+    };
+    juce::String text;
+    text << "## Spectrogram of the sweep\n\n![Spectrogram of the sweep](" << name << ")\n\n";
+    text << "| Parameter | Value |\n|---|---|\n";
+    text << "| signal | synchronized exponential sweep (Novak et al. 2015), " << juce::roundToInt(kSpectrogramStartHz) << " Hz ... "
+         << juce::roundToInt(kSpectrogramStopHz / 1000.0) << " kHz in " << juce::String(kSpectrogramSweepSeconds, 1) << " s, peak "
+         << juce::String(kSpectrogramLevelDbfs, 0) << " dBFS, the same on every input channel, then " << juce::String(kSpectrogramTailSeconds, 1)
+         << " s of silence |\n";
+    text << "| plugin | the default setting, " << juce::String(sampleRate / 1000.0, 1) << " kHz; shown: output channel 1 |\n";
+    text << "| analysis | two short-time Fourier transforms, " << pluginlab::measure::getSpectrogramWindowName(settings.window) << " window, "
+         << describeFrame(spectrogram.fftSize) << " and " << describeFrame(spectrogram.shortFftSize) << ", centred on the same instants, hop "
+         << spectrogram.hopSize << " samples (" << juce::String(1000.0 * spectrogram.hopSize / sampleRate, 1)
+         << " ms); each bin shows the smaller of the two levels (the long transform smears in time, the short one in frequency) |\n";
+    text << "| level | dB re a full-scale sine (a sine of amplitude 1 reads 0 dB); colour map plasma from " << juce::roundToInt(kSpectrogramFloorDb)
+         << " dB (dark) to " << juce::roundToInt(kSpectrogramCeilingDb) << " dB (yellow) |\n";
+    text << "| axes | frequency logarithmic, " << juce::roundToInt(kSpectrogramStartHz) << " Hz ... " << juce::roundToInt(kSpectrogramStopHz / 1000.0)
+         << " kHz (a pixel row shows the largest bin in it); time in s |\n\n";
+    text << "How to read it: the sweep is the bright rising line. Harmonics are fainter lines above it at 2, 3, ... times its frequency (a non-linear "
+            "plugin); lines that fold back down at the top are aliasing; a uniform glow is noise; anything after the end of the sweep is the "
+            "plugin's latency, ringing or its own signal. A filter shows as a line that gets darker where it attenuates.\n";
+    return text;
 }
 
 // writes the progress file and prints each new step; removes the file when it goes out of scope
@@ -128,6 +204,11 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
             formatManager, description, settings, [&progress, share](double fraction, const juce::String& step) { progress(share * fraction, "fingerprint: " + step); });
         fingerprint.settingsWarning = warning;
         report += pluginlab::engine::createReport(fingerprint) + "\n";
+        if (fingerprint.loaded)
+        {
+            progress(share, "spectrogram of the sweep");
+            report += writeSweepSpectrogram(formatManager, description, fingerprint.measuredChannels, reportFile, measured) + "\n";
+        }
         if (settings.measurements)
         {
             // the measurement units (W7.11) on the default setting of the plugin

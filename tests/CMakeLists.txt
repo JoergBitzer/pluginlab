@@ -23,6 +23,7 @@ target_sources(PluginLabTests
         MeasureNullTests.cpp
         MeasurePhaseTests.cpp
         MeasureResponseTests.cpp
+        MeasureSpectrogramTests.cpp
         MeasureSystemClassTests.cpp
         PluginMeasurementTests.cpp
         NonlinearReferenceTests.cpp
@@ -63,6 +64,7 @@ target_link_libraries(PluginLabTests
         pluginlab_signals
         pluginlab_reference
         pluginlab_measure
+        pluginlab_hosting_ui
         pluginlab_loader_core
         juce::juce_core
         juce::juce_dsp

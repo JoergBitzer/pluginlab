@@ -217,6 +217,10 @@ that decided, the largest harmonic). The guess comes from the class alone:
 B matters: a drive or a curve often does nothing at the defaults. A class other than LTI (at A or B) is also listed in the findings. The Developer page shows the
 group in the column "Class". The class at A decides what the other measurements mean (the sentence below the table).
 
+### 3.6c Spectrogram of the sweep (0.52.0)
+A synchronized sweep (20 Hz ... 20 kHz, 3 s, -6 dBFS, then 0.5 s of silence) through the plugin at its defaults, output channel 1, as a
+picture next to the report, with its parameters in a table: see [spectrogram.md](../measurements/spectrogram.md).
+
 ### 3.7 Other
 - **time-invariant** (R6): one instance: poke, setting B, **settled for `longSettleSeconds` (2 s)**, noise → first output; `timeInvarianceGapSeconds` (0.5 s) of silence;
   the same noise again → second output; the two the same (< -80 dB). If not: "time-varying" (an LFO, a random element, dither, a noise generator). For a time-varying plugin
