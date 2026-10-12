@@ -7,11 +7,13 @@ namespace pluginlab::ui
 namespace
 {
 constexpr int kLogoHeight = 48;
-// the colours of the Jade Hochschule (as in the author's TGMTools/JadeLookAndFeel.h): JadeRed, JadeGray, JadeWhite
+// the red of the Jade Hochschule (as in the author's TGMTools/JadeLookAndFeel.h); the letters and the impulse a light gray (white was too
+// bright), "Benchmark" a lighter gray than JadeGray (too dark)
 const juce::Colour kLogoBackground(0xffe30613);
-const juce::Colour kLogoGray(0xff5b5f57);
-const juce::Colour kLogoWave(0xfff2f2f2);
-constexpr int kWaveSteps = 64;
+const juce::Colour kLogoGray(0xff8a8e86);
+const juce::Colour kLogoLetters(0xffd8d8d8);
+constexpr int kWaveSteps = 96;
+constexpr float kSincHalfWidth = 3.0f;        // si(x) = sin(x) / x for x = -3 pi ... 3 pi: the main peak and two side lobes on each side
 }
 
 juce::Image makeLogo(int height)
@@ -23,31 +25,33 @@ juce::Image makeLogo(int height)
     const auto size = static_cast<float>(height);
     g.setColour(kLogoBackground);
     g.fillRoundedRectangle(0.0f, 0.0f, size, size, size * 0.18f);
-    g.setColour(juce::Colours::white);
+    g.setColour(kLogoLetters);
     g.setFont(juce::FontOptions(size * 0.56f, juce::Font::bold));
     g.drawText("JB", 0, 0, height, height * 4 / 5, juce::Justification::centred);
-    // a short sine under the letters: a signal, measured
+    // an si impulse under the letters (sin(x) / x, two side lobes on each side): the impulse response, measured
     juce::Path wave;
-    const float left = size * 0.16f;
-    const float right = size * 0.84f;
-    const float middle = size * 0.8f;
-    const float amplitude = size * 0.06f;
+    const float left = size * 0.12f;
+    const float right = size * 0.88f;
+    const float baseline = size * 0.88f;
+    const float amplitude = size * 0.19f;
     for (int step = 0; step <= kWaveSteps; ++step)
     {
         const float fraction = static_cast<float>(step) / kWaveSteps;
-        const float x = left + (right - left) * fraction;
-        const float y = middle - amplitude * std::sin(juce::MathConstants<float>::twoPi * fraction);
+        const float x = juce::MathConstants<float>::pi * kSincHalfWidth * (2.0f * fraction - 1.0f);
+        const float si = std::abs(x) < 1.0e-6f ? 1.0f : std::sin(x) / x;
+        const float px = left + (right - left) * fraction;
+        const float py = baseline - amplitude * si;
         if (step == 0)
         {
-            wave.startNewSubPath(x, y);
+            wave.startNewSubPath(px, py);
         }
         else
         {
-            wave.lineTo(x, y);
+            wave.lineTo(px, py);
         }
     }
-    g.setColour(kLogoWave);
-    g.strokePath(wave, juce::PathStrokeType(size * 0.05f));
+    g.setColour(kLogoLetters);
+    g.strokePath(wave, juce::PathStrokeType(size * 0.04f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     g.setColour(kLogoBackground);
     g.setFont(juce::FontOptions(size * 0.34f, juce::Font::bold));
     g.drawText("Jade", height + height / 6, height / 12, width - height, height / 2, juce::Justification::centredLeft);
@@ -59,12 +63,10 @@ juce::Image makeLogo(int height)
 
 bool writeLogo(const juce::File& folder, const juce::String& fileName)
 {
+    // always written: a folder keeps reports for years, and the logo of an older version would stay
     const juce::File file = folder.getChildFile(fileName);
-    if (file.existsAsFile())
-    {
-        return true;
-    }
     folder.createDirectory();
+    file.deleteFile();
     juce::FileOutputStream stream(file);
     juce::PNGImageFormat png;
     return stream.openedOk() && png.writeImageToStream(makeLogo(kLogoHeight), stream);
