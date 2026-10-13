@@ -28,6 +28,10 @@ public:
     // Where the mappings of plugins that are not our own are kept (W8.5; our own plugins' mappings are in the repository, mappings/)
     juce::File getMappingFolder() const;
 
+    // The name of the person who last confirmed a mapping on the Developer page (offered at the next confirmation)
+    juce::String getMappingConfirmer() const;
+    void setMappingConfirmer(const juce::String& name);
+
     // A file that exists while the plugins of the last session are being loaded: if it is still there at the next start, loading them
     // did not finish (a plugin crashed the program).
     juce::File getRestoreMarker() const;

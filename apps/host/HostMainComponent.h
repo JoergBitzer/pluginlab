@@ -32,6 +32,7 @@ struct StartupOptions
     bool developerView = false;    // ... and shows it when it is ready
     bool developerGui = false;     // --gui: the GUI review instead of the report (W5d.7)
     bool developerMapping = false; // --mapping: the survey and mapping proposal instead of the report (W8.5)
+    bool developerCalibration = false; // --calibration: the calibration and the interactions instead of the report (W8.6, W8.7)
     double playSeconds = 0.0;      // --play <seconds> <report file>: plays on the Compare page, writes the report and quits
     juce::File playReportFile;
 

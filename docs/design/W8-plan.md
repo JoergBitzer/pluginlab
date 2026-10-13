@@ -1,6 +1,6 @@
 # W8: system classification, EQ band model, parameter mapping and calibration (plan)
 
-Status: **plan v2, W8.1 ... W8.7 done** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
+Status: **plan v2, W8.1 ... W8.8 done (W8 complete)** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
 and comments, kept verbatim in the appendix). Planning §8, W8: "EQ band model + parameter mapping, calibration of knobs by measurement. Done when:
 mapping data validated for the test EQs." Lessons of the prototype (planning §5 item 4, `docs/prototype/LESSONS_LEARNED.md`): the model of "one peaking
 band" was too narrow; every plugin needed an hour of manual exploration for its mapping file; a tool that lists all parameters and proposes a mapping is
@@ -230,4 +230,13 @@ pass filters (ACM-3SA's high cut gets an extra peak near 21 kHz).
 Test EQ Parallel (1 + (H1 - 1) + (H2 - 1): -2.480 / +3.493 dB at one frequency, theory -2.486 / +3.502 dB; still 0.5 dB three octaves
 apart). They are also the first multi-band test of the survey and the mapping: both bands found, laws as in the code; a plugin-wide
 bypass is proposed as band 1's switch (noted in the mappings). Open: the author's test objects with `--calibrate`.
+
+### W8.8 host and report (0.55.0, done)
+The Developer page of the stand-alone application covers W8: the report (fingerprint with the system class at A and B, 0.49.0), the GUI
+review, "Survey + mapping" with its report (0.48.0), and now "Calibrate" (calibration and interactions in a process of its own, progress bar,
+"View calibration", a column "Calibration") and the confirmation of a mapping in its window ("Open mapping file", "Confirm mapping ...":
+the name with the date into `confirmedBy`; the column "Mapping" shows who confirmed it). `--developer <plugin> --calibration [--view]` for
+scripted checks; checked in the virtual display (the calibration of the Test EQ Parallel from the page; the mapping window with its
+buttons). Not yet tried by hand: the confirmation dialog (the author). Open after W8: the author's test objects through the page; a
+Nyquist-matched low-pass family (ACM-3SA's high cut).
 

@@ -76,7 +76,16 @@ HostShell::HostShell(const StartupOptions& options)
         {
             m_pluginsPage->loadPlugin(scan.descriptions[0]);
             setCurrentTabIndex(2);
-            if (options.developerMapping)
+            if (options.developerCalibration)
+            {
+                // the calibration and the interactions (W8.6, W8.7)
+                if (options.developerView)
+                {
+                    m_developerPage->onCalibrationReady = [this](int row) { m_developerPage->viewCalibration(row); };
+                }
+                m_developerPage->generateCalibration(0);
+            }
+            else if (options.developerMapping)
             {
                 // the survey and mapping proposal (W8.5)
                 if (options.developerView)

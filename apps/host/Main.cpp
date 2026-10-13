@@ -35,10 +35,11 @@ const juce::String kCalibrateOption = "--calibrate";     // --calibrate <plugin 
 const juce::String kGuiSnapshotOption = "--gui-snapshot"; // --gui-snapshot <plugin file> <folder>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
-const juce::String kDeveloperOption = "--developer"; // --developer <plugin file> [--gui | --mapping] [--view]: opens the Developer page and makes (and shows) the report, the GUI review or the mapping
+const juce::String kDeveloperOption = "--developer"; // --developer <plugin file> [--gui | --mapping | --calibration] [--view]: opens the Developer page and makes (and shows) the report, the GUI review, the mapping or the calibration
 const juce::String kViewOption = "--view";
 const juce::String kGuiOption = "--gui";         // with --developer: the GUI review instead of the report
 const juce::String kMappingOption = "--mapping"; // with --developer: the survey and mapping proposal instead of the report
+const juce::String kCalibrationOption = "--calibration"; // with --developer: the calibration (and the interactions) instead of the report
 const juce::String kPlayOption = "--play"; // --play <seconds> <report file> (with --compare): plays, writes the report, quits
 const juce::String kCompareOption = "--compare"; // --compare <audio file> [<plugin file>]: opens the Compare page
 constexpr int kArgumentsOfOneValue = 1;
@@ -238,6 +239,7 @@ public:
             options.developerView = arguments.contains(kViewOption);
             options.developerGui = arguments.contains(kGuiOption);
             options.developerMapping = arguments.contains(kMappingOption);
+            options.developerCalibration = arguments.contains(kCalibrationOption);
         }
 
         const int playIndex = arguments.indexOf(kPlayOption);

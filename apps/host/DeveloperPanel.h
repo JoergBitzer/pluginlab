@@ -35,13 +35,15 @@ public:
     {
         Report,
         GuiReview,
-        Mapping
+        Mapping,
+        Calibration
     };
 
     // Told when a report / a GUI review is ready (the row)
     std::function<void(int row)> onReportReady;
     std::function<void(int row)> onGuiReviewReady;
     std::function<void(int row)> onMappingReady;
+    std::function<void(int row)> onCalibrationReady;
 
     // The list follows the plugins of the engine (call after plugins were loaded or unloaded)
     void refresh();
@@ -69,12 +71,19 @@ public:
     void viewGuiReview(int row);
     void generateMapping(int row);
     void viewMapping(int row);
+    void generateCalibration(int row);
+    void viewCalibration(int row);
+    // the mapping of a row: confirm it (asks for the name, writes confirmedBy), open its JSON in the system's editor
+    void confirmMapping(int row);
+    void openMappingFile(int row);
     juce::String getStatusText(int row) const;
     juce::String getGuiStatusText(int row) const;
     juce::String getMappingStatusText(int row) const;
+    juce::String getCalibrationStatusText(int row) const;
     bool isReportReady(int row) const;
     bool isGuiReviewReady(int row) const;
     bool isMappingReady(int row) const;
+    bool isCalibrationReady(int row) const;
 
 private:
     enum class State
@@ -101,6 +110,10 @@ private:
         juce::String guiMessage;                             // why the last GUI review failed
         juce::File mappingFile;                              // the survey and mapping report (Markdown)
         State mappingState = State::NoReport;
+        juce::String mappingConfirmedBy;                     // of the JSON in the mapping folder (empty: a proposal or none)
+        bool mappingJsonExists = false;
+        juce::File calibrationFile;                          // the calibration report (Markdown)
+        State calibrationState = State::NoReport;
     };
 
     // the running job (one at a time): its row, kind, start and the progress it reported
@@ -120,6 +133,9 @@ private:
     const pluginlab::engine::SummaryItem* findSummaryItem(const Row& row, int columnId) const;
 
     void updateRowFromDisk(Row& row) const;
+    // the mapping JSON of a row in the user's mapping folder, and the newer proposal next to a confirmed one (if there is one)
+    juce::File getMappingJson(const Row& row) const;
+    void updateMappingConfirmation(Row& row) const;
     Row* findRow(const juce::String& key);
     void startNextJob();
     void queueJob(int row, JobKind kind);

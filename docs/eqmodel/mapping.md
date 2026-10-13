@@ -73,8 +73,14 @@ inverse of their measured laws, and then what these parameters need to act
   window: `PluginLabHost --map <plugin file> <report>`. Both survey the plugin,
   write the report (survey and mapping, Markdown) and the proposal there. A confirmed file is never overwritten: the new proposal goes
   next to it (`.proposal.json`) and the report lists the differences.
-- Confirming: open the JSON, check the rows against the report, correct what
-  is wrong, and write your name into `confirmedBy`.
+- Confirming (0.55.0, W8.8): in the host, the window of "View mapping" has
+  "Open mapping file" (the JSON in the system's editor, for corrections; a newer
+  `.proposal.json` next to a confirmed mapping is opened first) and "Confirm
+  mapping ..." (asks for the name, remembered for the next time, and writes
+  "name (date)" into `confirmedBy`; a confirmed proposal replaces the old
+  mapping). The column "Mapping" shows "confirmed by ..." or "proposal (not
+  confirmed)". Without the host: edit the JSON and write the name into
+  `confirmedBy`.
 
 ## The report
 The survey and mapping report (`--map`, the Developer page) is built of

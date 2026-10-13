@@ -47,6 +47,11 @@ Over the rates (the conclusion):
 - **depends on the sample rate**: deviates at some rates, as shown at others.
 
 ## The report
+On the Developer page (0.55.0, W8.8): "Calibrate" runs it in a process of its
+own with the progress bar, "View calibration" shows the report, the column
+"Calibration" the state; `PluginLabHost --developer <plugin file> --calibration
+[--view]` does the same from the command line. The report ends with the
+interactions between bands (W8.7, [interactions.md](interactions.md)).
 `PluginLabHost --calibrate <plugin file> <report> [<plugin id>]` uses the
 mapping in the user's mapping folder (`~/.config/pluginlab/mappings`); without
 one the survey proposes it first and writes it there (as `--map` does). The

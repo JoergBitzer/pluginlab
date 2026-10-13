@@ -8,6 +8,7 @@ const juce::String kFolderName = "pluginlab";
 const juce::String kSettingsFileName = "host_settings.xml";
 const juce::String kRootTag = "HostSettings";
 const juce::String kAudioDirectoryKey = "lastAudioDirectory";
+const juce::String kMappingConfirmerKey = "mappingConfirmedBy";
 const juce::String kListFolderKey = "listFolder";
 const juce::String kListsFolderName = "lists";
 const juce::String kLastAudioListName = "last_session.audiolist";
@@ -66,6 +67,16 @@ juce::File HostSettings::getLastAudioDirectory() const
 void HostSettings::setLastAudioDirectory(const juce::File& folder)
 {
     write(kAudioDirectoryKey, folder.getFullPathName());
+}
+
+juce::String HostSettings::getMappingConfirmer() const
+{
+    return read(kMappingConfirmerKey);
+}
+
+void HostSettings::setMappingConfirmer(const juce::String& name)
+{
+    write(kMappingConfirmerKey, name);
 }
 
 juce::File HostSettings::getListFolder() const

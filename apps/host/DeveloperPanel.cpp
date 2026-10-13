@@ -1,6 +1,7 @@
 #include "DeveloperPanel.h"
 
 #include "HostFingerprint.h"
+#include "pluginlab/engine/Mapping.h"
 
 #include "pluginlab/engine/OfflineRenderer.h"
 #include "pluginlab/engine/ReportText.h"
@@ -14,7 +15,7 @@ namespace
 constexpr int kMargin = 8;
 constexpr int kRowHeight = 28;
 constexpr int kHeaderHeight = 24;
-constexpr int kInfoHeight = 80; // five lines: what the jobs do and where their results are kept
+constexpr int kInfoHeight = 96; // six lines: what the jobs do and where their results are kept
 constexpr int kProgressHeight = 22; // the strip with the running job
 constexpr int kColumnNumber = 1;
 constexpr int kColumnName = 2;
@@ -24,6 +25,7 @@ constexpr int kColumnDate = 5;
 constexpr int kColumnActions = 6;
 constexpr int kColumnGui = 7;
 constexpr int kColumnMapping = 8;
+constexpr int kColumnCalibration = 9;
 constexpr int kFirstSummaryColumn = 10; // the columns of the single results follow, in the order of kSummaryColumns
 constexpr int kWidthSummary = 90;
 const juce::Colour kDoubtfulColour(0xffffa040);
@@ -32,9 +34,10 @@ constexpr int kWidthName = 200;
 constexpr int kWidthFormat = 60;
 constexpr int kWidthStatus = 240;
 constexpr int kWidthDate = 150;
-constexpr int kWidthActions = 720;
+constexpr int kWidthActions = 960;
 constexpr int kWidthGui = 220;
 constexpr int kWidthMapping = 280;
+constexpr int kWidthCalibration = 280;
 constexpr int kButtonWidth = 110;
 constexpr int kProcessTimeoutMs = 20 * 60 * 1000; // the measurement loads the plugin many times; a big plugin needs minutes
 constexpr int kPollMs = 200;
@@ -51,6 +54,8 @@ const juce::String kGuiReviewFile = "gui_review.md";
 const juce::String kGuiWindowSuffix = "#gui";
 const juce::String kMappingWindowSuffix = "#map";
 const juce::String kMappingFileSuffix = "_mapping";
+const juce::String kCalibrationWindowSuffix = "#cal";
+const juce::String kCalibrationFileSuffix = "_calibration";
 const juce::String kDateFormat = "%Y-%m-%d %H:%M";
 }
 
@@ -100,6 +105,10 @@ public:
         else if (m_kind == DeveloperPanel::JobKind::Mapping)
         {
             option = "--map";
+        }
+        else if (m_kind == DeveloperPanel::JobKind::Calibration)
+        {
+            option = "--calibrate";
         }
         juce::ChildProcess process;
         const juce::File host = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
@@ -181,7 +190,7 @@ private:
     // moves a complete result into place; for a GUI review that did not complete, the step it was in (progress.txt) is the message
     bool finish(const juce::File& temporary, juce::String& message) const
     {
-        if (m_kind == DeveloperPanel::JobKind::Mapping)
+        if (m_kind == DeveloperPanel::JobKind::Mapping || m_kind == DeveloperPanel::JobKind::Calibration)
         {
             return temporary.existsAsFile() && temporary.getSize() > 0 && temporary.moveFileTo(m_target);
         }
@@ -374,7 +383,11 @@ private:
 class ReportWindow : public juce::DocumentWindow
 {
 public:
-    ReportWindow(DeveloperPanel& owner, const juce::String& key, const juce::String& title, const juce::String& markdown, const juce::File& folder)
+    // actions: further buttons beside "Copy report" (e.g. "Confirm mapping"), their text and what they do
+    using Action = std::pair<juce::String, std::function<void()>>;
+
+    ReportWindow(DeveloperPanel& owner, const juce::String& key, const juce::String& title, const juce::String& markdown, const juce::File& folder,
+                 const std::vector<Action>& actions = {})
         : juce::DocumentWindow(title, juce::Desktop::getInstance().getDefaultLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId),
                                juce::DocumentWindow::allButtons),
           m_owner(owner),
@@ -387,6 +400,13 @@ public:
         m_copyButton.onClick = [this] { juce::SystemClipboard::copyTextToClipboard(m_markdown); };
         m_content.addAndMakeVisible(m_viewport);
         m_content.addAndMakeVisible(m_copyButton);
+        for (const Action& action : actions)
+        {
+            auto button = std::make_unique<juce::TextButton>(action.first);
+            button->onClick = action.second;
+            m_content.addAndMakeVisible(*button);
+            m_actions.push_back(std::move(button));
+        }
         m_content.onResize = [this] { layout(); };
         m_content.setSize(kReportWindowWidth, kReportWindowHeight);
         setUsingNativeTitleBar(true);
@@ -420,7 +440,13 @@ private:
     void layout()
     {
         juce::Rectangle<int> area = m_content.getLocalBounds();
-        m_copyButton.setBounds(area.removeFromBottom(kCopyRowHeight).reduced(kMargin / 2).removeFromLeft(kCopyButtonWidth));
+        juce::Rectangle<int> row = area.removeFromBottom(kCopyRowHeight).reduced(kMargin / 2);
+        m_copyButton.setBounds(row.removeFromLeft(kCopyButtonWidth));
+        for (const auto& button : m_actions)
+        {
+            row.removeFromLeft(kMargin);
+            button->setBounds(row.removeFromLeft(kCopyButtonWidth));
+        }
         m_viewport.setBounds(area);
     }
 
@@ -433,6 +459,7 @@ private:
     ReportView m_view;
     juce::Viewport m_viewport;
     juce::TextButton m_copyButton{"Copy report (Markdown)"};
+    std::vector<std::unique_ptr<juce::TextButton>> m_actions;
     Content m_content;
 };
 
@@ -482,15 +509,20 @@ public:
         m_viewGui.onClick = [this] { m_owner.viewGuiReview(m_row); };
         m_map.onClick = [this] { m_owner.generateMapping(m_row); };
         m_viewMap.onClick = [this] { m_owner.viewMapping(m_row); };
+        m_calibrate.onClick = [this] { m_owner.generateCalibration(m_row); };
+        m_viewCalibration.onClick = [this] { m_owner.viewCalibration(m_row); };
         m_map.setTooltip("Parameter survey and mapping proposal (W8.4, W8.5): every parameter alone over its range; minutes per plugin");
-        for (juce::TextButton* button : {&m_generate, &m_view, &m_review, &m_viewGui, &m_map, &m_viewMap})
+        m_calibrate.setTooltip("Calibration (W8.6) and interactions between bands (W8.7) with the plugin's mapping (the survey first if there is none)");
+        for (juce::TextButton* button : {&m_generate, &m_view, &m_review, &m_viewGui, &m_map, &m_viewMap, &m_calibrate, &m_viewCalibration})
         {
             addAndMakeVisible(button);
         }
     }
 
-    void update(int row, bool ready, bool busy, bool guiReady, bool guiBusy, bool mapReady, bool mapBusy)
+    void update(int row, bool ready, bool busy, bool guiReady, bool guiBusy, bool mapReady, bool mapBusy, bool calibrationReady, bool calibrationBusy)
     {
+        m_viewCalibration.setEnabled(calibrationReady);
+        m_calibrate.setEnabled(! calibrationBusy);
         m_viewMap.setEnabled(mapReady);
         m_map.setEnabled(! mapBusy);
         m_row = row;
@@ -503,7 +535,7 @@ public:
     void resized() override
     {
         juce::Rectangle<int> area = getLocalBounds().reduced(2);
-        for (juce::TextButton* button : {&m_generate, &m_view, &m_review, &m_viewGui, &m_map, &m_viewMap})
+        for (juce::TextButton* button : {&m_generate, &m_view, &m_review, &m_viewGui, &m_map, &m_viewMap, &m_calibrate, &m_viewCalibration})
         {
             button->setBounds(area.removeFromLeft(kButtonWidth));
             area.removeFromLeft(kMargin);
@@ -519,6 +551,8 @@ private:
     juce::TextButton m_viewGui{"View GUI review"};
     juce::TextButton m_map{"Survey + mapping"};
     juce::TextButton m_viewMap{"View mapping"};
+    juce::TextButton m_calibrate{"Calibrate"};
+    juce::TextButton m_viewCalibration{"View calibration"};
 };
 
 DeveloperPanel::DeveloperPanel(pluginlab::engine::MeasurementEngine& engine, HostSettings& settings)
@@ -534,6 +568,7 @@ DeveloperPanel::DeveloperPanel(pluginlab::engine::MeasurementEngine& engine, Hos
     m_table.getHeader().addColumn("Report", kColumnStatus, kWidthStatus);
     m_table.getHeader().addColumn("GUI review", kColumnGui, kWidthGui);
     m_table.getHeader().addColumn("Mapping", kColumnMapping, kWidthMapping);
+    m_table.getHeader().addColumn("Calibration", kColumnCalibration, kWidthCalibration);
     for (int index = 0; index < kNumberOfSummaryColumns; ++index)
     {
         m_table.getHeader().addColumn(kSummaryColumns[index].title, kFirstSummaryColumn + index, kWidthSummary);
@@ -544,7 +579,8 @@ DeveloperPanel::DeveloperPanel(pluginlab::engine::MeasurementEngine& engine, Hos
                         "gives the number). A report tests a plugin technically (parameters, latency at three sample rates, block sizes, "
                         "delivery of parameters, robustness, AES17 measurements) in a process of its own; it can take a minute. The GUI review opens the plugin's "
                         "editor in windows of its own (captures, colour-vision variants, scale factors, robustness, load). Survey + mapping moves every parameter "
-                        "alone and proposes a mapping (minutes per plugin). Reports are kept in "
+                        "alone and proposes a mapping (minutes per plugin); confirm it in its window. Calibrate compares what the knobs show with what the plugin does at "
+                        "44.1, 48 and 96 kHz and whether its bands add. Reports are kept in "
                         + m_settings.getFingerprintFolder().getFullPathName() + ", proposed mappings in " + m_settings.getMappingFolder().getFullPathName() + ".",
                         juce::dontSendNotification);
     m_infoLabel.setMinimumHorizontalScale(1.0f);
@@ -596,7 +632,10 @@ void DeveloperPanel::paint(juce::Graphics& g)
         g.setColour(kProgressColour);
         g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * static_cast<float>(juce::jlimit(0.0, 1.0, m_running.fraction))), 4.0f);
     }
-    const juce::String job = m_running.kind == JobKind::Mapping ? "Survey + mapping" : m_running.kind == JobKind::GuiReview ? "GUI review" : "Report";
+    const juce::String job = m_running.kind == JobKind::Mapping       ? "Survey + mapping"
+                             : m_running.kind == JobKind::Calibration ? "Calibration"
+                             : m_running.kind == JobKind::GuiReview   ? "GUI review"
+                                                                      : "Report";
     juce::String text = job + " of " + hosting::getDisplayName(row->description) + ": " + getRunningText(*row, m_running.kind);
     if (! m_queue.empty())
     {
@@ -651,6 +690,13 @@ void DeveloperPanel::refresh()
         if (known != nullptr && (known->mappingState == State::Waiting || known->mappingState == State::Running || known->mappingState == State::Failed))
         {
             row.mappingState = known->mappingState;
+        }
+        updateMappingConfirmation(row);
+        row.calibrationFile = row.reportFile.getSiblingFile(row.reportFile.getFileNameWithoutExtension() + kCalibrationFileSuffix + kReportExtension);
+        row.calibrationState = row.calibrationFile.existsAsFile() ? State::Ready : State::NoReport;
+        if (known != nullptr && (known->calibrationState == State::Waiting || known->calibrationState == State::Running || known->calibrationState == State::Failed))
+        {
+            row.calibrationState = known->calibrationState;
         }
         row.guiState = State::NoReport;
         if (row.guiFolder.getChildFile(kGuiReviewFile).existsAsFile())
@@ -782,6 +828,10 @@ void DeveloperPanel::paintCell(juce::Graphics& g, int rowNumber, int columnId, i
     {
         text = getMappingStatusText(rowNumber);
     }
+    else if (columnId == kColumnCalibration)
+    {
+        text = getCalibrationStatusText(rowNumber);
+    }
     else if (columnId == kColumnDate && row.reportFile.existsAsFile())
     {
         text = row.reportTime.formatted(kDateFormat);
@@ -876,7 +926,8 @@ juce::Component* DeveloperPanel::refreshComponentForCell(int rowNumber, int colu
     const Row& row = m_rows[static_cast<size_t>(rowNumber)];
     cell->update(rowNumber, isReportReady(rowNumber), row.state == State::Running || row.state == State::Waiting, isGuiReviewReady(rowNumber),
                  row.guiState == State::Running || row.guiState == State::Waiting, isMappingReady(rowNumber),
-                 row.mappingState == State::Running || row.mappingState == State::Waiting);
+                 row.mappingState == State::Running || row.mappingState == State::Waiting, isCalibrationReady(rowNumber),
+                 row.calibrationState == State::Running || row.calibrationState == State::Waiting);
     return cell;
 }
 
@@ -895,6 +946,11 @@ void DeveloperPanel::generateMapping(int row)
     queueJob(row, JobKind::Mapping);
 }
 
+void DeveloperPanel::generateCalibration(int row)
+{
+    queueJob(row, JobKind::Calibration);
+}
+
 void DeveloperPanel::queueJob(int row, JobKind kind)
 {
     if (row < 0 || row >= static_cast<int>(m_rows.size()))
@@ -910,6 +966,10 @@ void DeveloperPanel::queueJob(int row, JobKind kind)
     else if (kind == JobKind::Mapping)
     {
         stateOfKind = &entry.mappingState;
+    }
+    else if (kind == JobKind::Calibration)
+    {
+        stateOfKind = &entry.calibrationState;
     }
     State& target = *stateOfKind;
     if (target == State::Running || target == State::Waiting)
@@ -947,6 +1007,11 @@ void DeveloperPanel::startNextJob()
     {
         row->mappingState = State::Running;
         m_job = std::make_unique<PanelJob>(*this, kind, row->pluginFile, row->key, row->mappingFile, row->key);
+    }
+    else if (kind == JobKind::Calibration)
+    {
+        row->calibrationState = State::Running;
+        m_job = std::make_unique<PanelJob>(*this, kind, row->pluginFile, row->key, row->calibrationFile, row->key);
     }
     else
     {
@@ -993,7 +1058,8 @@ juce::String DeveloperPanel::getRunningText(const Row& row, JobKind kind) const
     }
     else
     {
-        text << (kind == JobKind::Mapping ? "surveying" : kind == JobKind::GuiReview ? "reviewing (editor windows open)" : "measuring") << ", ";
+        text << (kind == JobKind::Mapping ? "surveying" : kind == JobKind::Calibration ? "calibrating" : kind == JobKind::GuiReview ? "reviewing (editor windows open)" : "measuring")
+             << ", ";
     }
     return text + elapsed;
 }
@@ -1005,7 +1071,7 @@ bool DeveloperPanel::isRunningCell(const Row& row, int columnId) const
         return false;
     }
     return (columnId == kColumnStatus && m_running.kind == JobKind::Report) || (columnId == kColumnMapping && m_running.kind == JobKind::Mapping)
-           || (columnId == kColumnGui && m_running.kind == JobKind::GuiReview);
+           || (columnId == kColumnGui && m_running.kind == JobKind::GuiReview) || (columnId == kColumnCalibration && m_running.kind == JobKind::Calibration);
 }
 
 void DeveloperPanel::jobFinished(const juce::String& key, JobKind kind, bool success, const juce::String& message)
@@ -1032,9 +1098,23 @@ void DeveloperPanel::jobFinished(const juce::String& key, JobKind kind, bool suc
                 row->state = State::Failed;
             }
         }
+        else if (kind == JobKind::Calibration)
+        {
+            row->calibrationState = success ? State::Ready : State::Failed;
+            updateMappingConfirmation(*row); // a calibration without a mapping proposes one first
+            if (success)
+            {
+                m_windows.erase(key + kCalibrationWindowSuffix); // an open window shows the old report
+                if (onCalibrationReady)
+                {
+                    onCalibrationReady(index);
+                }
+            }
+        }
         else if (kind == JobKind::Mapping)
         {
             row->mappingState = success ? State::Ready : State::Failed;
+            updateMappingConfirmation(*row);
             if (success)
             {
                 m_windows.erase(key + kMappingWindowSuffix); // an open window shows the old report
@@ -1151,7 +1231,14 @@ juce::String DeveloperPanel::getMappingStatusText(int row) const
         case State::Failed:
             return "failed (crash or time limit)";
         case State::Ready:
-            return "ready";
+        {
+            const Row& entry = m_rows[static_cast<size_t>(row)];
+            if (entry.mappingConfirmedBy.isNotEmpty())
+            {
+                return "ready, confirmed by " + entry.mappingConfirmedBy;
+            }
+            return entry.mappingJsonExists ? "ready, proposal (not confirmed)" : "ready";
+        }
     }
     return {};
 }
@@ -1182,7 +1269,153 @@ void DeveloperPanel::viewMapping(int row)
     }
     const juce::String title = "Survey and mapping: " + hosting::getDisplayName(entry.description) + " ("
                                + entry.mappingFile.getLastModificationTime().formatted(kDateFormat) + ")";
-    m_windows[windowKey] = std::make_unique<ReportWindow>(*this, windowKey, title, entry.mappingFile.loadFileAsString(), entry.mappingFile.getParentDirectory());
+    const std::vector<ReportWindow::Action> actions = {{"Confirm mapping ...", [this, row] { confirmMapping(row); }},
+                                                       {"Open mapping file", [this, row] { openMappingFile(row); }}};
+    m_windows[windowKey] = std::make_unique<ReportWindow>(*this, windowKey, title, entry.mappingFile.loadFileAsString(), entry.mappingFile.getParentDirectory(), actions);
+}
+
+juce::String DeveloperPanel::getCalibrationStatusText(int row) const
+{
+    if (row < 0 || row >= static_cast<int>(m_rows.size()))
+    {
+        return {};
+    }
+    const Row& entry = m_rows[static_cast<size_t>(row)];
+    switch (entry.calibrationState)
+    {
+        case State::NoReport:
+            return "no calibration yet";
+        case State::Waiting:
+            return "waiting ...";
+        case State::Running:
+            return getRunningText(entry, JobKind::Calibration);
+        case State::Failed:
+            return "failed (crash or time limit)";
+        case State::Ready:
+            return "ready (" + entry.calibrationFile.getLastModificationTime().formatted(kDateFormat) + ")";
+    }
+    return {};
+}
+
+bool DeveloperPanel::isCalibrationReady(int row) const
+{
+    if (row < 0 || row >= static_cast<int>(m_rows.size()))
+    {
+        return false;
+    }
+    const Row& entry = m_rows[static_cast<size_t>(row)];
+    return entry.calibrationFile.existsAsFile() && entry.calibrationState != State::Running && entry.calibrationState != State::Waiting;
+}
+
+void DeveloperPanel::viewCalibration(int row)
+{
+    if (! isCalibrationReady(row))
+    {
+        return;
+    }
+    const Row& entry = m_rows[static_cast<size_t>(row)];
+    const juce::String windowKey = entry.key + kCalibrationWindowSuffix;
+    const auto existing = m_windows.find(windowKey);
+    if (existing != m_windows.end())
+    {
+        existing->second->toFront(true);
+        return;
+    }
+    const juce::String title = "Calibration: " + hosting::getDisplayName(entry.description) + " ("
+                               + entry.calibrationFile.getLastModificationTime().formatted(kDateFormat) + ")";
+    m_windows[windowKey] =
+        std::make_unique<ReportWindow>(*this, windowKey, title, entry.calibrationFile.loadFileAsString(), entry.calibrationFile.getParentDirectory());
+}
+
+juce::File DeveloperPanel::getMappingJson(const Row& row) const
+{
+    return m_settings.getMappingFolder().getChildFile(pluginlab::engine::getMappingFileName(row.description.name));
+}
+
+void DeveloperPanel::updateMappingConfirmation(Row& row) const
+{
+    juce::String error;
+    const std::optional<pluginlab::engine::Mapping> mapping = pluginlab::engine::Mapping::read(getMappingJson(row), error);
+    row.mappingJsonExists = mapping.has_value();
+    row.mappingConfirmedBy = mapping ? mapping->confirmedBy : juce::String();
+}
+
+void DeveloperPanel::openMappingFile(int row)
+{
+    if (row < 0 || row >= static_cast<int>(m_rows.size()))
+    {
+        return;
+    }
+    const Row& entry = m_rows[static_cast<size_t>(row)];
+    const juce::File json = getMappingJson(entry);
+    const juce::File proposal = json.withFileExtension(".proposal.json");
+    const juce::File file = proposal.existsAsFile() ? proposal : json; // a new proposal next to a confirmed mapping is what needs checking
+    if (file.existsAsFile())
+    {
+        file.startAsProcess();
+    }
+}
+
+void DeveloperPanel::confirmMapping(int row)
+{
+    if (row < 0 || row >= static_cast<int>(m_rows.size()))
+    {
+        return;
+    }
+    const Row& entry = m_rows[static_cast<size_t>(row)];
+    const juce::File json = getMappingJson(entry);
+    const juce::File proposal = json.withFileExtension(".proposal.json");
+    // a newer proposal next to a confirmed mapping replaces it when confirmed; otherwise the mapping itself is confirmed
+    const juce::File source = proposal.existsAsFile() ? proposal : json;
+    juce::String error;
+    if (! pluginlab::engine::Mapping::read(source, error))
+    {
+        juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Confirm mapping", "No mapping to confirm: " + error);
+        return;
+    }
+    juce::String name = m_settings.getMappingConfirmer();
+    if (name.isEmpty())
+    {
+        name = juce::SystemStats::getFullUserName().isNotEmpty() ? juce::SystemStats::getFullUserName() : juce::SystemStats::getLogonName();
+    }
+    auto* window = new juce::AlertWindow("Confirm mapping",
+                                         "You have checked every row of the mapping against the survey (and corrected the JSON where it was wrong). "
+                                         "Your name goes into confirmedBy, with today's date:\n" + source.getFullPathName(),
+                                         juce::MessageBoxIconType::QuestionIcon);
+    window->addTextEditor("name", name, "Name:");
+    window->addButton("Confirm", 1, juce::KeyPress(juce::KeyPress::returnKey));
+    window->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+    const juce::Component::SafePointer<DeveloperPanel> self(this);
+    const juce::String key = entry.key;
+    window->enterModalState(true, juce::ModalCallbackFunction::create([self, window, source, json, proposal, key](int result) {
+                                if (self == nullptr || result != 1)
+                                {
+                                    return;
+                                }
+                                const juce::String confirmer = window->getTextEditorContents("name").trim();
+                                if (confirmer.isEmpty())
+                                {
+                                    return;
+                                }
+                                juce::String readError;
+                                std::optional<pluginlab::engine::Mapping> mapping = pluginlab::engine::Mapping::read(source, readError);
+                                if (! mapping)
+                                {
+                                    return;
+                                }
+                                mapping->confirmedBy = confirmer + " (" + juce::Time::getCurrentTime().formatted("%Y-%m-%d") + ")";
+                                if (mapping->write(json) && source == proposal)
+                                {
+                                    proposal.deleteFile();
+                                }
+                                self->m_settings.setMappingConfirmer(confirmer);
+                                if (Row* changed = self->findRow(key))
+                                {
+                                    self->updateMappingConfirmation(*changed);
+                                }
+                                self->m_table.repaint();
+                            }),
+                            true);
 }
 
 void DeveloperPanel::closeWindow(const juce::String& key)
