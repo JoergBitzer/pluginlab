@@ -1,6 +1,6 @@
 # W9: the matcher (plan)
 
-Status: **plan v2** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
+Status: **plan v2, W9.1 done** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
 `planning.md` §8: "**Matcher** (user chooses parameters, start point, frequency range, tolerance; real-time deviation display). Done when:
 master reproduced on each test plugin or the residual quantified and attributed."
 
@@ -166,3 +166,10 @@ Comments:
   will work completely different. What is common is: parameters are optimized against a given optimization routine." → section 2.
 - "The main case will be a user who owns one EQ and wants to compare the sound to several new ones. Our reference plugins are for tutorials
   and teaching and of course to divide myth from reality." → section 1, 4.1, 4.5, 6.
+
+## Progress
+### W9.1 general layer (0.56.0, done)
+Library `pluginlab_match` (`src/match/Match.h`): `ParameterSpace`, `Probe`, `Objective` (`WeightedDifference`), Levenberg-Marquardt with bounds,
+budget (evaluations, seconds) and "at bound" flags, `MatchProblem` with its cache. Document `docs/matching/matcher-core.md`; tests
+`tests/MatchTests.cpp` (linear least squares exact, Rosenbrock in 64 evaluations, bounds, budgets, parameter space, cache).
+

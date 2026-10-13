@@ -14,6 +14,7 @@ target_sources(PluginLabTests
         ValidatorTests.cpp
         LoaderTests.cpp
         MappingTests.cpp
+        MatchTests.cpp
         MeasureCrosstalkTests.cpp
         MeasureDelayTests.cpp
         MeasureDistortionTests.cpp
@@ -62,6 +63,7 @@ target_link_libraries(PluginLabTests
         pluginlab_core
         pluginlab_engine
         pluginlab_eqmodel
+        pluginlab_match
         pluginlab_signals
         pluginlab_reference
         pluginlab_measure
