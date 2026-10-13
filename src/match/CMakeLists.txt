@@ -1,7 +1,8 @@
 # pluginlab_match: the matcher of W9 (docs/design/W9-plan.md): the general layer (parameter space, probe, objective, Levenberg-Marquardt,
-# the match problem with its cache and budget), which knows nothing about EQs; the domains (EQ first) supply probe and objective. No GUI, no
+# the match problem with its cache and budget), which knows nothing about EQs; the domains (the EQ of W9.2 first) supply probe and objective. No GUI, no
 # hosting.
 add_library(pluginlab_match STATIC
+    EqDomain.cpp
     Match.cpp)
 
 target_include_directories(pluginlab_match
@@ -11,6 +12,7 @@ target_include_directories(pluginlab_match
 target_link_libraries(pluginlab_match
     PUBLIC
         pluginlab_measure
+        pluginlab_eqmodel
     PRIVATE
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)

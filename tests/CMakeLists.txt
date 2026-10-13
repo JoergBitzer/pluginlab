@@ -14,6 +14,7 @@ target_sources(PluginLabTests
         ValidatorTests.cpp
         LoaderTests.cpp
         MappingTests.cpp
+        MatchEqTests.cpp
         MatchTests.cpp
         MeasureCrosstalkTests.cpp
         MeasureDelayTests.cpp

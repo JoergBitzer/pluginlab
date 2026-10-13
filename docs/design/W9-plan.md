@@ -1,6 +1,6 @@
 # W9: the matcher (plan)
 
-Status: **plan v2, W9.1 done** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
+Status: **plan v2, W9.1 and W9.2 done** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
 `planning.md` §8: "**Matcher** (user chooses parameters, start point, frequency range, tolerance; real-time deviation display). Done when:
 master reproduced on each test plugin or the residual quantified and attributed."
 
@@ -172,4 +172,11 @@ Comments:
 Library `pluginlab_match` (`src/match/Match.h`): `ParameterSpace`, `Probe`, `Objective` (`WeightedDifference`), Levenberg-Marquardt with bounds,
 budget (evaluations, seconds) and "at bound" flags, `MatchProblem` with its cache. Document `docs/matching/matcher-core.md`; tests
 `tests/MatchTests.cpp` (linear least squares exact, Rosenbrock in 64 evaluations, bounds, budgets, parameter space, cache).
+
+### W9.2 EQ domain (0.57.0, done)
+`MagnitudeProbe` (magnitude in dB on a log grid, clamped at -100 dB), `getCurveMagnitude` (band-model curve as master), `makeMagnitudeObjective`
+(`src/match/EqDomain.cpp`); document `docs/matching/eq-domain.md`; tests `tests/MatchEqTests.cpp` on reference processors: RBJ peak, low
+shelf, Butterworth low-pass and two RBJ peaks matched within 0.01 dB from starts within an octave (10 ... 67 renders); Orfanidis against RBJ
+leaves -0.81 dB at 19.3 kHz (the teaching case). Learned: the dB floor is needed (a stop band stalled the optimizer at 26 dB); a render
+takes 0.28 s in Debug (W9.3 must make it fast); a start 1.7 octaves away falls into a local minimum (the model start of W9.4).
 
