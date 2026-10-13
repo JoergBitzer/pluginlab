@@ -155,3 +155,40 @@ pluginlab_add_test_eq_plugin(PluginLabTestEqSwitch "PluginLab Test EQ Switch" Te
 pluginlab_add_test_eq_plugin(PluginLabTestEqDrive "PluginLab Test EQ Drive" Teq5 0 0 0 1)
 # knobs that show something else than they do, for the calibration (W8.6): frequency 5 % high, "Q" a bandwidth in octaves, gain half the dB shown
 pluginlab_add_test_eq_plugin(PluginLabTestEqKnobs "PluginLab Test EQ Knob Faults" Teq6 0 0 0 0 1)
+
+# Two RBJ peaks for the interactions (W8.7): in series (they add in dB) and in parallel (they do not add where they overlap)
+function(pluginlab_add_two_band_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE PARALLEL)
+    juce_add_plugin(${TARGET_NAME}
+        COMPANY_NAME "Jade_Hochschule"
+        IS_SYNTH FALSE
+        NEEDS_MIDI_INPUT FALSE
+        NEEDS_MIDI_OUTPUT FALSE
+        VST3_CATEGORIES "Fx" "EQ"
+        VST3_AUTO_MANIFEST TRUE
+        COPY_PLUGIN_AFTER_BUILD TRUE
+        VST3_COPY_DIR "${PLUGINLAB_TEST_PLUGIN_DIR}"
+        PLUGIN_MANUFACTURER_CODE IHAJ
+        PLUGIN_CODE ${PLUGIN_CODE}
+        FORMATS VST3
+        PLUGIN_NAME "${DISPLAY_NAME}"
+        PRODUCT_NAME "${TARGET_NAME}")
+
+    target_sources(${TARGET_NAME} PRIVATE TestTwoBandEqPlugin.cpp)
+
+    target_compile_definitions(${TARGET_NAME}
+        PUBLIC
+            JUCE_WEB_BROWSER=0
+            JUCE_USE_CURL=0
+            JUCE_VST3_CAN_REPLACE_VST2=0
+            PLUGINLAB_TEST_EQ_PARALLEL=${PARALLEL})
+
+    target_link_libraries(${TARGET_NAME}
+        PRIVATE
+            juce::juce_audio_utils
+        PUBLIC
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_warning_flags)
+endfunction()
+
+pluginlab_add_two_band_eq_plugin(PluginLabTestEqTwoBands "PluginLab Test EQ Two Bands" Teq7 0)
+pluginlab_add_two_band_eq_plugin(PluginLabTestEqParallel "PluginLab Test EQ Parallel" Teq8 1)

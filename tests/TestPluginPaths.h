@@ -61,6 +61,17 @@ inline juce::File getEqKnobFaultPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestEqKnobs.vst3");
 }
 
+// two RBJ peaks (interactions, W8.7): in series (they add in dB) and in parallel (they do not add where they overlap)
+inline juce::File getEqTwoBandsPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestEqTwoBands.vst3");
+}
+
+inline juce::File getEqParallelPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestEqParallel.vst3");
+}
+
 inline juce::File getEqFsFaultPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestEqFs.vst3");

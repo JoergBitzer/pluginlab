@@ -1,6 +1,6 @@
 # W8: system classification, EQ band model, parameter mapping and calibration (plan)
 
-Status: **plan v2, W8.1 ... W8.6 done** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
+Status: **plan v2, W8.1 ... W8.7 done** (v1 2026-10-09 on the author's request "start the planning document on W8"; v2 the same day after the author's answers
 and comments, kept verbatim in the appendix). Planning §8, W8: "EQ band model + parameter mapping, calibration of knobs by measurement. Done when:
 mapping data validated for the test EQs." Lessons of the prototype (planning §5 item 4, `docs/prototype/LESSONS_LEARNED.md`): the model of "one peaking
 band" was too narrow; every plugin needed an hour of manual exploration for its mapping file; a tool that lists all parameters and proposes a mapping is
@@ -222,3 +222,12 @@ EQ none. Corrections on the way, from the author's ACM-3SA (local): distortion d
 else changes (its low cut and trim had been "distortion"); the band fit prunes to the good residual, the cheapest band first (two shelves at
 -30 dB had beaten its high-pass). Open: the author's test objects with `--calibrate`; a Nyquist-matched low-pass family for analogue-modelled
 pass filters (ACM-3SA's high cut gets an extra peak near 21 kHz).
+
+### W8.7 interactions between bands (0.54.0, done)
+`measureInteractions` (`src/engine/Interactions.cpp`), part of the `--calibrate` report, document `docs/eqmodel/interactions.md`, tests
+`tests/InteractionTests.cpp` (one CTest per plugin). For each pair of mapped bands: peaks at 0, 1/3, 1 and 3 octaves apart, +6/+6 and
++6/-6 dB, set through the mapping; dB(A+B) - dB(A) - dB(B) + dB(neither). New test plugins: Test EQ Two Bands (series: adds, 0.000 dB) and
+Test EQ Parallel (1 + (H1 - 1) + (H2 - 1): -2.480 / +3.493 dB at one frequency, theory -2.486 / +3.502 dB; still 0.5 dB three octaves
+apart). They are also the first multi-band test of the survey and the mapping: both bands found, laws as in the code; a plugin-wide
+bypass is proposed as band 1's switch (noted in the mappings). Open: the author's test objects with `--calibrate`.
+

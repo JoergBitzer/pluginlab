@@ -21,6 +21,7 @@ signals (the numbers come from the tests); implementation.
 | parameter survey: what each parameter does, coupled parameters (band model: `docs/eqmodel/`) | [../eqmodel/parameter-survey.md](../eqmodel/parameter-survey.md) | - | W8.4, done |
 | mapping: knob laws, mapping files, a setting for a band (`--map`) | [../eqmodel/mapping.md](../eqmodel/mapping.md) | - | W8.5, done |
 | spectrogram of the sweep in the fingerprint report (two resolutions, plasma) | [spectrogram.md](spectrogram.md) | - | 0.52.0, done |
+| interactions between bands: do the bands add in dB (part of `--calibrate`) | [../eqmodel/interactions.md](../eqmodel/interactions.md) | - | W8.7, done |
 | calibration, myth and reality: shown against measured at 44.1/48/96 kHz (`--calibrate`) | [../eqmodel/calibration.md](../eqmodel/calibration.md) | - | W8.6, done |
 | first run on twelve real EQs at their defaults (measurement and GUI review) | [real-plugins-2026-10-09.md](real-plugins-2026-10-09.md) | - | results |
 

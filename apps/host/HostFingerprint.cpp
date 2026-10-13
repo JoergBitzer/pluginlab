@@ -6,6 +6,7 @@
 #include "pluginlab/PluginLabVersion.h"
 #include "pluginlab/engine/Calibration.h"
 #include "pluginlab/engine/Fingerprint.h"
+#include "pluginlab/engine/Interactions.h"
 #include "pluginlab/engine/Mapping.h"
 #include "pluginlab/engine/PluginDevice.h"
 #include "pluginlab/engine/ParameterSurvey.h"
@@ -24,6 +25,7 @@ namespace
 constexpr double kFingerprintShare = 0.75; // of a report: the fingerprint; the measurement units the rest
 constexpr double kSurveyShare = 0.97;      // of a mapping: the survey; the proposal the rest
 constexpr double kCalibrationSurveyShare = 0.5; // of a calibration without a mapping: the survey first
+constexpr double kCalibrationShare = 0.8;       // of the rest: the calibration; the interactions of the bands the remainder
 // the spectrogram of the fingerprint report: a synchronized sweep through the plugin at its defaults (docs/measurements/spectrogram.md)
 constexpr double kSpectrogramStartHz = 20.0;
 constexpr double kSpectrogramStopHz = 20000.0;
@@ -409,12 +411,19 @@ bool writeCalibrationReport(const juce::File& pluginFile, const juce::File& repo
             mapping->write(file);
             note = "No mapping existed: the survey proposed one, written to `" + file.getFullPathName() + "` (not confirmed; check it with \"View mapping\").";
         }
+        // the calibration band by band, then whether the bands add (W8.7)
+        const double calibrationEnd = share + (1.0 - share) * kCalibrationShare;
         const pluginlab::engine::CalibrationSettings settings;
-        const pluginlab::engine::CalibrationResult result = pluginlab::engine::calibrate(subject, *mapping, settings, [&progress, share](double fraction, const juce::String& step) {
-            progress(share + (1.0 - share) * fraction, "calibration: " + step);
+        const pluginlab::engine::CalibrationResult result = pluginlab::engine::calibrate(subject, *mapping, settings, [&progress, share, calibrationEnd](double fraction, const juce::String& step) {
+            progress(share + (calibrationEnd - share) * fraction, "calibration: " + step);
         });
+        const pluginlab::engine::InteractionResult interactions =
+            pluginlab::engine::measureInteractions(subject, *mapping, {}, [&progress, calibrationEnd](double fraction, const juce::String& step) {
+                progress(calibrationEnd + (1.0 - calibrationEnd) * fraction, "interactions: " + step);
+            });
         report += pluginlab::engine::signReport("# Calibration: " + description.name + " " + description.version + "\n\n" + note + "\n\n"
                                                     + pluginlab::engine::createCalibrationReport(result) + "\n"
+                                                    + pluginlab::engine::createInteractionReport(interactions) + "\n"
                                                     + pluginlab::engine::createCalibrationReportFooter(settings),
                                                 "PluginLabHost, calibration")
                   + "\n";

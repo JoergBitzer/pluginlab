@@ -10,6 +10,7 @@ target_sources(PluginLabTests
         VersionTests.cpp
         ScannerTests.cpp
         HostedPluginTests.cpp
+        InteractionTests.cpp
         ValidatorTests.cpp
         LoaderTests.cpp
         MappingTests.cpp
@@ -79,7 +80,7 @@ if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
 
-add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)")
+add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)")
 # a hanging test (a dialog nobody can click, a plugin that never returns) must fail soon, not after the default 25 minutes
 set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 600 RESOURCE_LOCK display)
 # the fingerprint measures many test plugins (with the system class at A and B since 0.49.0): a test with a limit of its own; not at the same
@@ -91,6 +92,12 @@ add_test(NAME PluginLabFingerprintRealTime COMMAND PluginLabTests --only "Real-t
 set_tests_properties(PluginLabFingerprintRealTime PROPERTIES TIMEOUT 600 RUN_SERIAL TRUE)
 # the parameter survey (W8.4) renders some hundred times per plugin: one entry per plugin with its own limit (Debug: 1 ... 9 minutes each), so
 # that "ctest -j" runs them side by side
+# the interactions between bands (W8.7): one entry per plugin
+foreach(COMBINED "Test EQ Two Bands" "Test EQ Parallel" "Reference EQ")
+    string(REPLACE " " "" INTERACTION_TEST_NAME "${COMBINED}")
+    add_test(NAME PluginLabInteractions_${INTERACTION_TEST_NAME} COMMAND PluginLabTests --only "Interactions (W8.7): ${COMBINED}")
+    set_tests_properties(PluginLabInteractions_${INTERACTION_TEST_NAME} PROPERTIES TIMEOUT 1200)
+endforeach()
 # the calibration (W8.6) measures every band parameter at three sample rates: one entry per plugin
 foreach(CALIBRATED "Test EQ" "Test EQ Fs Fault" "Test EQ Knob Faults" "Reference EQ")
     string(REPLACE " " "" CALIBRATION_TEST_NAME "${CALIBRATED}")

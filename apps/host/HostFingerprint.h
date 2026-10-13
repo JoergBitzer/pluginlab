@@ -24,7 +24,8 @@ bool writeMappingProposal(const juce::File& pluginFile, const juce::File& report
 
 // Command line mode --calibrate <plugin file> <report file> [<plugin identifier>]: the calibration (W8.6, "myth and reality") of every plugin of
 // the file (or the one with the identifier): the band parameters of its mapping, shown against measured, at 44.1, 48 and 96 kHz; only the
-// deviations. The mapping comes from the user's mapping folder; without one the survey proposes it first (and writes it there, as --map does).
+// deviations; then whether the bands add in dB (W8.7). The mapping comes from the user's mapping folder; without one the survey proposes it first
+// (and writes it there, as --map does).
 bool writeCalibrationReport(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier = {});
 
 // While --fingerprint, --map and --calibrate run, they write what they are doing to <report file>.progress: the fraction done (0 ... 1) on the first line, the

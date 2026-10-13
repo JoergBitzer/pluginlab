@@ -6,6 +6,7 @@ add_library(pluginlab_engine STATIC
     ChannelAdapter.cpp
     Fingerprint.cpp
     FingerprintSettings.cpp
+    Interactions.cpp
     KnobLaw.cpp
     LatencyMeasurer.cpp
     Mapping.cpp
