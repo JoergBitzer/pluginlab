@@ -1,6 +1,6 @@
 # W9: the matcher (plan)
 
-Status: **plan v2, W9.1 and W9.2 done** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
+Status: **plan v2, W9.1 ... W9.3 done** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
 `planning.md` §8: "**Matcher** (user chooses parameters, start point, frequency range, tolerance; real-time deviation display). Done when:
 master reproduced on each test plugin or the residual quantified and attributed."
 
@@ -81,7 +81,8 @@ The budget is a time limit (default 15 s per target) and a render limit; when it
 
 ### 4.4 The objective, the optimizer and the attribution
 - **Objective**: magnitude in dB on a log grid (12 points per octave) in the user's range (default 20 Hz ... 20 kHz, at most 0.45 fs),
-  third-octave weights; the tolerance default 0.1 dB largest deviation (`planning.md`: "equal" = within 0.1 dB). Output gain is matched only
+  third-octave weights; the tolerance as a level: exact 0.01, strict 0.1 (default, `planning.md`: "equal"), medium 0.25, loose 0.5 dB (the author:
+  the just noticeable difference in a third-octave band is about 1 dB). Output gain is matched only
   if the user releases a gain parameter for it. Phase: later.
 - **Optimizer**: Levenberg-Marquardt with numerical derivatives in the normalised parameters, bounded (projected onto the bounds); stops at
   the tolerance, when it stalls, or at the budget. CMA-ES only if LM proves not enough (the author: "we can add CMA-ES later").
@@ -179,4 +180,12 @@ budget (evaluations, seconds) and "at bound" flags, `MatchProblem` with its cach
 shelf, Butterworth low-pass and two RBJ peaks matched within 0.01 dB from starts within an octave (10 ... 67 renders); Orfanidis against RBJ
 leaves -0.81 dB at 19.3 kHz (the teaching case). Learned: the dB floor is needed (a stop band stalled the optimizer at 26 dB); a render
 takes 0.28 s in Debug (W9.3 must make it fast); a start 1.7 octaves away falls into a local minimum (the model start of W9.4).
+
+### W9.3 fast render path (0.58.0, done)
+`LivePluginTarget` (one live instance: poke, setting, 0.25 s settle, input) and `checkLiveTarget` (LTI by the system class, else refused; two
+renders of one setting must agree) in `src/engine/LivePluginDevice.cpp`; the impulse stimulus of `MagnitudeProbe`. Document
+`docs/matching/fast-render-path.md`; tests `tests/MatchPluginTests.cpp`: about 40 ms per render in Debug (seven times faster than the careful
+sweep), within 0.004 dB of it on four test plugins and within 0.0004 dB of the exact RBJ curve (the sweep's short window is the less exact
+one); the drive and the tremolo refused with their reasons. Limit: ringing longer than the 0.35 s window (Q 8 at 20 Hz). With it, on the
+author's suggestion: tolerance levels exact 0.01 / strict 0.1 (default) / medium 0.25 / loose 0.5 dB (`MatchTolerance`).
 

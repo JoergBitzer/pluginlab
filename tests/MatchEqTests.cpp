@@ -103,6 +103,32 @@ public:
         const auto probe = std::make_shared<match::MagnitudeProbe>(probeSettings);
         const std::vector<double>& grid = probe->getFrequencies();
 
+        beginTest("the tolerance levels (the author: the just noticeable difference in a third-octave band is about 1 dB)");
+        {
+            expectEquals(match::getToleranceDb(match::MatchTolerance::Exact), 0.01);
+            expectEquals(match::getToleranceDb(match::MatchTolerance::Strict), 0.1);
+            expectEquals(match::getToleranceDb(match::MatchTolerance::Medium), 0.25);
+            expectEquals(match::getToleranceDb(match::MatchTolerance::Loose), 0.5);
+            expect(match::parseTolerance("medium") == match::MatchTolerance::Medium);
+            expect(match::parseTolerance("Loose") == match::MatchTolerance::Loose);
+            expect(! match::parseTolerance("tight").has_value());
+            // a looser tolerance ends the search sooner: the same twin match at exact and at loose
+            const eq::Band master = makeBand(eq::DesignFamily::Rbj, ref::FilterType::Peak, 1000.0, 6.0, 2.0);
+            const eq::Band start = makeBand(eq::DesignFamily::Rbj, ref::FilterType::Peak, 600.0, 3.0, 1.2);
+            const std::vector<double> curve = match::getCurveMagnitude(eq::EqModel{{master}, 0.0}, grid, kSampleRate);
+            int renders[2] = {0, 0};
+            int slot = 0;
+            for (const match::MatchTolerance tolerance : {match::MatchTolerance::Exact, match::MatchTolerance::Loose})
+            {
+                match::MatchProblem problem(curve, makeTarget({start}), probe, match::makeMagnitudeObjective(grid.size(), tolerance), makeSpace({start}));
+                const match::OptimizerResult result = problem.solve(kTestBudget);
+                expect(result.withinTolerance, match::getToleranceName(tolerance));
+                renders[slot++] = result.evaluations;
+            }
+            expect(renders[1] <= renders[0], "loose " + juce::String(renders[1]) + " renders, exact " + juce::String(renders[0]));
+            logMessage("tolerance: exact " + juce::String(renders[0]) + " renders, loose " + juce::String(renders[1]) + " renders");
+        }
+
         beginTest("the probe: a measured band equals its band-model curve");
         {
             const eq::Band band = makeBand(eq::DesignFamily::Rbj, ref::FilterType::Peak, 1000.0, 6.0, 2.0);

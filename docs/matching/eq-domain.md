@@ -11,6 +11,12 @@ Unit of W9.2. Code: `src/match/EqDomain.cpp` (`MagnitudeProbe`,
 | `getCurveMagnitude` | a band-model curve as the master (bands typed in or from a band fit): exact, no render, the same grid and floor |
 | `makeMagnitudeObjective` | the dB difference, every grid point the same weight (the grid is logarithmic: every octave counts the same); within the tolerance when the largest difference is below it (default 0.1 dB, `planning.md`: "equal") |
 
+**Tolerance levels** (0.58.0, on the author's suggestion: the just noticeable
+difference of a level in a third-octave band is about 1 dB): `MatchTolerance`
+exact (0.01 dB, for checking precision), **strict (0.1 dB, the default;
+`planning.md`: "equal")**, medium (0.25 dB), loose (0.5 dB). A looser level ends
+the search sooner: the RBJ twin below takes 31 renders at exact, 23 at loose.
+
 Amplitude only (the author: phase later). The output gain is matched only if
 the user releases a gain parameter for it.
 

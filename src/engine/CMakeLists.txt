@@ -9,6 +9,7 @@ add_library(pluginlab_engine STATIC
     Interactions.cpp
     KnobLaw.cpp
     LatencyMeasurer.cpp
+    LivePluginDevice.cpp
     Mapping.cpp
     MeasurementEngine.cpp
     OfflineRenderer.cpp
