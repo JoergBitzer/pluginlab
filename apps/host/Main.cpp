@@ -32,6 +32,7 @@ const juce::String kFingerprintOption = "--fingerprint"; // --fingerprint <plugi
 const juce::String kMeasureOption = "--measure";         // --measure <plugin file> <report file>
 const juce::String kMapOption = "--map";                 // --map <plugin file> <report file>
 const juce::String kCalibrateOption = "--calibrate";     // --calibrate <plugin file> <report file>
+const juce::String kMatchOption = "--match";             // --match <job file> <report file>
 const juce::String kGuiSnapshotOption = "--gui-snapshot"; // --gui-snapshot <plugin file> <folder>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
@@ -147,6 +148,15 @@ public:
                 identifier = arguments[identifierIndex].unquoted();
             }
             const bool written = pluginlab::host::writeMappingProposal(resolveFile(arguments[mapIndex + 1]), resolveFile(arguments[mapIndex + 2]), identifier);
+            setApplicationReturnValue(written ? kExitOk : kExitReportFailed);
+            quit();
+            return;
+        }
+
+        const int matchIndex = arguments.indexOf(kMatchOption);
+        if (matchIndex >= 0 && matchIndex + kArgumentsOfReport < arguments.size())
+        {
+            const bool written = pluginlab::host::writeMatchReport(resolveFile(arguments[matchIndex + 1]), resolveFile(arguments[matchIndex + 2]));
             setApplicationReturnValue(written ? kExitOk : kExitReportFailed);
             quit();
             return;

@@ -28,7 +28,13 @@ bool writeMappingProposal(const juce::File& pluginFile, const juce::File& report
 // (and writes it there, as --map does).
 bool writeCalibrationReport(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier = {});
 
-// While --fingerprint, --map and --calibrate run, they write what they are doing to <report file>.progress: the fraction done (0 ... 1) on the first line, the
+// Command line mode --match <job file> <report file>: the matcher (W9.4, docs/matching/plugin-matching.md). The job (JSON) names the master
+// ("plugin" with a "setting" of normalised values by parameter name, or a "curve" of bands), the targets ("plugin", "release": the parameter
+// names to optimize, "start": values by name, "modelStart": from the master's bands through the target's mapping in the user's mapping
+// folder), "tolerance" (exact, strict, medium, loose), "seconds" per target, "lowestHz" and "highestHz". Writes the report (Markdown).
+bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile);
+
+// While --fingerprint, --map, --calibrate and --match run, they write what they are doing to <report file>.progress: the fraction done (0 ... 1) on the first line, the
 // step on the second (the Developer page draws a progress bar from it), and print each new step. The file is removed at the end.
 juce::File getProgressFile(const juce::File& reportFile);
 

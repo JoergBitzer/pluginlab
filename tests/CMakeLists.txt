@@ -33,6 +33,7 @@ target_sources(PluginLabTests
         NonlinearReferenceTests.cpp
         OracleTests.cpp
         ParameterSurveyTests.cpp
+        PluginMatchTests.cpp
         BandFitTests.cpp
         CalibrationTests.cpp
         BrowserTests.cpp
@@ -84,7 +85,7 @@ if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
 
-add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)|Fast render path (W9.3)")
+add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)|Fast render path (W9.3)|Plugin matching (W9.4)")
 # a hanging test (a dialog nobody can click, a plugin that never returns) must fail soon, not after the default 25 minutes
 set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 600 RESOURCE_LOCK display)
 # the fingerprint measures many test plugins (with the system class at A and B since 0.49.0): a test with a limit of its own; not at the same
@@ -99,6 +100,9 @@ set_tests_properties(PluginLabFingerprintRealTime PROPERTIES TIMEOUT 600 RUN_SER
 # the fast render path of the matcher (W9.3): plugins against the careful delivery
 add_test(NAME PluginLabFastRenderPath COMMAND PluginLabTests --only "Fast render path (W9.3)")
 set_tests_properties(PluginLabFastRenderPath PROPERTIES TIMEOUT 1200)
+# matching plugins (W9.4): the test pairs of the plan
+add_test(NAME PluginLabPluginMatching COMMAND PluginLabTests --only "Plugin matching (W9.4)")
+set_tests_properties(PluginLabPluginMatching PROPERTIES TIMEOUT 1800)
 # the interactions between bands (W8.7): one entry per plugin
 foreach(COMBINED "Test EQ Two Bands" "Test EQ Parallel" "Reference EQ")
     string(REPLACE " " "" INTERACTION_TEST_NAME "${COMBINED}")
@@ -161,6 +165,16 @@ add_test(NAME PluginLabHostMap
         -DSETTINGS_FOLDER=${CMAKE_CURRENT_BINARY_DIR}/host_map_settings
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostMap.cmake)
 set_tests_properties(PluginLabHostMap PROPERTIES TIMEOUT 1200)
+
+# the matcher from the command line (W9.4): a job file, two targets
+add_test(NAME PluginLabHostMatch
+    COMMAND ${CMAKE_COMMAND}
+        -DHOST_APPLICATION=$<TARGET_FILE:PluginLabHost>
+        -DPLUGIN_FOLDER=${PLUGINLAB_TEST_PLUGIN_DIR}
+        -DREPORT_FILE=${CMAKE_CURRENT_BINARY_DIR}/host_match.md
+        -DSETTINGS_FOLDER=${CMAKE_CURRENT_BINARY_DIR}/host_match_settings
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostMatch.cmake)
+set_tests_properties(PluginLabHostMatch PROPERTIES TIMEOUT 900)
 
 # The GUI review (W5d): the capture of a hosted editor needs X (xwd and ImageMagick); Linux only, in the virtual display of tools/ctest_offscreen.sh
 if(UNIX AND NOT APPLE)

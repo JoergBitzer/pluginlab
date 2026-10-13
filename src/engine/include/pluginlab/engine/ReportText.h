@@ -19,6 +19,9 @@ juce::String wrapText(const juce::String& text, int width = kReportLineLength);
 // (juce::String(x, 0) does not round: it gives every digit.)
 juce::String formatFrequency(double hertz);
 
+// A plugin's text without false precision: a number with more than two decimals rounded ("7678.3115234" -> "7678", "7.5249996" -> "7.52")
+juce::String tidyNumberText(const juce::String& text);
+
 // Who made a review: "Jade Benchmark, pluginlab 0.42.0 (PluginLabHost; JUCE v9.0.3; Linux), 2026-10-11 10:12", for the head of every report
 juce::String getReviewSignature(const juce::String& program);
 

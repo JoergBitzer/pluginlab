@@ -1,6 +1,6 @@
 # W9: the matcher (plan)
 
-Status: **plan v2, W9.1 ... W9.3 done** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
+Status: **plan v2, W9.1 ... W9.4 done** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
 `planning.md` §8: "**Matcher** (user chooses parameters, start point, frequency range, tolerance; real-time deviation display). Done when:
 master reproduced on each test plugin or the residual quantified and attributed."
 
@@ -188,4 +188,11 @@ renders of one setting must agree) in `src/engine/LivePluginDevice.cpp`; the imp
 sweep), within 0.004 dB of it on four test plugins and within 0.0004 dB of the exact RBJ curve (the sweep's short window is the less exact
 one); the drive and the tremolo refused with their reasons. Limit: ringing longer than the 0.35 s window (Q 8 at 20 Hz). With it, on the
 author's suggestion: tolerance levels exact 0.01 / strict 0.1 (default) / medium 0.25 / loose 0.5 dB (`MatchTolerance`).
+
+### W9.4 plugin matching (0.59.0, done)
+`matchPlugins` (`src/engine/PluginMatch.cpp`): master as a plugin setting or a band-model curve, targets one after another through the fast
+path with the checks, the user's released parameters, the optional model start (master bands through the target's mapping), the tolerance
+level, the report; `PluginLabHost --match <job file> <report>`. Document `docs/matching/plugin-matching.md`; tests: the main case (one
+master, three targets: Test EQ, Knob Faults, Fs Fault, all matched in 5.6 ... 6 s each), Orfanidis against RBJ not within, two bands against a
+curve, the switch EQ, the drive refused, a far start fixed by the model start (one render).
 

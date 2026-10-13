@@ -7,6 +7,7 @@
 #include "pluginlab/engine/Calibration.h"
 #include "pluginlab/engine/Fingerprint.h"
 #include "pluginlab/engine/Interactions.h"
+#include "pluginlab/engine/PluginMatch.h"
 #include "pluginlab/engine/Mapping.h"
 #include "pluginlab/engine/PluginDevice.h"
 #include "pluginlab/engine/ParameterSurvey.h"
@@ -41,35 +42,6 @@ constexpr double kSpectrogramCeilingDb = 0.0;
 double getMeasurementRate()
 {
     return pluginlab::engine::MeasurementOptions().sampleRate;
-}
-
-// a parameter's text without false precision: a number with more than two decimals rounded ("7678.3115234" -> "7678", "7.5249996" -> "7.52")
-juce::String tidyParameterText(const juce::String& text)
-{
-    const juce::String trimmed = text.trim();
-    int start = 0;
-    while (start < trimmed.length() && ! juce::CharacterFunctions::isDigit(trimmed[start]))
-    {
-        ++start;
-    }
-    int end = start;
-    int point = -1;
-    while (end < trimmed.length() && (juce::CharacterFunctions::isDigit(trimmed[end]) || (trimmed[end] == '.' && point < 0)))
-    {
-        point = trimmed[end] == '.' ? end : point;
-        ++end;
-    }
-    if (point < 0 || end - point - 1 <= 2)
-    {
-        return trimmed;
-    }
-    const double value = trimmed.substring(start, end).getDoubleValue();
-    juce::String number = std::abs(value) >= 100.0 ? juce::String(juce::roundToInt(value)) : juce::String(value, 2);
-    if (number.containsChar('.'))
-    {
-        number = number.trimCharactersAtEnd("0").trimCharactersAtEnd(".");
-    }
-    return trimmed.substring(0, start) + number + trimmed.substring(end);
 }
 
 // the sweep through the plugin at a setting as a spectrogram picture (a PNG file); false if nothing came out or the file cannot be written
@@ -119,7 +91,7 @@ juce::String writeSweepSpectrograms(juce::AudioPluginFormatManager& formatManage
         if (entry.index >= 0 && entry.index < static_cast<int>(settingB.size()))
         {
             settingB[static_cast<size_t>(entry.index)] = entry.valueB;
-            changes.add(entry.name + " = " + tidyParameterText(entry.textB));
+            changes.add(entry.name + " = " + pluginlab::engine::tidyNumberText(entry.textB));
         }
     }
     const juce::String stem = reportFile.getFileNameWithoutExtension() + "_sweep_spectrogram" + (index > 0 ? "_" + juce::String(index) : juce::String());
@@ -435,4 +407,168 @@ bool writeCalibrationReport(const juce::File& pluginFile, const juce::File& repo
     pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
     return reportFile.replaceWithText(report);
 }
+
+namespace
+{
+// normalised values by parameter name ({"Gain": 0.75, ...}) into a setting; false (with the name) if a name is not a parameter of the plugin
+bool applyNamedValues(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, const juce::var& values,
+                      std::vector<float>& setting, juce::String& error)
+{
+    const juce::DynamicObject* object = values.getDynamicObject();
+    if (object == nullptr)
+    {
+        return true;
+    }
+    juce::String instanceError;
+    const std::unique_ptr<juce::AudioPluginInstance> instance = formatManager.createPluginInstance(description, getMeasurementRate(), 512, instanceError);
+    if (instance == nullptr)
+    {
+        error = instanceError;
+        return false;
+    }
+    for (const juce::NamedValueSet::NamedValue& entry : object->getProperties())
+    {
+        bool found = false;
+        for (int index = 0; index < instance->getParameters().size() && index < static_cast<int>(setting.size()); ++index)
+        {
+            if (instance->getParameters()[index]->getName(64) == entry.name.toString())
+            {
+                setting[static_cast<size_t>(index)] = static_cast<float>(static_cast<double>(entry.value));
+                found = true;
+            }
+        }
+        if (! found)
+        {
+            error = description.name + " has no parameter \"" + entry.name.toString() + "\"";
+            return false;
+        }
+    }
+    return true;
 }
+
+std::optional<juce::PluginDescription> scanFirst(juce::AudioPluginFormatManager& formatManager, const juce::String& path)
+{
+    const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(formatManager, juce::File(path));
+    if (scan.descriptions.isEmpty())
+    {
+        return std::nullopt;
+    }
+    return scan.descriptions[0];
+}
+}
+
+bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
+{
+    const juce::var job = juce::JSON::parse(jobFile.loadFileAsString());
+    juce::String error;
+    juce::AudioPluginFormatManager formatManager;
+    hosting::addHeadlessFormats(formatManager);
+    pluginlab::engine::MatchMaster master;
+    const juce::var masterJob = job.getProperty("master", {});
+    if (const juce::Array<juce::var>* curve = masterJob.getProperty("curve", {}).getArray())
+    {
+        pluginlab::eqmodel::EqModel model;
+        for (const juce::var& entry : *curve)
+        {
+            pluginlab::eqmodel::Band band;
+            const juce::String family = entry.getProperty("family", "RBJ cookbook").toString();
+            const juce::String type = entry.getProperty("type", "peak").toString();
+            for (const pluginlab::eqmodel::DesignFamily candidate : pluginlab::eqmodel::getAllFamilies())
+            {
+                if (family.equalsIgnoreCase(pluginlab::eqmodel::getFamilyName(candidate)))
+                {
+                    band.family = candidate;
+                }
+            }
+            for (int candidate = 0; candidate <= static_cast<int>(pluginlab::reference::FilterType::HighShelf); ++candidate)
+            {
+                if (type.equalsIgnoreCase(pluginlab::reference::getFilterTypeName(static_cast<pluginlab::reference::FilterType>(candidate))))
+                {
+                    band.type = static_cast<pluginlab::reference::FilterType>(candidate);
+                }
+            }
+            band.frequencyHz = entry.getProperty("frequency", 1000.0);
+            band.gainDb = entry.getProperty("gain", 0.0);
+            band.q = entry.getProperty("q", 0.71);
+            band.order = entry.getProperty("order", 2);
+            model.bands.push_back(band);
+        }
+        master.curve = model;
+    }
+    else if (const std::optional<juce::PluginDescription> plugin = scanFirst(formatManager, masterJob.getProperty("plugin", "").toString()))
+    {
+        master.plugin = plugin;
+        master.setting = pluginlab::engine::getDefaultSetting(formatManager, *plugin, getMeasurementRate());
+        if (! applyNamedValues(formatManager, *plugin, masterJob.getProperty("setting", {}), master.setting, error))
+        {
+            std::fprintf(stderr, "%s\n", error.toRawUTF8());
+            return false;
+        }
+    }
+    else
+    {
+        std::fprintf(stderr, "the job has no master (\"plugin\" or \"curve\")\n");
+        return false;
+    }
+
+    std::vector<pluginlab::engine::MatchTarget> targets;
+    const juce::File mappingFolder = HostSettings().getMappingFolder();
+    if (const juce::Array<juce::var>* list = job.getProperty("targets", {}).getArray())
+    {
+        for (const juce::var& entry : *list)
+        {
+            const std::optional<juce::PluginDescription> plugin = scanFirst(formatManager, entry.getProperty("plugin", "").toString());
+            if (! plugin)
+            {
+                std::fprintf(stderr, "cannot scan %s\n", entry.getProperty("plugin", "").toString().toRawUTF8());
+                return false;
+            }
+            pluginlab::engine::MatchTarget target;
+            target.plugin = *plugin;
+            target.start = pluginlab::engine::getDefaultSetting(formatManager, *plugin, getMeasurementRate());
+            if (! applyNamedValues(formatManager, *plugin, entry.getProperty("start", {}), target.start, error))
+            {
+                std::fprintf(stderr, "%s\n", error.toRawUTF8());
+                return false;
+            }
+            juce::String instanceError;
+            const std::unique_ptr<juce::AudioPluginInstance> instance = formatManager.createPluginInstance(*plugin, getMeasurementRate(), 512, instanceError);
+            if (const juce::Array<juce::var>* release = entry.getProperty("release", {}).getArray())
+            {
+                for (const juce::var& name : *release)
+                {
+                    for (int index = 0; instance != nullptr && index < instance->getParameters().size(); ++index)
+                    {
+                        if (instance->getParameters()[index]->getName(64) == name.toString())
+                        {
+                            target.released.push_back(index);
+                        }
+                    }
+                }
+            }
+            target.modelStart = entry.getProperty("modelStart", false);
+            if (target.modelStart)
+            {
+                juce::String mappingError;
+                target.mapping = pluginlab::engine::Mapping::read(mappingFolder.getChildFile(pluginlab::engine::getMappingFileName(plugin->name)), mappingError);
+            }
+            targets.push_back(target);
+        }
+    }
+    pluginlab::engine::PluginMatchSettings settings;
+    settings.probe.sampleRate = getMeasurementRate();
+    settings.probe.lowestHz = job.getProperty("lowestHz", 20.0);
+    settings.probe.highestHz = job.getProperty("highestHz", 20000.0);
+    settings.budget.seconds = job.getProperty("seconds", 15.0);
+    if (const std::optional<pluginlab::match::MatchTolerance> tolerance = pluginlab::match::parseTolerance(job.getProperty("tolerance", "strict").toString()))
+    {
+        settings.tolerance = *tolerance;
+    }
+    ProgressWriter progress(reportFile);
+    const pluginlab::engine::PluginMatchResult result =
+        pluginlab::engine::matchPlugins(formatManager, master, targets, settings, [&progress](double fraction, const juce::String& step) { progress(fraction, step); });
+    pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
+    return reportFile.replaceWithText(pluginlab::engine::signReport("# Match\n\n" + pluginlab::engine::createPluginMatchReport(result), "PluginLabHost, match"));
+}
+}
+

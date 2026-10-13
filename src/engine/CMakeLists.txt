@@ -15,6 +15,7 @@ add_library(pluginlab_engine STATIC
     OfflineRenderer.cpp
     ParameterSurvey.cpp
     PluginDevice.cpp
+    PluginMatch.cpp
     PluginMeasurement.cpp
     ReportText.cpp
     RenderSlot.cpp
@@ -35,6 +36,7 @@ target_link_libraries(pluginlab_engine
         pluginlab_core
         pluginlab_measure
         pluginlab_eqmodel
+        pluginlab_match
         juce::juce_audio_formats
     PRIVATE
         juce::juce_recommended_config_flags

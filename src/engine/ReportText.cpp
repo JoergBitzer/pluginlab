@@ -122,6 +122,34 @@ juce::String alignMarkdownTables(const juce::String& markdown)
     return result;
 }
 
+juce::String tidyNumberText(const juce::String& text)
+{
+    const juce::String trimmed = text.trim();
+    int start = 0;
+    while (start < trimmed.length() && ! juce::CharacterFunctions::isDigit(trimmed[start]))
+    {
+        ++start;
+    }
+    int end = start;
+    int point = -1;
+    while (end < trimmed.length() && (juce::CharacterFunctions::isDigit(trimmed[end]) || (trimmed[end] == '.' && point < 0)))
+    {
+        point = trimmed[end] == '.' ? end : point;
+        ++end;
+    }
+    if (point < 0 || end - point - 1 <= 2)
+    {
+        return trimmed;
+    }
+    const double value = trimmed.substring(start, end).getDoubleValue();
+    juce::String number = std::abs(value) >= 100.0 ? juce::String(juce::roundToInt(value)) : juce::String(value, 2);
+    if (number.containsChar('.'))
+    {
+        number = number.trimCharactersAtEnd("0").trimCharactersAtEnd(".");
+    }
+    return trimmed.substring(0, start) + number + trimmed.substring(end);
+}
+
 juce::String formatFrequency(double hertz)
 {
     return std::abs(hertz) < 100.0 ? juce::String(hertz, 1) : juce::String(juce::roundToInt(hertz));
