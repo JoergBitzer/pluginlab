@@ -72,6 +72,12 @@ inline juce::File getEqParallelPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestEqParallel.vst3");
 }
 
+// the frequency knob ends at 5 kHz (attribution of the matcher, W9.5)
+inline juce::File getEqLimitedPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestEqLimited.vst3");
+}
+
 inline juce::File getEqFsFaultPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestEqFs.vst3");

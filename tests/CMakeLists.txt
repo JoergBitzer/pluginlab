@@ -85,7 +85,7 @@ if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
 
-add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)|Fast render path (W9.3)|Plugin matching (W9.4)")
+add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)|Fast render path (W9.3)|Plugin matching (W9.4)|Match attribution (W9.5)")
 # a hanging test (a dialog nobody can click, a plugin that never returns) must fail soon, not after the default 25 minutes
 set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 600 RESOURCE_LOCK display)
 # the fingerprint measures many test plugins (with the system class at A and B since 0.49.0): a test with a limit of its own; not at the same
@@ -103,6 +103,9 @@ set_tests_properties(PluginLabFastRenderPath PROPERTIES TIMEOUT 1200)
 # matching plugins (W9.4): the test pairs of the plan
 add_test(NAME PluginLabPluginMatching COMMAND PluginLabTests --only "Plugin matching (W9.4)")
 set_tests_properties(PluginLabPluginMatching PROPERTIES TIMEOUT 1800)
+# why a match misses the tolerance (W9.5): a knob at its end, another family, a band missing, interacting bands
+add_test(NAME PluginLabMatchAttribution COMMAND PluginLabTests --only "Match attribution (W9.5)")
+set_tests_properties(PluginLabMatchAttribution PROPERTIES TIMEOUT 1800)
 # the interactions between bands (W8.7): one entry per plugin
 foreach(COMBINED "Test EQ Two Bands" "Test EQ Parallel" "Reference EQ")
     string(REPLACE " " "" INTERACTION_TEST_NAME "${COMBINED}")

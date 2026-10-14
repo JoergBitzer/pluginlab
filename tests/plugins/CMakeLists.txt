@@ -109,6 +109,10 @@ function(pluginlab_add_test_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE FS_BU
     if(ARGC GREATER 7)
         set(KNOB_FAULTS ${ARGV7})
     endif()
+    set(LIMITED 0)
+    if(ARGC GREATER 8)
+        set(LIMITED ${ARGV8})
+    endif()
     juce_add_plugin(${TARGET_NAME}
         COMPANY_NAME "Jade_Hochschule"
         IS_SYNTH FALSE
@@ -135,7 +139,8 @@ function(pluginlab_add_test_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE FS_BU
             PLUGINLAB_TEST_EQ_PREPARE_BUG=${PREPARE_BUG}
             PLUGINLAB_TEST_EQ_ENABLE_SWITCH=${ENABLE_SWITCH}
             PLUGINLAB_TEST_EQ_DRIVE=${DRIVE}
-            PLUGINLAB_TEST_EQ_KNOB_FAULTS=${KNOB_FAULTS})
+            PLUGINLAB_TEST_EQ_KNOB_FAULTS=${KNOB_FAULTS}
+            PLUGINLAB_TEST_EQ_LIMITED=${LIMITED})
 
     target_link_libraries(${TARGET_NAME}
         PRIVATE
@@ -155,6 +160,8 @@ pluginlab_add_test_eq_plugin(PluginLabTestEqSwitch "PluginLab Test EQ Switch" Te
 pluginlab_add_test_eq_plugin(PluginLabTestEqDrive "PluginLab Test EQ Drive" Teq5 0 0 0 1)
 # knobs that show something else than they do, for the calibration (W8.6): frequency 5 % high, "Q" a bandwidth in octaves, gain half the dB shown
 pluginlab_add_test_eq_plugin(PluginLabTestEqKnobs "PluginLab Test EQ Knob Faults" Teq6 0 0 0 0 1)
+# the frequency knob ends at 5 kHz: a knob at the end of its range for the attribution of the matcher (W9.5)
+pluginlab_add_test_eq_plugin(PluginLabTestEqLimited "PluginLab Test EQ Limited" Teq9 0 0 0 0 0 1)
 
 # Two RBJ peaks for the interactions (W8.7): in series (they add in dB) and in parallel (they do not add where they overlap)
 function(pluginlab_add_two_band_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE PARALLEL)

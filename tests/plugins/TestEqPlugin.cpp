@@ -9,6 +9,7 @@
 //   PLUGINLAB_TEST_EQ_ENABLE_SWITCH=1  the band has a switch "Enabled" that is off by default (like the bands of Venn Audio Free EQ)
 //   PLUGINLAB_TEST_EQ_DRIVE=1        an "analogue" EQ for the parameter survey: "Drive" (tanh(g x) / g before the band, off at 0 dB), "Output" (a
 //                                    level after it) and "Display" (a switch of the editor that changes nothing in the audio)
+//   PLUGINLAB_TEST_EQ_LIMITED=1      the frequency knob ends at 5 kHz (the attribution of the matcher, W9.5: a knob at the end of its range)
 //   PLUGINLAB_TEST_EQ_KNOB_FAULTS=1  knobs that show something else than they do (the calibration of W8.6): the band sits 5 % above the frequency
 //                                    shown, the "Q" knob is a bandwidth in octaves (range 0.1 ... 3), the gain is half the dB shown
 namespace
@@ -17,7 +18,7 @@ constexpr int kParameterVersion = 1;
 constexpr float kMinGainDb = -24.0f;
 constexpr float kMaxGainDb = 24.0f;
 constexpr float kMinFrequencyHz = 20.0f;
-constexpr float kMaxFrequencyHz = 20000.0f;
+constexpr float kMaxFrequencyHz = PLUGINLAB_TEST_EQ_LIMITED ? 5000.0f : 20000.0f;
 constexpr float kFrequencySkew = 0.3f;
 constexpr float kMinQ = 0.1f;
 constexpr float kMaxQ = 10.0f;

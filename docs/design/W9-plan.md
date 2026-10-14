@@ -1,6 +1,6 @@
 # W9: the matcher (plan)
 
-Status: **plan v2, W9.1 ... W9.4 done** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
+Status: **plan v2, W9.1 ... W9.5 done** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
 `planning.md` §8: "**Matcher** (user chooses parameters, start point, frequency range, tolerance; real-time deviation display). Done when:
 master reproduced on each test plugin or the residual quantified and attributed."
 
@@ -195,4 +195,10 @@ path with the checks, the user's released parameters, the optional model start (
 level, the report; `PluginLabHost --match <job file> <report>`. Document `docs/matching/plugin-matching.md`; tests: the main case (one
 master, three targets: Test EQ, Knob Faults, Fs Fault, all matched in 5.6 ... 6 s each), Orfanidis against RBJ not within, two bands against a
 curve, the switch EQ, the drive refused, a far start fixed by the model start (one render).
+
+### W9.5 attribution (0.60.0, done)
+`attribute` (`src/engine/PluginMatch.cpp`) and the report's "Why not closer": a knob at the end of its range, the bands interact (W8.7,
+measured; moved before the family, because a fit describes interacting bands as another family), another design family (band fits, families
+with the same magnitude grouped), a band missing, not found (then a second start from the model). New test build Test EQ Limited (frequency
+knob to 5 kHz). Document `docs/matching/attribution.md`; tests: each of the four built-in causes is named first.
 

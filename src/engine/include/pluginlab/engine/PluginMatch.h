@@ -52,6 +52,24 @@ struct ReleasedValue
     bool atBound = false;
 };
 
+// Why a target is not within the tolerance (W9.5, docs/matching/attribution.md), in the order they are tested
+enum class MatchCause
+{
+    KnobRange,      // a released parameter at the end of its range
+    Interaction,    // the target's bands do not add (W8.7; measured, so before what the band fits suggest)
+    DesignFamily,   // the target's band is of another design family than the master's (RBJ against Orfanidis near Nyquist)
+    BandMissing,    // the master has more bands than the target makes
+    NotFound        // none of these: the optimizer (a second start from the model was tried if possible)
+};
+
+const char* getMatchCauseName(MatchCause cause);
+
+struct MatchAttribution
+{
+    MatchCause cause = MatchCause::NotFound;
+    juce::String evidence;           // the numbers behind it
+};
+
 struct TargetMatchResult
 {
     juce::String name;
@@ -62,6 +80,8 @@ struct TargetMatchResult
     std::vector<ReleasedValue> values;
     std::vector<double> targetFeatures;              // the target's magnitude at the found setting
     bool startedFromModel = false;
+    std::vector<MatchAttribution> causes;            // when not within the tolerance: every cause that applies, the first is the main one
+    double worstHz = 0.0;                            // where the deviation is largest
     double seconds = 0.0;                            // with the checks
 };
 

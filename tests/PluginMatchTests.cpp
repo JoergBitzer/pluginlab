@@ -35,11 +35,12 @@ eq::Band makeBand(eq::DesignFamily family, double frequency, double gain, double
 
 // W9.4: matching plugins (docs/matching/plugin-matching.md): the test pairs of the plan (section 6) through the fast render path, each within
 // its budget; the main case of several targets against one master.
+// Two objects: the matching of W9.4 and the attribution of W9.5 (why not closer), each a CTest of its own.
 class PluginMatchTests : public juce::UnitTest
 {
 public:
-    PluginMatchTests()
-        : juce::UnitTest("Plugin matching (W9.4)", "pluginlab")
+    explicit PluginMatchTests(bool attribution)
+        : juce::UnitTest(attribution ? "Match attribution (W9.5)" : "Plugin matching (W9.4)", "pluginlab"), m_attribution(attribution)
     {
     }
 
@@ -47,6 +48,12 @@ public:
     {
         m_formatManager = std::make_unique<juce::AudioPluginFormatManager>();
         pluginlab::hosting::addHeadlessFormats(*m_formatManager);
+        if (m_attribution)
+        {
+            testAttribution();
+            m_formatManager.reset();
+            return;
+        }
         beginTest("the plugins of the test pairs load");
         const auto referenceEq = scan(testpaths::getReferencePlugin("Eq"));
         const auto testEq = scan(testpaths::getEqPlugin());
@@ -139,6 +146,63 @@ public:
     }
 
 private:
+    // the cause the code has built in must be the first one named
+    void expectCause(const engine::PluginMatchResult& result, engine::MatchCause expected)
+    {
+        logMessage(engine::createPluginMatchReport(result));
+        expect(result.targets.size() == 1, "one target");
+        if (result.targets.size() != 1)
+        {
+            return;
+        }
+        const engine::TargetMatchResult& item = result.targets.front();
+        expect(! item.refused, item.reason);
+        expect(! item.optimizer.withinTolerance, "must miss the tolerance (largest " + juce::String(item.optimizer.largest, 3) + " dB)");
+        expect(! item.causes.empty() && item.causes.front().cause == expected,
+               juce::String("expected: ") + engine::getMatchCauseName(expected) + ", named: "
+                   + (item.causes.empty() ? juce::String("nothing") : juce::String(engine::getMatchCauseName(item.causes.front().cause))));
+    }
+
+    void testAttribution()
+    {
+        beginTest("the plugins of the attribution load");
+        const auto referenceEq = scan(testpaths::getReferencePlugin("Eq"));
+        const auto testEq = scan(testpaths::getEqPlugin());
+        const auto limited = scan(testpaths::getEqLimitedPlugin());
+        const auto parallel = scan(testpaths::getEqParallelPlugin());
+        if (! referenceEq || ! testEq || ! limited || ! parallel)
+        {
+            return;
+        }
+        beginTest("a knob at the end of its range: a peak at 8 kHz, the target's frequency knob ends at 5 kHz");
+        expectCause(engine::matchPlugins(*m_formatManager, makeReferenceMaster(*referenceEq, makeBand(eq::DesignFamily::Rbj, 8000.0, 6.0, 2.0)),
+                                         {makeTarget(*limited, {0.5625f, 0.6f, 0.141f}, {0, 1, 2})}),
+                    engine::MatchCause::KnobRange);
+
+        beginTest("another design family: Orfanidis at 10 kHz against an RBJ target");
+        expectCause(engine::matchPlugins(*m_formatManager, makeReferenceMaster(*referenceEq, makeBand(eq::DesignFamily::Orfanidis, 10000.0, 6.0, 1.0)),
+                                         {makeTarget(*testEq, {0.625f, 0.75f, 0.09f}, {0, 1, 2})}),
+                    engine::MatchCause::DesignFamily);
+
+        beginTest("a band missing: two peaks against a one-band target");
+        {
+            engine::MatchMaster master;
+            master.curve = eq::EqModel{{makeBand(eq::DesignFamily::Rbj, 300.0, 5.0, 1.0), makeBand(eq::DesignFamily::Rbj, 3000.0, -4.0, 2.0)}, 0.0};
+            expectCause(engine::matchPlugins(*m_formatManager, master, {makeTarget(*testEq, {0.5625f, 0.363f, 0.141f}, {0, 1, 2})}), engine::MatchCause::BandMissing);
+        }
+
+        beginTest("the bands interact: two overlapping peaks (in series) against the parallel two-band EQ");
+        {
+            engine::MatchMaster master;
+            master.curve = eq::EqModel{{makeBand(eq::DesignFamily::Rbj, 1000.0, 9.0, 1.0), makeBand(eq::DesignFamily::Rbj, 1414.0, 9.0, 1.0)}, 0.0};
+            std::vector<float> start = engine::getDefaultSetting(*m_formatManager, *parallel, kSampleRate);
+            engine::MatchTarget target = makeTarget(*parallel, start, {0, 1, 2, 3, 4, 5}, true);
+            target.mapping = readMapping("PluginLab Test EQ Parallel");
+            target.modelStart = true;
+            expectCause(engine::matchPlugins(*m_formatManager, master, {target}), engine::MatchCause::Interaction);
+        }
+    }
+
     std::optional<juce::PluginDescription> scan(const juce::File& file)
     {
         const pluginlab::hosting::PluginScanResult result = pluginlab::hosting::PluginScanner::scanFileInProcess(*m_formatManager, file);
@@ -186,6 +250,8 @@ private:
     }
 
     std::unique_ptr<juce::AudioPluginFormatManager> m_formatManager;
+    bool m_attribution = false;
 };
 
-static PluginMatchTests pluginMatchTests;
+static PluginMatchTests pluginMatchTests(false);
+static PluginMatchTests matchAttributionTests(true);
