@@ -245,7 +245,7 @@ void LiveResponseView::rebuildPlot()
     const double differenceStep = largestDifference > kFineDifferenceDb ? kRangeStepDb / 2.0 : 1.0; // 1 dB steps for small deviations, else 3
     options.differenceRangeDb = std::max(kSmallestDifferenceDb, std::ceil((largestDifference + kHeadroomDb) / differenceStep) * differenceStep);
     options.differenceTitle = "slot - reference (dB)";
-    options.title = m_monitor != nullptr ? "Live magnitude (impulse, " + juce::String(juce::roundToInt(m_monitor->getSampleRate())) + " Hz, at most 5 updates/s per changed slot)"
+    options.title = m_monitor != nullptr ? "EQ magnitude responses up to Nyquist (impulse, " + juce::String(juce::roundToInt(m_monitor->getSampleRate())) + " Hz, at most 5 updates/s per changed slot)"
                                          : "Live response switched off";
     if (frequencies.empty())
     {

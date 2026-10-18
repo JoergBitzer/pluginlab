@@ -15,7 +15,6 @@ namespace
 constexpr int kStopTimeoutMs = 4000;
 constexpr int kClassifyPollMs = 100;
 constexpr double kMsPerSecond = 1000.0;
-constexpr double kHighestFractionOfRate = 0.45;
 
 double nowMs()
 {
@@ -219,7 +218,7 @@ LiveResponseMonitor::LiveResponseMonitor(juce::AudioPluginFormatManager& formatM
     settings.stimulus = match::ProbeStimulus::Impulse;
     settings.sampleRate = sampleRate;
     settings.lowestHz = options.lowestHz;
-    settings.highestHz = std::min(options.highestHz, kHighestFractionOfRate * sampleRate);
+    settings.upToNyquist = true;
     settings.perOctave = options.perOctave;
     m_shared->probe = std::make_unique<match::MagnitudeProbe>(settings);
 }

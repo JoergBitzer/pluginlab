@@ -21,9 +21,21 @@ double toDb(std::complex<double> value)
 }
 
 MagnitudeProbe::MagnitudeProbe(const MagnitudeProbeSettings& settings)
-    : m_settings(settings),
-      m_frequencies(eqmodel::makeLogGrid(settings.lowestHz, std::min(settings.highestHz, kHighestShare * settings.sampleRate), settings.perOctave))
+    : m_settings(settings)
 {
+    if (settings.upToNyquist && settings.stimulus == ProbeStimulus::Impulse)
+    {
+        // the DTFT of the impulse response is exact up to fs / 2; the last point is fs / 2 itself
+        const double nyquist = 0.5 * settings.sampleRate;
+        m_frequencies = eqmodel::makeLogGrid(settings.lowestHz, nyquist, settings.perOctave);
+        while (! m_frequencies.empty() && m_frequencies.back() >= nyquist)
+        {
+            m_frequencies.pop_back();
+        }
+        m_frequencies.push_back(nyquist);
+        return;
+    }
+    m_frequencies = eqmodel::makeLogGrid(settings.lowestHz, std::min(settings.highestHz, kHighestShare * settings.sampleRate), settings.perOctave);
 }
 
 std::vector<double> MagnitudeProbe::measure(const measure::Device& device) const

@@ -10,7 +10,7 @@ namespace
 {
 constexpr int kTabBarHeight = 30;
 const juce::String kPluginsTabName = "Plugins";
-const juce::String kCompareTabName = "Compare";
+const juce::String kCompareTabName = "EQ Compare"; // the curves and the deviations assume EQs (LTI); listening works for any plugin
 const juce::String kDeveloperTabName = "Developer";
 const juce::String kMatcherTabName = "Matcher";
 constexpr int kCompareTab = 1;

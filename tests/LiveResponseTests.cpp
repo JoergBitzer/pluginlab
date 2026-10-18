@@ -191,10 +191,12 @@ public:
             }
         }
 
-        beginTest("another sample rate: the grid ends at 0.45 of it");
+        beginTest("the curves go up to Nyquist, at every rate");
+        for (const double rate : {44100.0, 48000.0, 96000.0})
         {
-            engine::LiveResponseMonitor monitor(*m_formatManager, 32000.0);
-            expectLessOrEqual(monitor.getFrequencies().back(), 0.45 * 32000.0 + 1.0e-6);
+            engine::LiveResponseMonitor monitor(*m_formatManager, rate);
+            expectWithinAbsoluteError(monitor.getFrequencies().back(), 0.5 * rate, 1.0e-9);
+            expect(monitor.getFrequencies()[monitor.getFrequencies().size() - 2] < 0.5 * rate, "rising");
         }
         m_formatManager.reset(); // before JUCE's leak check at exit (this test object is static)
     }

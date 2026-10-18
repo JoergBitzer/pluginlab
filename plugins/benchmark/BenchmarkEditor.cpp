@@ -31,7 +31,7 @@ BenchmarkEditor::BenchmarkEditor(BenchmarkProcessor& owner)
     const juce::Colour background = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId);
     m_tabs.setTabBarDepth(kTabBarHeight);
     m_tabs.addTab("Plugins", background, m_pluginsPage, true);
-    m_tabs.addTab("Compare", background, m_comparePage, true);
+    m_tabs.addTab("EQ Compare", background, m_comparePage, true);
     m_tabs.addTab("Matcher", background, m_matcherPage, true);
     addAndMakeVisible(m_tabs);
     setResizable(true, true);

@@ -26,6 +26,7 @@ struct MagnitudeProbeSettings
     double sampleRate = 48000.0;
     double lowestHz = 20.0;        // the user's frequency range
     double highestHz = 20000.0;    // at most 0.45 of the sample rate
+    bool upToNyquist = false;      // the grid ends at exactly fs / 2 instead (impulse only: the live display compares EQs where they cramp)
     double perOctave = 12.0;       // points of the log grid
     double levelDbfs = -12.0;      // peak of the sweep
     double sweepSeconds = 0.5;

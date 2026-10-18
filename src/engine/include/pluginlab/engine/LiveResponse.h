@@ -20,9 +20,8 @@ struct LiveResponseOptions
 {
     double updatesPerSecond = 5.0;     // per slot (the author: 5 per changed slot)
     double classifyAfterSeconds = 1.0; // the knobs at rest this long: the system class of the setting is checked
-    double lowestHz = 20.0;
-    double highestHz = 20000.0;        // at most 0.45 of the sample rate
-    double perOctave = 12.0;
+    double lowestHz = 20.0;            // up to fs / 2 (the author: EQs differ most where they cramp towards Nyquist)
+    double perOctave = 48.0;           // dense enough near fs / 2 (the top octave: 48 points)
 };
 
 struct LiveSlotResponse

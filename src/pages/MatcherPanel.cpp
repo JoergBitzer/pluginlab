@@ -17,6 +17,7 @@ namespace pluginlab::host
 {
 namespace
 {
+constexpr double kLivePerOctave = 48.0; // the live view: dense up to fs / 2
 constexpr int kMargin = 8;
 constexpr int kRowHeight = 26;
 constexpr int kLabelWidth = 70;
@@ -148,6 +149,8 @@ public:
         match::MagnitudeProbeSettings settings;
         settings.sampleRate = kSampleRate;
         settings.stimulus = match::ProbeStimulus::Impulse;
+        settings.upToNyquist = true; // the curves up to fs / 2 (the match itself keeps its frequency range)
+        settings.perOctave = kLivePerOctave;
         m_probe = std::make_unique<match::MagnitudeProbe>(settings);
         if (master)
         {
@@ -526,6 +529,9 @@ void MatcherPanel::rebuildLive()
         // the band curve: its exact magnitude on the probe's grid
         match::MagnitudeProbeSettings settings;
         settings.sampleRate = kSampleRate;
+        settings.stimulus = match::ProbeStimulus::Impulse; // the grid of the live view (up to fs / 2)
+        settings.upToNyquist = true;
+        settings.perOctave = kLivePerOctave;
         const match::MagnitudeProbe grid(settings);
         eqmodel::Band band;
         band.type = static_cast<reference::FilterType>(std::array<int, 5>{6, 7, 8, 0, 1}[static_cast<size_t>(std::max(0, m_curveType.getSelectedItemIndex()))]);

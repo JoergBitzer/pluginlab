@@ -260,7 +260,8 @@ ComparePanel::ComparePanel(pluginlab::engine::MeasurementEngine& engine, HostSet
     {
         addAndMakeVisible(component);
     }
-    m_slotsLabel.setText("Slots: the dry reference and the plugins loaded on the Plugins page. Select a row or press 1 ... 9 to hear a slot.", juce::dontSendNotification);
+    m_slotsLabel.setText("EQ Compare - slots: the dry reference and the plugins loaded on the Plugins page. Select a row or press 1 ... 9 to hear a slot.",
+                         juce::dontSendNotification);
     updateFileControls();
     setStatus("Add audio files, load plugins on the Plugins page, then press Play.");
     if (isInsideDaw())
