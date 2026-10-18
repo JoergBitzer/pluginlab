@@ -41,6 +41,7 @@ target_sources(PluginLabTests
         CalibrationTests.cpp
         BrowserTests.cpp
         CatalogTests.cpp
+        EasyTests.cpp
         EngineTests.cpp
         EqModelTests.cpp
         FingerprintTests.cpp
@@ -61,6 +62,7 @@ target_compile_definitions(PluginLabTests
         PLUGINLAB_ORACLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/oracle"
         PLUGINLAB_MAPPING_DIR="${CMAKE_SOURCE_DIR}/mappings"
         PLUGINLAB_SCANNER_EXECUTABLE="$<TARGET_FILE:PluginLabScanner>"
+        PLUGINLAB_HOST_EXECUTABLE="$<TARGET_FILE:PluginLabHost>"
         JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_PRODUCT_NAME>"
         JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_VERSION>")
 

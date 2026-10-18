@@ -10,7 +10,7 @@
 
 namespace pluginlab::host
 {
-class MatchJobThread;
+class MatchJob;
 class LiveDeviationThread;
 
 // The page "Matcher" (W9.6, docs/matching/matcher-page.md): the master (a loaded plugin as it is set, or a band curve), the targets (the other
@@ -116,7 +116,7 @@ private:
     juce::Label m_status;
     juce::Rectangle<int> m_progressArea;
 
-    std::unique_ptr<MatchJobThread> m_job;
+    std::unique_ptr<MatchJob> m_job;
     std::unique_ptr<LiveDeviationThread> m_live;
     juce::File m_lastReport;
     double m_fraction = -1.0;

@@ -13,6 +13,8 @@ const juce::String kPluginsTabName = "Plugins";
 const juce::String kCompareTabName = "EQ Compare"; // the curves and the deviations assume EQs (LTI); listening works for any plugin
 const juce::String kDeveloperTabName = "Developer";
 const juce::String kMatcherTabName = "Matcher";
+const juce::String kEasyTabName = "Easy";        // the musician's walkthrough (W10.4); last, so that the tabs of the tests keep their places
+constexpr int kPluginsTab = 0;
 constexpr int kCompareTab = 1;
 constexpr int kMatcherTab = 3;
 constexpr double kMsPerSecond = 1000.0;
@@ -37,6 +39,20 @@ HostShell::HostShell(const StartupOptions& options)
     m_comparePage = new ComparePanel(m_engine, m_settings);
     m_developerPage = new DeveloperPanel(m_engine, m_settings);
     m_matcherPage = new MatcherPanel(m_engine, m_settings);
+    m_easyPage = new EasyPanel(m_engine, m_settings);
+    m_easyPage->onShowPlugins = [this] { setCurrentTabIndex(kPluginsTab); };
+    m_easyPage->onShowEditorOfSlot = [this](int slot) { m_pluginsPage->showEditorOfSlot(slot); };
+    m_easyPage->onPlayOrStop = [this] {
+        if (m_comparePage->isPlaying())
+        {
+            m_comparePage->stopPlaying();
+        }
+        else
+        {
+            m_comparePage->startPlaying(); // the audio files of the page EQ Compare
+        }
+    };
+    m_easyPage->isPlaying = [this] { return m_comparePage->isPlaying(); };
     m_matcherPage->onListen = [this] { setCurrentTabIndex(kCompareTab); };
     m_matcherPage->onShowReport = [this](const juce::String& title, const juce::File& report) { m_developerPage->showReport(title, report); };
     m_pluginsPage->onSlotsChanged = [this] { slotsChanged(); };
@@ -50,6 +66,7 @@ HostShell::HostShell(const StartupOptions& options)
     addTab(kCompareTabName, background, m_comparePage, true);
     addTab(kDeveloperTabName, background, m_developerPage, true);
     addTab(kMatcherTabName, background, m_matcherPage, true);
+    addTab(kEasyTabName, background, m_easyPage, true);
     setSize(kWindowWidth, kWindowHeight);
     m_comparePage->slotsChanged();
 
@@ -205,6 +222,7 @@ void HostShell::changeEngineRate(double sampleRate)
     m_comparePage->slotsChanged();
     m_developerPage->refresh();
     m_matcherPage->slotsChanged();
+    m_easyPage->slotsChanged();
     saveSession();
 }
 

@@ -27,7 +27,7 @@ constexpr int kBlocksToSettle = 200;               // the engine's alignment del
 constexpr int kRestoreWaitMs = 3000;
 constexpr int kEditorWidth = 1100;                 // the editor's default size
 constexpr int kEditorHeight = 760;
-constexpr int kCompareTab = 1;
+constexpr int kCompareTab = 2; // Easy, Plugins, EQ Compare, Matcher
 }
 
 // W10.2: the processor of Jade Benchmark, the plugin product (docs/design/W10-plan.md): the DAW's track through the slots, the latency the DAW
@@ -121,6 +121,8 @@ public:
             editor->setSize(kEditorWidth, kEditorHeight);
             if (auto* tabs = findChild<juce::TabbedComponent>(*editor))
             {
+                expectEquals(tabs->getTabNames()[0], juce::String("Easy"), "the musician's page first (W10.4)");
+                writePicture(*editor, "pluginlab_benchmark_easy.png");
                 tabs->setCurrentTabIndex(kCompareTab);
             }
             if (auto* compare = findChild<pluginlab::host::ComparePanel>(*editor))
@@ -158,6 +160,19 @@ public:
     }
 
 private:
+    void writePicture(juce::Component& component, const juce::String& name)
+    {
+        const juce::File picture = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile(name);
+        juce::FileOutputStream stream(picture);
+        if (stream.openedOk())
+        {
+            stream.setPosition(0);
+            stream.truncate();
+            juce::PNGImageFormat().writeImageToStream(component.createComponentSnapshot(component.getLocalBounds()), stream);
+            logMessage("picture: " + picture.getFullPathName());
+        }
+    }
+
     template <typename Type>
     static Type* findChild(juce::Component& parent)
     {

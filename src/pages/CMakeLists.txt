@@ -4,9 +4,11 @@
 add_library(pluginlab_pages STATIC
     ComparePanel.cpp
     DeveloperPanel.cpp
+    EasyPanel.cpp
     HostMainComponent.cpp
     HostSettings.cpp
     LiveResponseView.cpp
+    MatchJob.cpp
     MatcherPanel.cpp
     PageServices.cpp)
 

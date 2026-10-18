@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -36,6 +37,13 @@ public:
     // Processes the block: output = this slot's version of input (same size). Audio thread safe after prepare().
     void process(const juce::AudioBuffer<float>& input, juce::AudioBuffer<float>& output);
 
+    // The level trim for listening (W10.4: the slots compared at the same level): any thread; the audio thread ramps to a new value within
+    // one block (no click)
+    void setTrimDb(float decibels);
+    float getTrimDb() const;
+    // Applies the trim to a block of this slot's output (audio thread)
+    void applyTrim(juce::AudioBuffer<float>& output);
+
 private:
     void warmUp();
     void delayOutput(juce::AudioBuffer<float>& output);
@@ -53,5 +61,8 @@ private:
     int m_compensation = 0;
     int m_delayPosition = 0;
     std::vector<std::vector<float>> m_delayLines;
+
+    std::atomic<float> m_trimDb{0.0f};
+    float m_appliedTrimGain = 1.0f; // audio thread
 };
 }

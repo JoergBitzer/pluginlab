@@ -9,7 +9,8 @@ constexpr int kHeight = 760;
 constexpr int kMinimumWidth = 800;
 constexpr int kMinimumHeight = 560;
 constexpr int kTabBarHeight = 30;
-constexpr int kCompareTab = 1;
+constexpr int kPluginsTab = 1;
+constexpr int kCompareTab = 2;
 }
 
 BenchmarkEditor::BenchmarkEditor(BenchmarkProcessor& owner)
@@ -18,6 +19,9 @@ BenchmarkEditor::BenchmarkEditor(BenchmarkProcessor& owner)
     m_pluginsPage = new pluginlab::host::HostMainComponent(owner.getEngine(), owner.getFormatManager(), owner.getSettings());
     m_comparePage = new pluginlab::host::ComparePanel(owner.getEngine(), owner.getSettings());
     m_matcherPage = new pluginlab::host::MatcherPanel(owner.getEngine(), owner.getSettings());
+    m_easyPage = new pluginlab::host::EasyPanel(owner.getEngine(), owner.getSettings());
+    m_easyPage->onShowPlugins = [this] { m_tabs.setCurrentTabIndex(kPluginsTab); };
+    m_easyPage->onShowEditorOfSlot = [this](int slot) { m_pluginsPage->showEditorOfSlot(slot); };
     m_pluginsPage->onSlotsChanged = [this] { slotsChanged(); };
     m_comparePage->onShowEditorOfSlot = [this](int slot) { m_pluginsPage->showEditorOfSlot(slot); };
     m_matcherPage->onListen = [this] { m_tabs.setCurrentTabIndex(kCompareTab); };
@@ -27,9 +31,11 @@ BenchmarkEditor::BenchmarkEditor(BenchmarkProcessor& owner)
         m_pluginsPage->refresh();
         m_comparePage->slotsChanged();
         m_matcherPage->slotsChanged();
+        m_easyPage->slotsChanged();
     };
     const juce::Colour background = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId);
     m_tabs.setTabBarDepth(kTabBarHeight);
+    m_tabs.addTab("Easy", background, m_easyPage, true); // the musician's page first
     m_tabs.addTab("Plugins", background, m_pluginsPage, true);
     m_tabs.addTab("EQ Compare", background, m_comparePage, true);
     m_tabs.addTab("Matcher", background, m_matcherPage, true);
@@ -50,6 +56,7 @@ void BenchmarkEditor::slotsChanged()
 {
     m_comparePage->slotsChanged();
     m_matcherPage->slotsChanged();
+    m_easyPage->slotsChanged();
     m_processor.slotsChanged();
 }
 

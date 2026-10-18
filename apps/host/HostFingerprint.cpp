@@ -24,6 +24,7 @@ namespace pluginlab::host
 {
 namespace
 {
+constexpr double kLevelFloorDb = -60.0; // the level of a matched target: only where the master is above this
 constexpr double kFingerprintShare = 0.75; // of a report: the fingerprint; the measurement units the rest
 constexpr double kSurveyShare = 0.97;      // of a mapping: the survey; the proposal the rest
 constexpr double kCalibrationSurveyShare = 0.5; // of a calibration without a mapping: the survey first
@@ -582,8 +583,27 @@ bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
         object->setProperty("plugin", index < targets.size() ? targets[index].plugin.createIdentifierString() : juce::String());
         object->setProperty("name", item.name);
         object->setProperty("refused", item.refused);
+        object->setProperty("reason", item.reason);
         object->setProperty("matched", ! item.refused && item.optimizer.withinTolerance);
         object->setProperty("largestDb", item.optimizer.largest);
+        object->setProperty("worstHz", item.worstHz);
+        if (! item.causes.empty())
+        {
+            object->setProperty("cause", pluginlab::engine::getMatchCauseName(item.causes.front().cause));
+            object->setProperty("evidence", item.causes.front().evidence);
+        }
+        // the level of the matched target against the master (mean dB difference where the master is above -60 dB): the trim for listening
+        double levelSum = 0.0;
+        int levelCount = 0;
+        for (size_t point = 0; point < item.targetFeatures.size() && point < result.masterFeatures.size(); ++point)
+        {
+            if (result.masterFeatures[point] > kLevelFloorDb)
+            {
+                levelSum += item.targetFeatures[point] - result.masterFeatures[point];
+                ++levelCount;
+            }
+        }
+        object->setProperty("levelDb", levelCount > 0 ? levelSum / levelCount : 0.0);
         juce::Array<juce::var> setting;
         for (const float value : item.setting)
         {

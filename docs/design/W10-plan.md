@@ -1,6 +1,6 @@
 # W10: the final products (plan)
 
-Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done). Milestone of
+Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done; W10.4 done). Milestone of
 `planning.md` §8: "**Final products: the stand-alone application and the plugin** (two main targets since 2026-10-12): 4 slots, parallel rendering, real-time transfer function
 display, three-level GUI, measurement presets, in both. Done when: persona walkthroughs succeed in the stand-alone application and in the
 plugin (musician compares a demo with an owned plugin; developer checks an algorithm)." The questions for the author are in section 7.
@@ -201,3 +201,30 @@ for the EQ and not LTI for Test EQ Drive with the drive on (with the reason), th
 knob of the playing instance (picture in the temp folder).
 "No dropouts while playing" is by construction (other instances, lower priority, no lock shared with the audio thread) and not measured
 by a test; to check by ear in Bitwig. The Matcher page keeps its own live view of one target (it shows the band curve as a master too).
+
+### W10.4 easy page (0.66.0, done)
+`EasyPanel` (`src/pages/EasyPanel.*`): the musician's walkthrough of 3.4 on one page, in both products (the plugin shows it first; the
+application as its last tab, so that the tabs of the tests keep their places).
+1. **My EQ**: a loaded plugin (the first by default), "Show its editor", "Load plugins ..." (the page Plugins).
+2. **Compare with**: the other loaded plugins, at most three.
+3. **Make them the same**: one button; the matcher with the defaults (the band parameters of the plugin's mapping with the model start; without a
+   mapping every continuous, automatable knob that is not a bypass: the musician cannot map a plugin inside a DAW), tolerance medium, 15 s per
+   plugin, in a process of its own (PluginLabHost --match; in the plugin the one in its bundle) with a progress bar; the found values are applied
+   at once.
+4. **Listen**: a row per plugin and one "without EQ"; the number button makes it the audible slot (the crossfade of the engine); how close in words
+   from the largest difference: "the same" (<= 0.25 dB, the tolerance), "audibly close" (<= 1 dB, the just noticeable difference the author gave),
+   "different", with the dB and the frequency; when not the same the main cause of the attribution (W9.5) in words; a refused plugin with its
+   reason. A **level slider** per row (the author: "level match but with a parameter / slider, so that it is transparent to the user"): the match
+   sets it to minus the matched plugin's mean level difference against mine; the user can move it. The application's Play button plays the files of
+   the page EQ Compare; inside a DAW the DAW plays.
+5. **Keep it**: the matched settings as presets of the plugins (settings folder, `presets/<plugin>/matched to <mine> <date>.state` and `.json`).
+
+Shared with the Matcher page (`src/pages/MatchJob.*`): the job file, the child process (`MatchJob`), the result (`readMatchResult`: now also
+the refusal reason, the main cause with its evidence, the frequency of the largest difference and the level difference), applying it, the
+mapped parameters, the presets. The engine has a level trim per slot (`setSlotTrimDb`, ramped within a block: no click), for listening only
+(the offline renders stay untrimmed); the plugin keeps the trims in the project.
+Test (`EasyTests`): the walkthrough with my Test EQ (+6 dB peak) against the Reference EQ and the two-band Test EQ through the real child
+process: both "the same" (0.02 and 0.00 dB) in 15 s, the values applied, the levels within the slider range, switching, two presets. The plugin's
+editor shows Easy first (`BenchmarkTests`).
+Open: the walkthrough by a person (the author) in both products; loading a saved preset back (W10.6 brings presets of measurements; plugin
+presets are files for now).

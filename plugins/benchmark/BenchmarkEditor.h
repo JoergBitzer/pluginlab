@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "ComparePanel.h"
+#include "EasyPanel.h"
 #include "HostMainComponent.h"
 #include "MatcherPanel.h"
 
@@ -25,7 +26,8 @@ private:
     BenchmarkProcessor& m_processor;
     juce::TabbedComponent m_tabs{juce::TabbedButtonBar::TabsAtTop};
     juce::TooltipWindow m_tooltips{this};
-    pluginlab::host::HostMainComponent* m_pluginsPage = nullptr; // owned by the tabs
+    pluginlab::host::EasyPanel* m_easyPage = nullptr;            // owned by the tabs
+    pluginlab::host::HostMainComponent* m_pluginsPage = nullptr;
     pluginlab::host::ComparePanel* m_comparePage = nullptr;
     pluginlab::host::MatcherPanel* m_matcherPage = nullptr;
 

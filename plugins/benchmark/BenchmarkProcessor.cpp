@@ -154,6 +154,7 @@ juce::MemoryBlock BenchmarkProcessor::createState()
     juce::XmlElement root(kStateTag);
     root.setAttribute("version", kStateVersion);
     root.setAttribute("activeSlot", m_engine.getActiveSlot());
+    root.setAttribute("dryTrimDb", m_engine.getSlotTrimDb(0));
     for (int slot = 0; slot < m_engine.getNumSlots(); ++slot)
     {
         pluginlab::hosting::HostedPlugin* plugin = m_engine.getPlugin(slot);
@@ -163,6 +164,7 @@ juce::MemoryBlock BenchmarkProcessor::createState()
         }
         auto* entry = root.createNewChildElement(kSlotTag);
         entry->setAttribute("name", m_engine.getSlotInfo(slot).name);
+        entry->setAttribute("trimDb", m_engine.getSlotTrimDb(slot));
         entry->addChildElement(plugin->getDescription().createXml().release());
         juce::MemoryBlock pluginState;
         plugin->getInstance().getStateInformation(pluginState);
@@ -225,8 +227,10 @@ void BenchmarkProcessor::restoreState(const juce::MemoryBlock& state)
         {
             plugin->getInstance().setStateInformation(pluginState.getData(), static_cast<int>(pluginState.getSize()));
         }
-        m_engine.addSlot(std::move(plugin), entry->getStringAttribute("name", description.name), error);
+        const int slot = m_engine.addSlot(std::move(plugin), entry->getStringAttribute("name", description.name), error);
+        m_engine.setSlotTrimDb(slot, static_cast<float>(entry->getDoubleAttribute("trimDb", 0.0)));
     }
+    m_engine.setSlotTrimDb(0, static_cast<float>(root->getDoubleAttribute("dryTrimDb", 0.0)));
     m_engine.setActiveSlot(juce::jlimit(0, m_engine.getNumSlots() - 1, root->getIntAttribute("activeSlot", 0)));
     slotsChanged();
     if (onSlotsRestored)

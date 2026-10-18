@@ -240,6 +240,23 @@ int MeasurementEngine::getActiveSlot() const
     return m_activeSlot;
 }
 
+void MeasurementEngine::setSlotTrimDb(int index, float decibels)
+{
+    if (index >= 0 && index < static_cast<int>(m_slots.size()))
+    {
+        m_slots[static_cast<size_t>(index)]->setTrimDb(decibels);
+    }
+}
+
+float MeasurementEngine::getSlotTrimDb(int index) const
+{
+    if (index < 0 || index >= static_cast<int>(m_slots.size()))
+    {
+        return 0.0f;
+    }
+    return m_slots[static_cast<size_t>(index)]->getTrimDb();
+}
+
 void MeasurementEngine::setCrossfadeMs(float milliseconds)
 {
     const juce::ScopedLock lock(m_lock);
@@ -302,6 +319,7 @@ void MeasurementEngine::processChunk(juce::AudioBuffer<float>& output, int start
     {
         juce::AudioBuffer<float> slotOutput(m_slotBuffers[index].getArrayOfWritePointers(), kChannels, numSamples);
         m_slots[index]->process(chunkInput, slotOutput);
+        m_slots[index]->applyTrim(slotOutput); // listening only: the offline renders (processAllSlots) stay untrimmed
     }
 
     const juce::AudioBuffer<float>& current = m_slotBuffers[static_cast<size_t>(m_activeSlot)];

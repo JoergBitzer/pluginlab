@@ -75,6 +75,10 @@ public:
     int getActiveSlot() const;
     void setCrossfadeMs(float milliseconds);
 
+    // The level trim of a slot for listening (W10.4), in dB: the audible output only (processBlock, processExternal), not processAllSlots
+    void setSlotTrimDb(int index, float decibels);
+    float getSlotTrimDb(int index) const;
+
     // Back to the first sample of the first file, all slots restarted (their plugins forget what they processed).
     void restart();
 

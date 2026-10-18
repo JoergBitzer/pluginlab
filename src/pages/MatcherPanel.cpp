@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 
+#include "MatchJob.h"
 #include "PageServices.h"
 #include "pluginlab/engine/LivePluginDevice.h"
 #include "pluginlab/engine/Mapping.h"
@@ -36,10 +37,7 @@ constexpr int kWidthPlugin = 240;
 constexpr int kWidthReleased = 520;
 constexpr int kWidthChoose = 90;
 constexpr int kLiveIntervalMs = 300;            // the live view reads the knobs this often (no audio plays while matching)
-constexpr int kPollMs = 200;
-constexpr juce::uint32 kProgressIntervalMs = 1000;
 constexpr int kStopTimeoutMs = 10000;
-constexpr int kProcessTimeoutMs = 10 * 60 * 1000;
 constexpr int kCurveItem = 1;                   // the first item of the master box
 constexpr double kPlotRangeDb = 24.0;           // the curves
 constexpr double kDifferenceRangeDb = 2.0;      // the difference below them
@@ -66,76 +64,6 @@ void setUpSlider(juce::Slider& slider, double low, double high, double value, do
     slider.setTextValueSuffix(suffix);
 }
 }
-
-// Runs PluginLabHost --match <job> <report> in a child process and tells the page its progress and its end
-class MatchJobThread : public juce::Thread
-{
-public:
-    MatchJobThread(MatcherPanel& owner, juce::File job, juce::File report)
-        : juce::Thread("MatchJob"), m_owner(owner), m_job(std::move(job)), m_report(std::move(report))
-    {
-    }
-
-    ~MatchJobThread() override
-    {
-        signalThreadShouldExit();
-        stopThread(kStopTimeoutMs);
-    }
-
-    void run() override
-    {
-        juce::ChildProcess process;
-        const juce::File host = getHelperExecutable(); // the application, or the PluginLabHost in the plugin's bundle
-        bool success = false;
-        juce::String message;
-        if (process.start(juce::StringArray{host.getFullPathName(), "--match", m_job.getFullPathName(), m_report.getFullPathName()}, 0))
-        {
-            const juce::uint32 started = juce::Time::getMillisecondCounter();
-            juce::uint32 lastProgress = 0;
-            while (process.isRunning() && ! threadShouldExit() && juce::Time::getMillisecondCounter() - started < static_cast<juce::uint32>(kProcessTimeoutMs))
-            {
-                if (juce::Time::getMillisecondCounter() - lastProgress >= kProgressIntervalMs)
-                {
-                    lastProgress = juce::Time::getMillisecondCounter();
-                    const JobProgress progress = readProgressFile(getProgressFile(m_report));
-                    post([progress](MatcherPanel& panel) { panel.jobProgress(progress.fraction, progress.step); });
-                }
-                wait(kPollMs);
-            }
-            if (process.isRunning())
-            {
-                process.kill();
-                message = "stopped (time limit)";
-            }
-            success = m_report.existsAsFile() && m_report.getSize() > 0;
-            if (! success && message.isEmpty())
-            {
-                message = "the match process ended without a report (a crash?)";
-            }
-        }
-        else
-        {
-            message = "could not start the match process";
-        }
-        post([success, message](MatcherPanel& panel) { panel.jobFinished(success, message); });
-    }
-
-private:
-    void post(std::function<void(MatcherPanel&)> call)
-    {
-        const juce::Component::SafePointer<MatcherPanel> owner(&m_owner);
-        juce::MessageManager::callAsync([owner, call] {
-            if (owner != nullptr)
-            {
-                call(*owner);
-            }
-        });
-    }
-
-    MatcherPanel& m_owner;
-    juce::File m_job;
-    juce::File m_report;
-};
 
 // The live deviation: copies of the master and the target (live instances of the fast path, W9.3) render the settings the page hands over
 // (read from the loaded plugins on the message thread); the probe's magnitude goes back to the page. No audio, no access to the loaded plugins.
@@ -471,18 +399,9 @@ void MatcherPanel::rebuildTargets()
         else
         {
             // the band parameters of the mapping (W8.5) are released by default; without a mapping the user chooses
-            juce::String error;
-            const juce::File file = m_settings.getMappingFolder().getChildFile(engine::getMappingFileName(plugin->getDescription().name));
-            if (const std::optional<engine::Mapping> mapping = engine::Mapping::read(file, error))
+            row.released = getMappedParameters(m_settings, plugin->getDescription());
+            if (! row.released.empty())
             {
-                for (const engine::MappedParameter& parameter : mapping->parameters)
-                {
-                    if (parameter.quantity == engine::MappedQuantity::Frequency || parameter.quantity == engine::MappedQuantity::Gain
-                        || parameter.quantity == engine::MappedQuantity::Q)
-                    {
-                        row.released.push_back(parameter.index);
-                    }
-                }
                 row.source = "from the mapping";
             }
         }
@@ -591,19 +510,13 @@ void MatcherPanel::liveUpdate(const std::vector<double>& frequencies, const std:
 
 juce::String MatcherPanel::writeJob(const juce::File& jobFile) const
 {
-    auto root = std::make_unique<juce::DynamicObject>();
-    auto master = std::make_unique<juce::DynamicObject>();
+    MatchJobSpec spec;
     const int masterSlot = getMasterSlot();
     if (masterSlot >= 0 && m_engine.getPlugin(masterSlot) != nullptr)
     {
         hosting::HostedPlugin* plugin = m_engine.getPlugin(masterSlot);
-        master->setProperty("plugin", plugin->getDescription().fileOrIdentifier);
-        juce::Array<juce::var> values;
-        for (const float value : engine::getSetting(plugin->getInstance()))
-        {
-            values.add(value);
-        }
-        master->setProperty("values", values);
+        spec.masterPlugin = plugin->getDescription().fileOrIdentifier;
+        spec.masterValues = engine::getSetting(plugin->getInstance());
     }
     else
     {
@@ -613,10 +526,8 @@ juce::String MatcherPanel::writeJob(const juce::File& jobFile) const
         band->setProperty("frequency", m_curveFrequency.getValue());
         band->setProperty("gain", m_curveGain.getValue());
         band->setProperty("q", m_curveQ.getValue());
-        master->setProperty("curve", juce::Array<juce::var>{juce::var(band.release())});
+        spec.masterCurve = juce::Array<juce::var>{juce::var(band.release())};
     }
-    root->setProperty("master", juce::var(master.release()));
-    juce::Array<juce::var> targets;
     juce::String problem;
     for (const TargetRow& row : m_targets)
     {
@@ -630,35 +541,17 @@ juce::String MatcherPanel::writeJob(const juce::File& jobFile) const
             problem = hosting::getDisplayName(plugin->getDescription()) + ": no parameter released";
             continue;
         }
-        auto target = std::make_unique<juce::DynamicObject>();
-        target->setProperty("plugin", plugin->getDescription().fileOrIdentifier);
-        juce::Array<juce::var> values;
-        for (const float value : engine::getSetting(plugin->getInstance()))
-        {
-            values.add(value);
-        }
-        target->setProperty("values", values);
-        juce::Array<juce::var> released;
-        for (const int index : row.released)
-        {
-            released.add(index);
-        }
-        target->setProperty("releaseIndices", released);
-        target->setProperty("modelStart", m_modelStart.getToggleState());
-        targets.add(juce::var(target.release()));
+        spec.targets.push_back({plugin->getDescription().fileOrIdentifier, engine::getSetting(plugin->getInstance()), row.released, m_modelStart.getToggleState()});
     }
-    root->setProperty("targets", targets);
-    root->setProperty("tolerance", kToleranceNames[std::max(0, m_toleranceBox.getSelectedItemIndex())].upToFirstOccurrenceOf(" ", false, false));
-    root->setProperty("seconds", m_seconds.getValue());
-    root->setProperty("lowestHz", m_lowest.getValue());
-    root->setProperty("highestHz", m_highest.getValue());
-    if (targets.isEmpty())
+    spec.tolerance = kToleranceNames[std::max(0, m_toleranceBox.getSelectedItemIndex())].upToFirstOccurrenceOf(" ", false, false);
+    spec.seconds = m_seconds.getValue();
+    spec.lowestHz = m_lowest.getValue();
+    spec.highestHz = m_highest.getValue();
+    if (spec.targets.empty() && problem.isNotEmpty())
     {
-        return problem.isNotEmpty() ? problem : juce::String("no target chosen");
+        return problem;
     }
-    jobFile.getParentDirectory().createDirectory();
-    jobFile.replaceWithText(juce::JSON::toString(juce::var(root.release())));
-    return {};
+    return writeMatchJob(spec, jobFile);
 }
 
 void MatcherPanel::startMatch()
@@ -681,8 +574,21 @@ void MatcherPanel::startMatch()
     m_fraction = 0.0;
     m_step = "starting";
     m_startedMs = juce::Time::getMillisecondCounter();
-    m_job = std::make_unique<MatchJobThread>(*this, job, m_lastReport);
-    m_job->startThread();
+    const juce::Component::SafePointer<MatcherPanel> self(this);
+    m_job = std::make_unique<MatchJob>(
+        job, m_lastReport,
+        [self](double fraction, const juce::String& step) {
+            if (self != nullptr)
+            {
+                self->jobProgress(fraction, step);
+            }
+        },
+        [self](bool success, const juce::String& message) {
+            if (self != nullptr)
+            {
+                self->jobFinished(success, message);
+            }
+        });
     m_status.setText("Matching in a process of its own ...", juce::dontSendNotification);
     updateButtons();
     repaint(m_progressArea);
@@ -724,80 +630,29 @@ void MatcherPanel::showLastReport()
 
 void MatcherPanel::applyResults()
 {
-    const juce::var result = juce::JSON::parse(juce::File(m_lastReport.getFullPathName() + ".json").loadFileAsString());
-    const juce::Array<juce::var>* targets = result.getProperty("targets", {}).getArray();
-    if (targets == nullptr)
+    std::vector<int> slots;
+    for (const TargetRow& row : m_targets)
     {
-        return;
+        slots.push_back(row.slot);
     }
-    int applied = 0;
-    for (const juce::var& entry : *targets)
-    {
-        if (static_cast<bool>(entry.getProperty("refused", false)))
-        {
-            continue;
-        }
-        const juce::String key = entry.getProperty("plugin", "").toString();
-        const juce::Array<juce::var>* setting = entry.getProperty("setting", {}).getArray();
-        const juce::Array<juce::var>* released = entry.getProperty("released", {}).getArray();
-        for (const TargetRow& row : m_targets)
-        {
-            hosting::HostedPlugin* plugin = m_engine.getPlugin(row.slot);
-            if (plugin == nullptr || row.key != key || setting == nullptr || released == nullptr)
-            {
-                continue;
-            }
-            for (const juce::var& index : *released)
-            {
-                const int parameter = static_cast<int>(index);
-                if (parameter >= 0 && parameter < setting->size())
-                {
-                    plugin->setParameterNormalised(parameter, static_cast<float>(static_cast<double>((*setting)[parameter])));
-                }
-            }
-            ++applied;
-        }
-    }
-    m_status.setText("Applied to " + juce::String(applied) + " target(s). \"Listen\" compares them on the page Compare.", juce::dontSendNotification);
+    const int applied = applyMatchOutcomes(m_engine, readMatchResult(m_lastReport), slots);
+    m_status.setText("Applied to " + juce::String(applied) + " target(s). \"Listen\" compares them on the page EQ Compare.", juce::dontSendNotification);
 }
 
 void MatcherPanel::savePresets()
 {
-    int saved = 0;
     const juce::String master = getMasterSlot() >= 0 && m_engine.getPlugin(getMasterSlot()) != nullptr
                                     ? hosting::getDisplayName(m_engine.getPlugin(getMasterSlot())->getDescription())
                                     : juce::String("band curve");
-    const juce::String stamp = juce::Time::getCurrentTime().formatted("%Y-%m-%d_%H-%M");
+    std::vector<int> slots;
     for (const TargetRow& row : m_targets)
     {
-        hosting::HostedPlugin* plugin = m_engine.getPlugin(row.slot);
-        if (plugin == nullptr || ! row.match)
+        if (row.match)
         {
-            continue;
-        }
-        juce::MemoryBlock state;
-        plugin->getInstance().getStateInformation(state);
-        const juce::String name = engine::makeFileNamePart(hosting::getDisplayName(plugin->getDescription()));
-        const juce::File folder = m_settings.getPresetFolder().getChildFile(name);
-        folder.createDirectory();
-        const juce::String stem = "matched to " + engine::makeFileNamePart(master) + " " + stamp;
-        if (folder.getChildFile(stem + ".state").replaceWithData(state.getData(), state.getSize()))
-        {
-            // what the state is, for people and for a later "load preset"
-            auto info = std::make_unique<juce::DynamicObject>();
-            info->setProperty("plugin", plugin->getDescription().createIdentifierString());
-            info->setProperty("master", master);
-            info->setProperty("date", stamp);
-            juce::Array<juce::var> values;
-            for (const float value : engine::getSetting(plugin->getInstance()))
-            {
-                values.add(value);
-            }
-            info->setProperty("values", values);
-            folder.getChildFile(stem + ".json").replaceWithText(juce::JSON::toString(juce::var(info.release())));
-            ++saved;
+            slots.push_back(row.slot);
         }
     }
+    const int saved = saveMatchedPresets(m_engine, m_settings, slots, master);
     m_status.setText("Saved " + juce::String(saved) + " preset(s) in " + m_settings.getPresetFolder().getFullPathName() + ".", juce::dontSendNotification);
 }
 

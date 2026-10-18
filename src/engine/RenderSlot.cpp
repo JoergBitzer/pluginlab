@@ -143,4 +143,28 @@ void RenderSlot::delayOutput(juce::AudioBuffer<float>& output)
     }
     m_delayPosition = (m_delayPosition + samples) % m_compensation;
 }
+
+void RenderSlot::setTrimDb(float decibels)
+{
+    m_trimDb.store(decibels);
+}
+
+float RenderSlot::getTrimDb() const
+{
+    return m_trimDb.load();
+}
+
+void RenderSlot::applyTrim(juce::AudioBuffer<float>& output)
+{
+    const float target = juce::Decibels::decibelsToGain(m_trimDb.load());
+    if (juce::approximatelyEqual(target, 1.0f) && juce::approximatelyEqual(m_appliedTrimGain, 1.0f))
+    {
+        return;
+    }
+    for (int channel = 0; channel < output.getNumChannels(); ++channel)
+    {
+        output.applyGainRamp(channel, 0, output.getNumSamples(), m_appliedTrimGain, target);
+    }
+    m_appliedTrimGain = target;
+}
 }
