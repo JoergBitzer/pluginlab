@@ -28,6 +28,7 @@ constexpr double kMsPerSecond = 1000.0;
 constexpr int kLabelWidth = 70;
 constexpr int kSmallEditorWidth = 70;
 constexpr int kSliderWidth = 220;
+constexpr float kParameterShare = 0.42f;
 constexpr int kFileColumnNumber = 1;
 constexpr int kFileColumnName = 2;
 constexpr int kFileColumnLength = 3;
@@ -248,7 +249,7 @@ ComparePanel::ComparePanel(pluginlab::engine::MeasurementEngine& engine, HostSet
 
     for (juce::Component* component : std::initializer_list<juce::Component*>{
              &m_addFileButton, &m_removeFileButton, &m_saveListButton, &m_loadListButton, &m_passesLabel, &m_passesBox, &m_regionLabel, &m_regionStart, &m_regionEnd, &m_fileTable,
-             &m_slotsLabel, &m_slotEditorButton, &m_slotTable, &m_parameters, &m_playButton,
+             &m_slotsLabel, &m_slotEditorButton, &m_slotTable, &m_parameters, &m_live, &m_playButton,
              &m_rewindButton, &m_deviceButton, &m_renderButton, &m_rateLabel, &m_rateBox, &m_crossfadeLabel, &m_crossfadeSlider,
              &m_statusLabel})
     {
@@ -299,7 +300,7 @@ void ComparePanel::resized()
         m_crossfadeSlider.setBounds(row.removeFromLeft(kSliderWidth));
         area.removeFromTop(kMargin);
         m_statusLabel.setBounds(area.removeFromBottom(kStatusHeight));
-        m_parameters.setBounds(area);
+        layOutParametersAndLive(area);
         return;
     }
 
@@ -347,7 +348,15 @@ void ComparePanel::resized()
     area.removeFromTop(kMargin);
 
     m_statusLabel.setBounds(area.removeFromBottom(kStatusHeight));
-    m_parameters.setBounds(area);
+    layOutParametersAndLive(area);
+}
+
+void ComparePanel::layOutParametersAndLive(juce::Rectangle<int> area)
+{
+    // the parameters of the selected slot on the left, the live curves of all slots on the right
+    m_parameters.setBounds(area.removeFromLeft(juce::roundToInt(static_cast<float>(area.getWidth()) * kParameterShare)));
+    area.removeFromLeft(kMargin);
+    m_live.setBounds(area);
 }
 
 bool ComparePanel::keyPressed(const juce::KeyPress& key)
@@ -599,6 +608,7 @@ void ComparePanel::slotsChanged()
     m_slotTable.deselectAllRows();
     m_slotTable.selectRow(m_engine.getActiveSlot());
     m_slotTable.repaint();
+    m_live.slotsChanged();
 }
 
 void ComparePanel::slotSelectionChanged()

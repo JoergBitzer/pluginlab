@@ -6,6 +6,7 @@ add_library(pluginlab_pages STATIC
     DeveloperPanel.cpp
     HostMainComponent.cpp
     HostSettings.cpp
+    LiveResponseView.cpp
     MatcherPanel.cpp
     PageServices.cpp)
 

@@ -1,6 +1,6 @@
 # W10: the final products (plan)
 
-Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done). Milestone of
+Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done). Milestone of
 `planning.md` §8: "**Final products: the stand-alone application and the plugin** (two main targets since 2026-10-12): 4 slots, parallel rendering, real-time transfer function
 display, three-level GUI, measurement presets, in both. Done when: persona walkthroughs succeed in the stand-alone application and in the
 plugin (musician compares a demo with an owned plugin; developer checks an algorithm)." The questions for the author are in section 7.
@@ -183,3 +183,21 @@ plugin's setting, a foreign state ignored.
 Open: the run in Bitwig and Reaper with 4 slots and pluginval (not installed here); the limit of 4 slots is not enforced yet; a match
 report opens in the system's viewer (the report window is a Developer-page component); macOS: PluginLabHost as an app bundle inside the
 plugin bundle is not handled yet (W10.7, CI).
+
+### W10.3 real-time transfer function display (0.64.0, done)
+`engine::LiveResponseMonitor` (`src/engine/LiveResponse.*`): per slot two measuring instances of the plugin (not the playing one), each
+with a thread below the audio thread's priority. The page reads the knobs of the playing instances 20 times per second and hands them in;
+the render thread renders a changed setting through the fast render path (W9.3: setting, settling, impulse, spectrum; 12 points per
+octave, 20 Hz ... min(20 kHz, 0.45 fs)) at most 5 times per second, always the latest setting, nothing for a knob that does not move.
+When the knobs rest for 1 s, the second instance checks the system class of that setting (W8.1) on its own thread, so the check never
+delays a curve. The dry slot is flat without an instance; a slot whose plugin did not change keeps its instances.
+`LiveResponseView` on the page Compare (both products), right of the parameter table: the curves of all slots on one log axis, the chosen
+reference slot thicker, the deviation of each slot from the reference below and as numbers (largest and rms, frequencies where both curves
+are below -60 dB left out); a slot that is not LTI at its setting is drawn grey with its class and reason; "system class being checked"
+while it runs. It measures only while the page is visible; the toggle "Live response" removes the measuring instances.
+Measured (Debug, Test EQ): knob to curve 41 ... 51 ms (the render about 41 ms); 20 settings in one second give 6 curves. Tests
+(`LiveResponseTests`): the curve within 0.3 s and equal to the exact RBJ curve (0.01 dB), the rate limit, no render without a change, LTI
+for the EQ and not LTI for Test EQ Drive with the drive on (with the reason), the instances kept, the grid at another rate, the view with a
+knob of the playing instance (picture in the temp folder).
+"No dropouts while playing" is by construction (other instances, lower priority, no lock shared with the audio thread) and not measured
+by a test; to check by ear in Bitwig. The Matcher page keeps its own live view of one target (it shows the band curve as a master too).

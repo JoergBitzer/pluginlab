@@ -9,6 +9,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "HostSettings.h"
+#include "LiveResponseView.h"
 #include "pluginlab/engine/MeasurementEngine.h"
 #include "pluginlab/ui/ParameterTableComponent.h"
 
@@ -56,6 +57,8 @@ public:
     void startPlaying();
     void stopPlaying();
     juce::String describeEngine() const;
+    // the live transfer function display (W10.3)
+    LiveResponseView& getLiveResponseView() { return m_live; }
     bool isPlaying() const;
 
     void resized() override;
@@ -87,6 +90,7 @@ private:
     void chooseRenderFolder();
     void changeEngineRate();
     void setStatus(const juce::String& text);
+    void layOutParametersAndLive(juce::Rectangle<int> area);
 
     pluginlab::engine::MeasurementEngine& m_engine;
     HostSettings& m_settings;
@@ -117,6 +121,7 @@ private:
     std::unique_ptr<ui::TextTableModel> m_slotModel;
     juce::TableListBox m_slotTable;
     ui::ParameterTableComponent m_parameters;
+    LiveResponseView m_live{m_engine};
 
     juce::TextButton m_playButton{"Play"};
     juce::TextButton m_rewindButton{"Rewind"};

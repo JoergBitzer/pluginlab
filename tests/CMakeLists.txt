@@ -12,6 +12,7 @@ target_sources(PluginLabTests
         HostedPluginTests.cpp
         InteractionTests.cpp
         ValidatorTests.cpp
+        LiveResponseTests.cpp
         LoaderTests.cpp
         MappingTests.cpp
         MatchEqTests.cpp
@@ -74,6 +75,7 @@ target_link_libraries(PluginLabTests
         pluginlab_hosting_ui
         pluginlab_loader_core
         pluginlab_benchmark_core
+        pluginlab_pages
         juce::juce_core
         juce::juce_dsp
         juce::juce_events
