@@ -15,6 +15,7 @@
 #include "pluginlab/engine/ReportText.h"
 #include "pluginlab/measure/Spectrogram.h"
 #include "pluginlab/ui/Logo.h"
+#include "pluginlab/ui/ResponsePlotImage.h"
 #include "pluginlab/ui/SpectrogramImage.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
@@ -446,6 +447,18 @@ bool applyNamedValues(juce::AudioPluginFormatManager& formatManager, const juce:
     return true;
 }
 
+// normalised values by position ([0.5, 0.25, ...]: the whole setting of a hosted instance, as the Matcher page sends it)
+void applyValues(const juce::var& values, std::vector<float>& setting)
+{
+    if (const juce::Array<juce::var>* list = values.getArray())
+    {
+        for (int index = 0; index < list->size() && index < static_cast<int>(setting.size()); ++index)
+        {
+            setting[static_cast<size_t>(index)] = static_cast<float>(static_cast<double>((*list)[index]));
+        }
+    }
+}
+
 std::optional<juce::PluginDescription> scanFirst(juce::AudioPluginFormatManager& formatManager, const juce::String& path)
 {
     const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(formatManager, juce::File(path));
@@ -499,6 +512,7 @@ bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
     {
         master.plugin = plugin;
         master.setting = pluginlab::engine::getDefaultSetting(formatManager, *plugin, getMeasurementRate());
+        applyValues(masterJob.getProperty("values", {}), master.setting);
         if (! applyNamedValues(formatManager, *plugin, masterJob.getProperty("setting", {}), master.setting, error))
         {
             std::fprintf(stderr, "%s\n", error.toRawUTF8());
@@ -526,6 +540,7 @@ bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
             pluginlab::engine::MatchTarget target;
             target.plugin = *plugin;
             target.start = pluginlab::engine::getDefaultSetting(formatManager, *plugin, getMeasurementRate());
+            applyValues(entry.getProperty("values", {}), target.start);
             if (! applyNamedValues(formatManager, *plugin, entry.getProperty("start", {}), target.start, error))
             {
                 std::fprintf(stderr, "%s\n", error.toRawUTF8());
@@ -533,6 +548,13 @@ bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
             }
             juce::String instanceError;
             const std::unique_ptr<juce::AudioPluginInstance> instance = formatManager.createPluginInstance(*plugin, getMeasurementRate(), 512, instanceError);
+            if (const juce::Array<juce::var>* indices = entry.getProperty("releaseIndices", {}).getArray())
+            {
+                for (const juce::var& index : *indices)
+                {
+                    target.released.push_back(static_cast<int>(index));
+                }
+            }
             if (const juce::Array<juce::var>* release = entry.getProperty("release", {}).getArray())
             {
                 for (const juce::var& name : *release)
@@ -567,8 +589,68 @@ bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
     ProgressWriter progress(reportFile);
     const pluginlab::engine::PluginMatchResult result =
         pluginlab::engine::matchPlugins(formatManager, master, targets, settings, [&progress](double fraction, const juce::String& step) { progress(fraction, step); });
+    // the found settings for programs (the Matcher page applies them): <report>.json
+    juce::Array<juce::var> found;
+    for (size_t index = 0; index < result.targets.size(); ++index)
+    {
+        const pluginlab::engine::TargetMatchResult& item = result.targets[index];
+        auto object = std::make_unique<juce::DynamicObject>();
+        object->setProperty("plugin", index < targets.size() ? targets[index].plugin.createIdentifierString() : juce::String());
+        object->setProperty("name", item.name);
+        object->setProperty("refused", item.refused);
+        object->setProperty("matched", ! item.refused && item.optimizer.withinTolerance);
+        object->setProperty("largestDb", item.optimizer.largest);
+        juce::Array<juce::var> setting;
+        for (const float value : item.setting)
+        {
+            setting.add(value);
+        }
+        object->setProperty("setting", setting);
+        juce::Array<juce::var> released;
+        for (const pluginlab::engine::ReleasedValue& value : item.values)
+        {
+            released.add(value.index);
+        }
+        object->setProperty("released", released);
+        found.add(juce::var(object.release()));
+    }
+    auto root = std::make_unique<juce::DynamicObject>();
+    root->setProperty("targets", found);
+    juce::File(reportFile.getFullPathName() + ".json").replaceWithText(juce::JSON::toString(juce::var(root.release())));
+    // the curves of the master and the matched targets, and their deviations
+    juce::String plotName;
+    if (result.error.isEmpty() && ! result.targets.empty())
+    {
+        std::vector<pluginlab::ui::PlotCurve> curves{{"master", juce::Colour(0xffe0e0e0), result.masterFeatures, 3.0f}};
+        std::vector<pluginlab::ui::PlotCurve> differences;
+        int colour = 0;
+        for (const pluginlab::engine::TargetMatchResult& item : result.targets)
+        {
+            if (item.refused || item.targetFeatures.size() != result.masterFeatures.size())
+            {
+                continue;
+            }
+            std::vector<double> difference(item.targetFeatures.size());
+            for (size_t index = 0; index < difference.size(); ++index)
+            {
+                difference[index] = item.targetFeatures[index] - result.masterFeatures[index];
+            }
+            curves.push_back({item.name, pluginlab::ui::getPlotColour(colour), item.targetFeatures, 2.0f});
+            differences.push_back({item.name, pluginlab::ui::getPlotColour(colour), difference, 2.0f});
+            ++colour;
+        }
+        pluginlab::ui::ResponsePlotOptions options;
+        options.title = "Master and matched targets (magnitude, dB)";
+        plotName = reportFile.getFileNameWithoutExtension() + "_curves.png";
+        if (! pluginlab::ui::writeResponsePlotPng(result.frequencies, curves, differences, options, reportFile.getSiblingFile(plotName)))
+        {
+            plotName.clear();
+        }
+    }
     pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
-    return reportFile.replaceWithText(pluginlab::engine::signReport("# Match\n\n" + pluginlab::engine::createPluginMatchReport(result), "PluginLabHost, match"));
+    return reportFile.replaceWithText(pluginlab::engine::signReport("# Match\n\n" + pluginlab::engine::createPluginMatchReport(result, plotName) + "\n"
+                                                                        + pluginlab::engine::createPluginMatchReportFooter(),
+                                                                    "PluginLabHost, match"));
 }
 }
 

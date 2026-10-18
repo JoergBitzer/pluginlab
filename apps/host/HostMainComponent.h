@@ -33,13 +33,17 @@ struct StartupOptions
     bool developerGui = false;     // --gui: the GUI review instead of the report (W5d.7)
     bool developerMapping = false; // --mapping: the survey and mapping proposal instead of the report (W8.5)
     bool developerCalibration = false; // --calibration: the calibration and the interactions instead of the report (W8.6, W8.7)
+    juce::File matcherMaster;      // --matcher <master plugin file | curve> <target plugin file> [--run]: loads both, opens the Matcher page (W9.6)
+    juce::File matcherTarget;
+    bool matcherRun = false;       // ... matches and shows the report
     double playSeconds = 0.0;      // --play <seconds> <report file>: plays on the Compare page, writes the report and quits
     juce::File playReportFile;
 
     // true if the program was started for a manual test: it then does not ask to restore the last session
     bool isManualTest() const
     {
-        return scanFolder != juce::File() || pluginNameToLoad.isNotEmpty() || compareAudioFile != juce::File() || developerPlugin != juce::File();
+        return scanFolder != juce::File() || pluginNameToLoad.isNotEmpty() || compareAudioFile != juce::File() || developerPlugin != juce::File()
+               || matcherMaster != juce::File();
     }
 };
 

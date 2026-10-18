@@ -10,6 +10,8 @@
 #include "pluginlab/engine/ReportText.h"
 #include "pluginlab/eqmodel/BandFit.h"
 #include "pluginlab/measure/FrequencyResponse.h"
+#include "pluginlab/measure/NullTest.h"
+#include "pluginlab/reference/Biquad.h"
 
 namespace pluginlab::engine
 {
@@ -18,6 +20,8 @@ namespace
 constexpr int kMasterFitBands = 6;
 constexpr int kTextLength = 64;
 constexpr double kSignificantGainDb = 0.5; // a fitted gain band with less counts as noise of the fit
+constexpr double kIdenticalNullDb = -200.0; // a residual this far down: the outputs are the same sample for sample
+constexpr int kNullWindowSamples = 1 << 15; // 0.68 s at 48 kHz: enough for the null of two EQs, short enough for the budget
 
 double getWorstFrequency(const std::vector<double>& residual, const std::vector<double>& frequencies)
 {
@@ -144,6 +148,36 @@ std::vector<MatchAttribution> attribute(juce::AudioPluginFormatManager& formatMa
         causes.push_back({MatchCause::NotFound, "no knob at the end of its range, the same design family, enough bands"});
     }
     return causes;
+}
+
+// the master as a device: the plugin at its setting, or the curve's bands as a cascade of biquads (no device for a linear-phase band)
+std::optional<measure::Device> makeMasterDevice(juce::AudioPluginFormatManager& formatManager, const MatchMaster& master)
+{
+    if (master.plugin)
+    {
+        return makePluginDevice(formatManager, *master.plugin, master.setting);
+    }
+    if (! master.curve)
+    {
+        return std::nullopt;
+    }
+    for (const eqmodel::Band& band : master.curve->bands)
+    {
+        if (band.family == eqmodel::DesignFamily::LinearPhase)
+        {
+            return std::nullopt;
+        }
+    }
+    const eqmodel::EqModel model = *master.curve;
+    return measure::makeProcessorDevice([model](double rate) {
+        std::vector<reference::BiquadCoefficients> sections;
+        for (const eqmodel::Band& band : model.bands)
+        {
+            const eqmodel::BandDesign design = eqmodel::designBand(band, rate);
+            sections.insert(sections.end(), design.sections.begin(), design.sections.end());
+        }
+        return std::make_unique<reference::BiquadCascade>(sections, rate);
+    });
 }
 
 // the bands of a plugin master: the band fit (W8.3) of its response, measured carefully
@@ -363,6 +397,21 @@ PluginMatchResult matchPlugins(juce::AudioPluginFormatManager& formatManager, co
                 }
             }
         }
+        // the null of master and matched target (W7): noise, gain and delay aligned
+        report(0.97, "null test");
+        if (const std::optional<measure::Device> masterDevice = makeMasterDevice(formatManager, master))
+        {
+            measure::NullTestSettings null;
+            null.sampleRate = sampleRate;
+            null.channels = 1;
+            null.windowSamples = kNullWindowSamples;
+            const measure::NullTestResult nullResult = measure::measureNull(*masterDevice, makePluginDevice(formatManager, target.plugin, item.setting), null);
+            if (! nullResult.channels.empty())
+            {
+                item.nullMeasured = true;
+                item.nullDepthDb = nullResult.channels[0].nullDepthDb;
+            }
+        }
         item.seconds = (juce::Time::getMillisecondCounterHiRes() - started) / 1000.0;
         result.targets.push_back(item);
     }
@@ -373,7 +422,7 @@ PluginMatchResult matchPlugins(juce::AudioPluginFormatManager& formatManager, co
     return result;
 }
 
-juce::String createPluginMatchReport(const PluginMatchResult& result)
+juce::String createPluginMatchReport(const PluginMatchResult& result, const juce::String& plotFile)
 {
     juce::String text;
     text << "## Match\n\n";
@@ -385,12 +434,16 @@ juce::String createPluginMatchReport(const PluginMatchResult& result)
         text << "**" << result.error << "**\n";
         return wrapMarkdownProse(text);
     }
-    text << "| Target | Result | Largest / rms deviation | Found setting | Renders, time |\n|---|---|---|---|---|\n";
+    if (plotFile.isNotEmpty())
+    {
+        text << "![The master and the matched targets](" << plotFile << ")\n\n";
+    }
+    text << "| Target | Result | Largest / rms deviation | Null depth | Found setting | Renders, time |\n|---|---|---|---|---|---|\n";
     for (const TargetMatchResult& item : result.targets)
     {
         if (item.refused)
         {
-            text << "| " << item.name << " | **refused** | - | " << item.reason << " | " << juce::String(item.seconds, 1) << " s |\n";
+            text << "| " << item.name << " | **refused** | - | - | " << item.reason << " | " << juce::String(item.seconds, 1) << " s |\n";
             continue;
         }
         juce::StringArray values;
@@ -400,7 +453,8 @@ juce::String createPluginMatchReport(const PluginMatchResult& result)
         }
         const juce::String verdict = item.optimizer.withinTolerance ? juce::String("matched") : "**not within the tolerance** (" + juce::String(match::getStopReasonName(item.optimizer.reason)) + ")";
         text << "| " << item.name << (item.startedFromModel ? " (model start)" : "") << " | " << verdict << " | " << juce::String(item.optimizer.largest, 3) << " / "
-             << juce::String(item.optimizer.rms, 3) << " dB | " << values.joinIntoString(", ") << " | " << item.optimizer.evaluations << ", "
+             << juce::String(item.optimizer.rms, 3) << " dB | " << (! item.nullMeasured ? juce::String("-") : item.nullDepthDb <= kIdenticalNullDb ? juce::String("identical") : juce::String(item.nullDepthDb, 1) + " dB") << " | "
+             << values.joinIntoString(", ") << " | " << item.optimizer.evaluations << ", "
              << juce::String(item.seconds, 1) << " s |\n";
     }
     juce::String why;
@@ -417,4 +471,30 @@ juce::String createPluginMatchReport(const PluginMatchResult& result)
     }
     return wrapMarkdownProse(text);
 }
+
+juce::String createPluginMatchReportFooter()
+{
+    juce::String text;
+    text << "## About the match\n\n";
+    text << "**Why.** Two EQs set to the same transfer function sound the same: there is no magic in a particular plugin once its curve is fitted. "
+            "The matcher sets each target so that its magnitude response equals the master's (the user's own EQ, or a curve), so that they can "
+            "be compared by listening, at the same curve and the same level.\n\n";
+    text << "**What it does.** Only the parameters the user released are moved (switches stay as the user set them). Each target is first checked "
+            "(it must be LTI, and two renders of one setting must agree; otherwise it is refused), then a live copy of it is set and measured with "
+            "an impulse, again and again, while Levenberg-Marquardt moves the released parameters, until the largest deviation is within the "
+            "tolerance or the time per target is used up. Afterwards master and target are compared with noise (the null test, gain and delay "
+            "aligned).\n\n";
+    text << "| Column | Meaning |\n|---|---|\n";
+    text << "| Result | matched: within the tolerance; not within the tolerance: the reason the search stopped, and the causes below; refused: why |\n";
+    text << "| Largest / rms deviation | the magnitude difference target - master over the frequency range, its largest value and its rms |\n";
+    text << "| Null depth | the residual of master minus target relative to the master (noise, gain and delay aligned): -60 dB and lower is a null "
+            "(planning: \"equal\"); a curve matched within 0.1 dB can still null poorly if the phase differs (linear against minimum phase) |\n";
+    text << "| Found setting | the released parameters as the plugin shows them; \"at the end of its range\": the knob could not go further |\n";
+    text << "| Tolerance | exact 0.01 dB (checking precision), strict 0.1 dB (the default), medium 0.25 dB, loose 0.5 dB; the just noticeable "
+            "difference of a level in a third-octave band is about 1 dB |\n\n";
+    text << "**What next.** Listen: the page Compare plays the same audio through master and targets with gapless switching and latency "
+            "compensation. Save the found settings as presets of the targets.\n";
+    return text;
 }
+}
+

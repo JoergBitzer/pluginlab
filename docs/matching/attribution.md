@@ -38,6 +38,11 @@ cause the code has built in is the first one named:
 - The family comparison rests on the band fit; a plugin whose response the
   fit describes poorly gets the family cause less reliably.
 - Not found is a statement about the optimizer, not about the plugin.
+- A knob with a large linear range keeps its useful part near one end (the
+  Reference EQ's Q, 0.1 ... 20: Q 0.5 ... 2 is 7 % of the knob); from a start an
+  octave away the optimizer slid against that end and was reported "at the
+  end of its range" although the cause is the start; the model start avoids
+  it (W9.7, the teaching case).
 - A target matched against a bound costs many renders (the Limited case:
   230 renders, 15.7 s): the optimizer keeps trying steps that the bound cuts
   away.

@@ -1,6 +1,6 @@
 # W9: the matcher (plan)
 
-Status: **plan v2, W9.1 ... W9.5 done** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
+Status: **plan v2, W9 done (W9.1 ... W9.7)** (v1 2026-10-12 for review; v2 the same day after the author's answers and comments, section 9). Milestone of
 `planning.md` §8: "**Matcher** (user chooses parameters, start point, frequency range, tolerance; real-time deviation display). Done when:
 master reproduced on each test plugin or the residual quantified and attributed."
 
@@ -201,4 +201,18 @@ curve, the switch EQ, the drive refused, a far start fixed by the model start (o
 measured; moved before the family, because a fit describes interacting bands as another family), another design family (band fits, families
 with the same magnitude grouped), a band missing, not found (then a second start from the model). New test build Test EQ Limited (frequency
 knob to 5 kHz). Document `docs/matching/attribution.md`; tests: each of the four built-in causes is named first.
+
+### W9.6 Matcher page (0.61.0, done)
+The tab "Matcher" of the stand-alone application (`apps/host/MatcherPanel.cpp`): master (a loaded plugin or a band curve), targets with the
+released parameters (from the mapping, or chosen), tolerance, range, seconds, model start; the live deviation (copies of the plugins, the knob
+values read three times a second, no audio); "Match" runs `--match` in a process of its own with a progress bar; report, apply, save as
+presets, listen. `--matcher <master | curve> <target> [--run]`. Document `docs/matching/matcher-page.md`; checked in the virtual display.
+
+### W9.7 report, documents, teaching (0.62.0, done)
+The match report has a picture of the curves and their deviations (`src/ui/ResponsePlotImage.cpp`), the null depth per target (W7, noise,
+gain and delay aligned; "identical" when bit exact) and a footer ("About the match": why, what, the columns, the tolerance levels, what next).
+The teaching page `docs/teaching/matching-orfanidis-rbj.md`: an Orfanidis master, an RBJ target (0.81 dB at 19 kHz, null -28 dB, "another
+design family") and the Reference EQ in its Orfanidis mode (identical). Found on the way: a knob with a large linear range (the Reference EQ's
+Q, 0.1 ... 20) keeps the useful part near one end; from a start an octave away the optimizer slid against that end (a local minimum); the
+model start avoids it. Proposed for later: optimize in physical units (log frequency, log Q) where a mapping gives the laws.
 

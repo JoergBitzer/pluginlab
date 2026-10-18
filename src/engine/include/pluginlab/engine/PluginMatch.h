@@ -82,6 +82,9 @@ struct TargetMatchResult
     bool startedFromModel = false;
     std::vector<MatchAttribution> causes;            // when not within the tolerance: every cause that applies, the first is the main one
     double worstHz = 0.0;                            // where the deviation is largest
+    bool nullMeasured = false;
+    double nullDepthDb = 0.0;                        // master against the matched target, noise, gain and delay aligned (W7): a match of the
+                                                     // magnitude is not a null (phase, linear against minimum phase)
     double seconds = 0.0;                            // with the checks
 };
 
@@ -103,6 +106,10 @@ PluginMatchResult matchPlugins(juce::AudioPluginFormatManager& formatManager, co
 // The start from the model: the master's bands (sorted by frequency) set through the target's mapping on the target's mapped bands, from base
 std::vector<float> makeModelStart(const Mapping& mapping, const std::vector<float>& base, const eqmodel::EqModel& masterBands);
 
-// Markdown: per target the result, the deviation, the found setting in the plugin's texts, renders and time; refusals with their reasons
-juce::String createPluginMatchReport(const PluginMatchResult& result);
+// Markdown: per target the result, the deviation, the null depth, the found setting in the plugin's texts, renders and time; refusals with their
+// reasons; why not closer. `plotFile`: a picture of the curves to show above the table (empty: none)
+juce::String createPluginMatchReport(const PluginMatchResult& result, const juce::String& plotFile = {});
+
+// Markdown: the end of a match report (why, what the matcher does, the tolerance levels, how to read the table, what to do next: listen)
+juce::String createPluginMatchReportFooter();
 }

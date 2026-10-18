@@ -12,6 +12,9 @@ constexpr int kTabBarHeight = 30;
 const juce::String kPluginsTabName = "Plugins";
 const juce::String kCompareTabName = "Compare";
 const juce::String kDeveloperTabName = "Developer";
+const juce::String kMatcherTabName = "Matcher";
+constexpr int kCompareTab = 1;
+constexpr int kMatcherTab = 3;
 constexpr double kMsPerSecond = 1000.0;
 constexpr int kWindowWidth = 1100;
 constexpr int kWindowHeight = 760;
@@ -33,6 +36,9 @@ HostShell::HostShell(const StartupOptions& options)
     m_pluginsPage = new HostMainComponent(m_engine, m_formatManager, m_settings, options);
     m_comparePage = new ComparePanel(m_engine, m_settings);
     m_developerPage = new DeveloperPanel(m_engine, m_settings);
+    m_matcherPage = new MatcherPanel(m_engine, m_settings);
+    m_matcherPage->onListen = [this] { setCurrentTabIndex(kCompareTab); };
+    m_matcherPage->onShowReport = [this](const juce::String& title, const juce::File& report) { m_developerPage->showReport(title, report); };
     m_pluginsPage->onSlotsChanged = [this] { slotsChanged(); };
     m_comparePage->onFilesChanged = [this] { filesChanged(); };
     m_comparePage->onShowEditorOfSlot = [this](int slot) { m_pluginsPage->showEditorOfSlot(slot); };
@@ -43,6 +49,7 @@ HostShell::HostShell(const StartupOptions& options)
     addTab(kPluginsTabName, background, m_pluginsPage, true);
     addTab(kCompareTabName, background, m_comparePage, true);
     addTab(kDeveloperTabName, background, m_developerPage, true);
+    addTab(kMatcherTabName, background, m_matcherPage, true);
     setSize(kWindowWidth, kWindowHeight);
     m_comparePage->slotsChanged();
 
@@ -67,6 +74,38 @@ HostShell::HostShell(const StartupOptions& options)
         }
     }
 
+    if (options.matcherMaster != juce::File())
+    {
+        // the Matcher page with the master and the target loaded (W9.6)
+        juce::AudioPluginFormatManager manager;
+        ui::addGuiFormats(manager);
+        const bool curve = options.matcherMaster.getFileName() == "curve"; // the band curve as master instead of a plugin
+        for (const juce::File& file : {options.matcherMaster, options.matcherTarget})
+        {
+            if (curve && file == options.matcherMaster)
+            {
+                continue;
+            }
+            const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(manager, file);
+            if (! scan.descriptions.isEmpty())
+            {
+                m_pluginsPage->loadPlugin(scan.descriptions[0]);
+            }
+        }
+        setCurrentTabIndex(kMatcherTab);
+        if (! curve)
+        {
+            m_matcherPage->chooseFirstAsMaster();
+        }
+        if (options.matcherRun)
+        {
+            m_matcherPage->onMatchFinished = [this] {
+                m_matcherPage->applyResults();
+                m_matcherPage->showLastReport();
+            };
+            m_matcherPage->startMatch();
+        }
+    }
     if (options.developerPlugin != juce::File())
     {
         juce::AudioPluginFormatManager manager;
@@ -165,6 +204,7 @@ void HostShell::changeEngineRate(double sampleRate)
     m_pluginsPage->refresh();
     m_comparePage->slotsChanged();
     m_developerPage->refresh();
+    m_matcherPage->slotsChanged();
     saveSession();
 }
 
@@ -172,6 +212,7 @@ void HostShell::slotsChanged()
 {
     m_comparePage->slotsChanged();
     m_developerPage->refresh();
+    m_matcherPage->slotsChanged();
     saveSession();
 }
 
@@ -286,6 +327,7 @@ void HostShell::restorePluginSet()
     m_pluginsPage->refresh();
     m_comparePage->slotsChanged();
     m_developerPage->refresh();
+    m_matcherPage->slotsChanged();
     endRestore();
 }
 

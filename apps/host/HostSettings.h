@@ -28,6 +28,10 @@ public:
     // Where the mappings of plugins that are not our own are kept (W8.5; our own plugins' mappings are in the repository, mappings/)
     juce::File getMappingFolder() const;
 
+    // Where the Matcher page keeps its jobs and reports (W9.6), and the presets it saves (one folder per plugin)
+    juce::File getMatcherFolder() const;
+    juce::File getPresetFolder() const;
+
     // The name of the person who last confirmed a mapping on the Developer page (offered at the next confirmation)
     juce::String getMappingConfirmer() const;
     void setMappingConfirmer(const juce::String& name);

@@ -8,6 +8,7 @@ add_library(pluginlab_hosting_ui STATIC
     ParameterTableComponent.cpp
     PluginEditorWindow.cpp
     PluginBrowserComponent.cpp
+    ResponsePlotImage.cpp
     SpectrogramImage.cpp)
 
 target_include_directories(pluginlab_hosting_ui

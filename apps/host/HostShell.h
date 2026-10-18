@@ -6,6 +6,7 @@
 #include "DeveloperPanel.h"
 #include "HostMainComponent.h"
 #include "HostSettings.h"
+#include "MatcherPanel.h"
 #include "pluginlab/engine/MeasurementEngine.h"
 
 namespace pluginlab::host
@@ -40,5 +41,6 @@ private:
     HostMainComponent* m_pluginsPage = nullptr; // owned by the tab
     ComparePanel* m_comparePage = nullptr;      // owned by the tab
     DeveloperPanel* m_developerPage = nullptr;  // owned by the tab
+    MatcherPanel* m_matcherPage = nullptr;      // owned by the tab
 };
 }

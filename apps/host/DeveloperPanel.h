@@ -75,6 +75,8 @@ public:
     void viewCalibration(int row);
     // the mapping of a row: confirm it (asks for the name, writes confirmedBy), open its JSON in the system's editor
     void confirmMapping(int row);
+    // a report window for any report file (the Matcher page's reports)
+    void showReport(const juce::String& title, const juce::File& report);
     void openMappingFile(int row);
     juce::String getStatusText(int row) const;
     juce::String getGuiStatusText(int row) const;

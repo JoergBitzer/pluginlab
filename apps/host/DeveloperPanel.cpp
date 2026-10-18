@@ -1429,4 +1429,17 @@ void DeveloperPanel::closeWindow(const juce::String& key)
                                         }
                                     });
 }
+
+void DeveloperPanel::showReport(const juce::String& title, const juce::File& report)
+{
+    const juce::String key = "report#" + report.getFullPathName();
+    const auto existing = m_windows.find(key);
+    if (existing != m_windows.end())
+    {
+        existing->second->toFront(true);
+        return;
+    }
+    m_windows[key] = std::make_unique<ReportWindow>(*this, key, title, report.loadFileAsString(), report.getParentDirectory());
 }
+}
+

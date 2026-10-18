@@ -69,6 +69,16 @@ void HostSettings::setLastAudioDirectory(const juce::File& folder)
     write(kAudioDirectoryKey, folder.getFullPathName());
 }
 
+juce::File HostSettings::getMatcherFolder() const
+{
+    return getFolder().getChildFile("matcher");
+}
+
+juce::File HostSettings::getPresetFolder() const
+{
+    return getFolder().getChildFile("presets");
+}
+
 juce::String HostSettings::getMappingConfirmer() const
 {
     return read(kMappingConfirmerKey);

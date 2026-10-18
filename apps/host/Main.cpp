@@ -40,6 +40,8 @@ const juce::String kDeveloperOption = "--developer"; // --developer <plugin file
 const juce::String kViewOption = "--view";
 const juce::String kGuiOption = "--gui";         // with --developer: the GUI review instead of the report
 const juce::String kMappingOption = "--mapping"; // with --developer: the survey and mapping proposal instead of the report
+const juce::String kMatcherOption = "--matcher"; // --matcher <master plugin file> <target plugin file> [--run]: the Matcher page with both loaded
+const juce::String kRunOption = "--run";
 const juce::String kCalibrationOption = "--calibration"; // with --developer: the calibration (and the interactions) instead of the report
 const juce::String kPlayOption = "--play"; // --play <seconds> <report file> (with --compare): plays, writes the report, quits
 const juce::String kCompareOption = "--compare"; // --compare <audio file> [<plugin file>]: opens the Compare page
@@ -250,6 +252,14 @@ public:
             options.developerGui = arguments.contains(kGuiOption);
             options.developerMapping = arguments.contains(kMappingOption);
             options.developerCalibration = arguments.contains(kCalibrationOption);
+        }
+
+        const int matcherIndex = arguments.indexOf(kMatcherOption);
+        if (matcherIndex >= 0 && matcherIndex + 2 < arguments.size())
+        {
+            options.matcherMaster = resolveFile(arguments[matcherIndex + 1]);
+            options.matcherTarget = resolveFile(arguments[matcherIndex + 2]);
+            options.matcherRun = arguments.contains(kRunOption);
         }
 
         const int playIndex = arguments.indexOf(kPlayOption);
