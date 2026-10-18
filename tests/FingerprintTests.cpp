@@ -63,7 +63,10 @@ public:
         {
             expect(delivery.passed, delivery.name + ": " + delivery.comment);
         }
-        expect(gain.findings.empty(), "findings: " + juce::StringArray(gain.findings.data(), static_cast<int>(gain.findings.size())).joinIntoString("; "));
+        // the gain plugin applies its gain at once: zipper noise is its only finding (docs/reference/zipper-noise.md)
+        expect(gain.zipper.measured && gain.zipper.zipperCount == 1, "zipper noise on the gain");
+        const std::vector<juce::String> otherFindings = withoutZipper(gain.findings);
+        expect(otherFindings.empty(), "findings: " + juce::StringArray(otherFindings.data(), static_cast<int>(otherFindings.size())).joinIntoString("; "));
         const juce::String report = pluginlab::engine::createReport(gain);
         expect(report.contains("continuous") && report.contains("switch"), "the steps are named");
         expect(! report.contains("2147483647"));
@@ -76,7 +79,7 @@ public:
         const std::vector<pluginlab::engine::SummaryItem> gainSummary = pluginlab::engine::summarize(gain);
         for (const pluginlab::engine::SummaryItem& item : gainSummary)
         {
-            expect(item.good || item.key == "parameters", "the gain plugin: " + item.key + " = " + item.result);
+            expect(item.good || item.key == "parameters" || item.key == "zipper", "the gain plugin: " + item.key + " = " + item.result);
         }
         const std::vector<pluginlab::engine::SummaryItem> roundTrip =
             pluginlab::engine::parseSummaryJson(pluginlab::engine::createSummaryJson(gain));
@@ -183,7 +186,7 @@ public:
         expect(latencyFlagged, "the summary must show 0 / 100 as worth a look");
         const pluginlab::engine::PluginFingerprint honest = measure(testpaths::getLatencyPlugin());
         expectEquals(honest.rates[0].measuredLatency, kLatencyPluginDelay);
-        expect(honest.findings.empty());
+        expect(withoutZipper(honest.findings).empty());
 
         beginTest("the linear-phase plugin: latency 127 measured with the delayed impulse, output before the peak (pre-ringing)");
         const pluginlab::engine::PluginFingerprint linear = measure(testpaths::getLinearPhasePlugin());
@@ -193,7 +196,7 @@ public:
             expectEquals(rate.reportedAfterAudio, kLinearPhaseDelay);
             expect(rate.outputBeforePeakDb > -60.0, "pre-ringing expected: " + juce::String(rate.outputBeforePeakDb));
         }
-        expect(linear.findings.empty());
+        expect(withoutZipper(linear.findings).empty());
 
         beginTest("block sizes: smoothing per block differs only in the transient, a low-pass reset per block also in the steady state");
         const pluginlab::engine::PluginFingerprint smoothing = measure(testpaths::getBlockSmoothingPlugin());
@@ -240,6 +243,20 @@ public:
     }
 
 private:
+    // the test plugins built on the gain plugin apply their gain at once: zipper noise is expected there and not a fault of the test
+    static std::vector<juce::String> withoutZipper(const std::vector<juce::String>& findings)
+    {
+        std::vector<juce::String> others;
+        for (const juce::String& finding : findings)
+        {
+            if (! finding.startsWith("Zipper noise:"))
+            {
+                others.push_back(finding);
+            }
+        }
+        return others;
+    }
+
     void testSettings()
     {
         beginTest("the settings: a missing file is written with the defaults, a changed value is read back, a broken file gives the defaults");

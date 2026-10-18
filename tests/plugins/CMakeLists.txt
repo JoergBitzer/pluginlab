@@ -78,6 +78,8 @@ pluginlab_add_test_plugin(PluginLabTestLinearPhase "PluginLab Test Linear Phase"
 # the gain smoothed once per block (steady state independent of the block size) and a low-pass reset per block (a fault)
 pluginlab_add_test_plugin(PluginLabTestBlockSmoothing "PluginLab Test Block Smoothing" Tbs1 0 0 TRUE FALSE 0 0 0 0 1 0 0 0 0)
 pluginlab_add_test_plugin(PluginLabTestBlockFault "PluginLab Test Block Fault" Tbf1 0 0 TRUE FALSE 0 0 0 0 2 0 0 0 0)
+# the gain ramped within each block (no zipper noise; Test Gain without smoothing has it)
+pluginlab_add_test_plugin(PluginLabTestGainRamp "PluginLab Test Gain Ramp" Tgr1 0 0 TRUE FALSE 0 0 0 0 3 0 0 0 0)
 # stereo behaviour: cross feed (R += L / 2) and a width control (the gain acts on L - R only), and a plugin with a side-chain input
 pluginlab_add_test_plugin(PluginLabTestCrossFeed "PluginLab Test Cross Feed" Tcf1 0 0 TRUE FALSE 0 0 0 0 0 1 0 0 0)
 pluginlab_add_test_plugin(PluginLabTestWidth "PluginLab Test Width" Twd1 0 0 TRUE FALSE 0 0 0 0 0 2 0 0 0)

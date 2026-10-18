@@ -34,6 +34,9 @@ const juce::Identifier kMaximumParameters("maximumParameters");
 const juce::Identifier kMaximumJumpedParameters("maximumJumpedParameters");
 const juce::Identifier kRealTimeTests("realTimeTests");
 const juce::Identifier kMeasurements("measurements");
+const juce::Identifier kZipperTests("zipperTests");
+const juce::Identifier kZipperExcessDb("zipperExcessDb");
+const juce::Identifier kZipperAboveDb("zipperAboveDb");
 const juce::Identifier kRealTimeSeconds("realTimeSeconds");
 const juce::Identifier kLongRealTimeSeconds("longRealTimeSeconds");
 
@@ -114,6 +117,9 @@ FingerprintSettings FingerprintSettings::loadOrCreate(const juce::File& file, ju
     readInt(*object, kMaximumJumpedParameters, settings.maximumJumpedParameters);
     readBool(*object, kRealTimeTests, settings.realTimeTests);
     readBool(*object, kMeasurements, settings.measurements);
+    readBool(*object, kZipperTests, settings.zipperTests);
+    readDouble(*object, kZipperExcessDb, settings.zipperExcessDb);
+    readDouble(*object, kZipperAboveDb, settings.zipperAboveDb);
     readDouble(*object, kRealTimeSeconds, settings.realTimeSeconds);
     readDouble(*object, kLongRealTimeSeconds, settings.longRealTimeSeconds);
     const juce::var blockSizes = object->getProperty(kBlockSizes);
@@ -161,6 +167,9 @@ juce::String FingerprintSettings::toJson() const
     object->setProperty(kMaximumJumpedParameters, maximumJumpedParameters);
     object->setProperty(kRealTimeTests, realTimeTests);
     object->setProperty(kMeasurements, measurements);
+    object->setProperty(kZipperTests, zipperTests);
+    object->setProperty(kZipperExcessDb, zipperExcessDb);
+    object->setProperty(kZipperAboveDb, zipperAboveDb);
     object->setProperty(kRealTimeSeconds, realTimeSeconds);
     object->setProperty(kLongRealTimeSeconds, longRealTimeSeconds);
     return juce::JSON::toString(juce::var(object.release()));

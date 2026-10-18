@@ -44,6 +44,11 @@ struct FingerprintSettings
     double realTimeSeconds = 2.0;            // length of the paced renders
     double longRealTimeSeconds = 0.0;        // a long paced run (demo noise and the like); 0 = off
 
+    // zipper noise per parameter (docs/reference/zipper-noise.md): tones while one continuous parameter ramps, one new value per block
+    bool zipperTests = true;
+    double zipperExcessDb = 10.0;            // the residual away from the tones during the ramp exceeds that of the ends held still by more
+    double zipperAboveDb = -60.0;            // and is above this, relative to the tones (no smoothing: about -46 dB, ramped per block: -70 dB)
+
     // the measurement units of W7 on the plugin's default setting, appended to the report (docs/measurements/plugins-and-host.md)
     bool measurements = true;
 

@@ -103,6 +103,11 @@ inline juce::File getBlockFaultPlugin()
     return getTestPluginFolder().getChildFile("PluginLabTestBlockFault.vst3");
 }
 
+inline juce::File getGainRampPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestGainRamp.vst3");
+}
+
 inline juce::File getCrossFeedPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestCrossFeed.vst3");

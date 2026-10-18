@@ -20,7 +20,8 @@ add_library(pluginlab_engine STATIC
     PluginMeasurement.cpp
     ReportText.cpp
     RenderSlot.cpp
-    SessionFiles.cpp)
+    SessionFiles.cpp
+    ZipperNoise.cpp)
 
 target_include_directories(pluginlab_engine
     PUBLIC

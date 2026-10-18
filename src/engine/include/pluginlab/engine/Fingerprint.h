@@ -6,6 +6,7 @@
 #include <juce_audio_processors_headless/juce_audio_processors_headless.h>
 
 #include "pluginlab/engine/FingerprintSettings.h"
+#include "pluginlab/engine/ZipperNoise.h"
 #include "pluginlab/measure/SystemClass.h"
 
 namespace pluginlab::engine
@@ -173,6 +174,7 @@ struct PluginFingerprint
     double idleLevelDb = -200.0;
     SystemClassFingerprint systemClass;
     RealTimeFingerprint realTime;
+    ZipperFingerprint zipper;                 // zipper noise per continuous parameter (settings.zipperTests)
     std::vector<juce::String> findings;       // what is noteworthy, in words, with the numbers
 };
 

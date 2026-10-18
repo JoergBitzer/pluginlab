@@ -194,10 +194,19 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 #else
     if (! m_bypass->get())
     {
+#if PLUGINLAB_TEST_PLUGIN_BLOCK_MODE == 3
+        // smoothed properly: a linear ramp from the last block's gain to the new one within the block (no steps: no zipper noise)
+        for (int channel = 0; channel < mainChannels; ++channel)
+        {
+            buffer.applyGainRamp(channel, 0, buffer.getNumSamples(), m_smoothedGain, gain);
+        }
+        m_smoothedGain = gain;
+#else
         for (int channel = 0; channel < mainChannels; ++channel)
         {
             buffer.applyGain(channel, 0, buffer.getNumSamples(), gain);
         }
+#endif
     }
 #endif
 #if PLUGINLAB_TEST_PLUGIN_LFO

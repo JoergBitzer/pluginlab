@@ -15,7 +15,8 @@
 // host (a plugin whose reported latency is wrong: the engine must measure it).
 // PLUGINLAB_TEST_PLUGIN_FIR_TAPS=N (odd) filters with a symmetric (linear phase) FIR of N taps: pre-ringing before the peak.
 // PLUGINLAB_TEST_PLUGIN_BLOCK_MODE=1 smooths the gain once per block (half the way to the target per block: the transient depends on the
-// block size, the steady state does not); =2 a one-pole low-pass whose state is reset at every block (a fault: depends on the block size).
+// block size, the steady state does not); =2 a one-pole low-pass whose state is reset at every block (a fault: depends on the block size);
+// =3 ramps the gain linearly within each block from the last value to the new one (smoothed properly: no zipper noise).
 // PLUGINLAB_TEST_PLUGIN_STEREO_MODE=1 cross feed (R += L / 2); =2 the gain is a width control (acts on L - R only).
 // PLUGINLAB_TEST_PLUGIN_SIDECHAIN=1 has a stereo side-chain input bus that is on by default.
 // PLUGINLAB_TEST_PLUGIN_LFO=1 a tremolo with a free-running LFO (2 Hz): time-varying.

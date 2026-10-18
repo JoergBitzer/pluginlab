@@ -251,6 +251,15 @@ a different algorithm for offline rendering, behaviour tied to the wall clock. W
 The pacing is a normal thread waiting (no audio device): good enough to detect time dependence, not to measure exact timing. On Linux a JUCE plugin runs its timers
 on a message thread of its own; on Windows and macOS it shares the host's message thread, which the paced render lets run.
 
+### 3.7c Zipper noise (0.65.0)
+Every continuous parameter that changes the audio (not the switches, choices and a bypass), with the others as in B: five tones (100, 315, 1000, 3150, 10000 Hz on
+bins of the analysis, -20 dBFS each) run through a fresh instance while the parameter ramps from `lowSetting` to `highSetting` in 1.37 s, **one new value per block of
+512 samples** (as a DAW without sample-accurate automation, or a knob, delivers it). The residual is the power more than 45 Hz away from every tone and its harmonics
+(up to the 5th), relative to the tones (Blackman-Harris window). A plugin that applies a new value at once changes its output in steps: its residual rises at the
+multiples of the block rate (94 Hz) around every tone. The same is measured with the two ends held still (the plugin's own noise and distortion). Zipper noise:
+the residual while moving is more than `zipperExcessDb` (10 dB) above the still one and above `zipperAboveDb` (-60 dB re the tones). Details and numbers:
+`docs/reference/zipper-noise.md`. `zipperTests` switches the test off.
+
 ### 3.8 Settings used
 The JSON of the settings the report was made with (2.5).
 
@@ -272,6 +281,8 @@ The JSON of the settings the report was made with (2.5).
 | Timer Gain (the gain reaches the audio through a 100 ms timer) | the fast scan finds no reacting parameter; real-time pace differs; the change: fast "not within the render", paced about 40 ms |
 | Offline Switch (+6 dB when rendering offline) | offline flag: different (0 dB re reference, i.e. as large as the signal) |
 | Wall Clock (2 Hz tremolo on the system clock) | two fast renders already differ a little (-29 dB), real-time pace much more (-5 dB): different |
+| Gain (no smoothing) / Block Smoothing (half the way per block) | zipper noise for Gain (about -46 dB re the tones while moving) |
+| Gain Ramp (the gain ramped linearly within each block) | no zipper noise (about -70 dB) |
 
 ## 5. Example: the own PeakEQ and the BL gain plugins
 PeakEQ: latency reported 0 (after prepare and after audio), measured 88 / 96 / 192 samples at 44.1 / 48 / 96 kHz (the constructor reports before `prepareToPlay` has

@@ -67,7 +67,8 @@ struct SummaryColumn
 };
 const SummaryColumn kSummaryColumns[] = {{"parameters", "Param. / react"},  {"systemClass", "Class"}, {"latency", "Latency rep. / meas."}, {"delivery", "Delivery"},
                                          {"blockSizes", "Block size indep."}, {"deterministic", "Deterministic"},       {"finite", "Finite"},
-                                         {"recovers", "Recovers"},          {"silence", "Silent"},                 {"ownSignal", "Own signal"}};
+                                         {"recovers", "Recovers"},          {"silence", "Silent"},                 {"ownSignal", "Own signal"},
+                                         {"zipper", "Zipper noise"}};
 constexpr int kNumberOfSummaryColumns = static_cast<int>(sizeof(kSummaryColumns) / sizeof(kSummaryColumns[0]));
 
 juce::File getSummaryFile(const juce::File& reportFile)

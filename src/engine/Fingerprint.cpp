@@ -7,6 +7,7 @@
 #include "pluginlab/engine/LatencyMeasurer.h"
 #include "pluginlab/engine/PluginDevice.h"
 #include "PluginRig.h"
+#include "ZipperMeasurement.h"
 
 namespace pluginlab::engine
 {
@@ -69,6 +70,8 @@ juce::String yesNo(bool value)
     }
     return "no";
 }
+
+constexpr double kZipperNothingDb = -199.0; // a residual of exactly nothing (-200 dB)
 
 juce::String formatDb(double value)
 {
@@ -1050,6 +1053,23 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     // ---- real-time behaviour: offline flag, real-time pace, a parameter change in real time (W5c) ----
     fingerprint.realTime = measureRealTime(bench, scanBase, settingB, fingerprint.parameters, fingerprint.measuredChannels, settings);
 
+    if (settings.zipperTests)
+    {
+        report(0.9, "zipper noise");
+        // ---- zipper noise: every continuous parameter that changes the audio ramps while tones run, one new value per block ----
+        std::vector<detail::ZipperCandidate> candidates;
+        for (const ParameterFingerprint& parameter : fingerprint.parameters)
+        {
+            const bool reacts = std::find(fingerprint.reactingParameters.begin(), fingerprint.reactingParameters.end(), parameter.index)
+                             != fingerprint.reactingParameters.end();
+            if (reacts && ! isDiscrete(parameter) && ! isBypass(parameter))
+            {
+                candidates.push_back({parameter.index, parameter.name});
+            }
+        }
+        fingerprint.zipper = detail::measureZipperNoise(bench, settingB, candidates, settings);
+    }
+
     report(0.98, "findings");
     // ---- what is noteworthy (with the numbers) ----
     if (fingerprint.systemClass.measured)
@@ -1099,6 +1119,20 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
                                        + " s of silence between, gives different output (" + formatDifference(fingerprint.timeInvarianceDifference)
                                        + "): an LFO, a random element, dither, a noise generator or a slow envelope. Repeatability, determinism, recovery and "
                                          "silence cannot be judged as for a time-invariant plugin.");
+    }
+    if (fingerprint.zipper.zipperCount > 0)
+    {
+        juce::StringArray names;
+        for (const ZipperParameterResult& entry : fingerprint.zipper.parameters)
+        {
+            if (entry.zipper)
+            {
+                names.add(entry.name + " (+" + juce::String(entry.excessDb, 1) + " dB, " + juce::String(entry.rampDb, 1) + " dB re the tones)");
+            }
+        }
+        fingerprint.findings.push_back("Zipper noise: " + names.joinIntoString(", ") + ". While the parameter moves (one new value per block, as from a "
+                                       "DAW's automation or a knob), the output changes in steps: noise away from the tones that is not there when the "
+                                       "parameter stands still. The plugin does not smooth this parameter (or smooths it per block only).");
     }
     if (fingerprint.timeInvariant && ! fingerprint.settlesInTime)
     {
@@ -1364,6 +1398,18 @@ std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
     add("timeInvariant", "time-invariant (the same noise twice through one instance)", invariance, formatDifference(fingerprint.timeInvarianceDifference), true);
     add("settles", "settles within " + juce::String(fingerprint.settings.settleSeconds, 2) + " s after a parameter change", yesNo(fingerprint.settlesInTime),
         formatDifference(fingerprint.settleDifference), fingerprint.settlesInTime || timeVarying);
+    if (fingerprint.zipper.measured)
+    {
+        int judged = 0;
+        for (const ZipperParameterResult& entry : fingerprint.zipper.parameters)
+        {
+            judged += entry.judged ? 1 : 0;
+        }
+        const bool none = fingerprint.zipper.zipperCount == 0;
+        add("zipper", "zipper noise while a parameter moves (one new value per block)", judged == 0 ? juce::String("not judged") : none ? juce::String("none")
+                                                                                                    : juce::String(fingerprint.zipper.zipperCount) + " of " + juce::String(judged),
+            juce::String(judged) + " continuous parameter(s) judged", none || timeVarying);
+    }
     add("blockSizes", "block size independent (steady state)", yesNo(fingerprint.blockSizeIndependent), worstBlock, fingerprint.blockSizeIndependent);
     add("deterministic", "deterministic (two instances, bit exact)", yesNo(fingerprint.deterministic), expectedNote, fingerprint.deterministic || timeVarying);
     add("finite", "output stays finite after parameter jumps", yesNo(fingerprint.outputStaysFinite), {}, fingerprint.outputStaysFinite);
@@ -1693,6 +1739,46 @@ juce::String createReport(const PluginFingerprint& fingerprint)
             addRow("B", fingerprint.systemClass.atB);
         }
         text << "\nWhat this means at the defaults: " << measure::getSystemClassMeaning(fingerprint.systemClass.atA.systemClass) << ".\n";
+    }
+
+    const ZipperFingerprint& zipper = fingerprint.zipper;
+    if (zipper.measured)
+    {
+        juce::StringArray tones;
+        for (const double tone : zipper.tonesHz)
+        {
+            tones.add(juce::String(juce::roundToInt(tone)));
+        }
+        text << "\n## Zipper noise\n";
+        text << "Every continuous parameter that changes the audio, with the others as in B: tones of " << tones.joinIntoString(", ") << " Hz (-20 dBFS each) run "
+                "through the plugin while the parameter ramps from " << juce::String(settings.lowSetting, 2) << " to " << juce::String(settings.highSetting, 2)
+             << " in " << juce::String(zipper.rampSeconds, 2) << " s, one new value per block of " << zipper.blockSize << " samples at "
+             << juce::String(kReferenceRate / 1000.0, 0) << " kHz (as a DAW delivers automation or a knob move). Residual: the power away from the tones and "
+                "their harmonics (more than 45 Hz off, just under half the block rate; Blackman-Harris window), relative to the tones. A plugin that applies each value at once changes its "
+                "output in steps, and each step is a click: the residual during the ramp rises above that of the two ends held still (the plugin's own noise "
+                "and distortion). Zipper noise: more than " << juce::String(settings.zipperExcessDb, 0) << " dB above and above "
+             << juce::String(settings.zipperAboveDb, 0) << " dB re the tones. Switches and choices are not ramped (a jump is their nature).\n\n";
+        if (zipper.parameters.empty())
+        {
+            text << "No continuous parameter changes the audio: nothing to ramp.\n";
+        }
+        else
+        {
+            const auto level = [](double value) { return value <= kZipperNothingDb ? juce::String("none") : juce::String(value, 1) + " dB"; };
+            text << "| # | parameter | change low / high | residual while moving | residual standing still | excess | zipper noise |\n|---|---|---|---|---|---|---|\n";
+            for (const ZipperParameterResult& entry : zipper.parameters)
+            {
+                text << "| " << entry.index << " | " << entry.name << " | " << level(entry.changeDb) << " | " << level(entry.rampDb) << " | " << level(entry.stillDb)
+                     << " | ";
+                if (! entry.judged)
+                {
+                    text << " | not judged: " << entry.note << " |\n";
+                    continue;
+                }
+                text << juce::String(entry.excessDb, 1) << " dB | "
+                     << (entry.zipper ? juce::String("**yes**") : juce::String("no")) << " |\n";
+            }
+        }
     }
 
     text << "\n## Other\n";
