@@ -2,6 +2,8 @@
 
 #include <juce_core/juce_core.h>
 
+#include "PageServices.h"
+
 namespace pluginlab::host
 {
 // Command line mode --fingerprint <plugin file> <report file> [<plugin identifier>]: measures the fingerprint of every plugin in the file (see
@@ -35,16 +37,5 @@ bool writeCalibrationReport(const juce::File& pluginFile, const juce::File& repo
 // setting by position) and "releaseIndices". Writes the report (Markdown) and <report>.json (per target: the found setting, released, matched).
 bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile);
 
-// While --fingerprint, --map, --calibrate and --match run, they write what they are doing to <report file>.progress: the fraction done (0 ... 1) on the first line, the
-// step on the second (the Developer page draws a progress bar from it), and print each new step. The file is removed at the end.
-juce::File getProgressFile(const juce::File& reportFile);
-
-struct JobProgress
-{
-    double fraction = -1.0; // negative: unknown
-    juce::String step;
-};
-
-// Reads such a file (fraction -1 and an empty step if there is none)
-JobProgress readProgressFile(const juce::File& progressFile);
+// (the progress file of the jobs: PageServices.h of the pages library)
 }

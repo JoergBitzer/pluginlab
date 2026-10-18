@@ -1,4 +1,4 @@
-# PluginLabHost: the stand-alone host application. W2: plugin list (scanned by PluginLabScanner processes), load/unload,
+# PluginLabHost: the stand-alone application (one of the two main targets; its pages are in src/pages, W10.1). W2: plugin list (scanned by PluginLabScanner processes), load/unload,
 # parameter table, editor windows; command line modes --write-version and --report for CI.
 juce_add_gui_app(PluginLabHost
     PRODUCT_NAME "PluginLabHost"
@@ -8,11 +8,6 @@ juce_add_gui_app(PluginLabHost
 target_sources(PluginLabHost
     PRIVATE
         Main.cpp
-        ComparePanel.cpp
-        DeveloperPanel.cpp
-        MatcherPanel.cpp
-        HostMainComponent.cpp
-        HostSettings.cpp
         HostShell.cpp
         HostFingerprint.cpp
         HostGuiSnapshot.cpp
@@ -48,6 +43,7 @@ target_link_libraries(PluginLabHost
         pluginlab_core
         pluginlab_engine
         pluginlab_hosting_ui
+        pluginlab_pages
         juce::juce_gui_basics
         juce::juce_audio_processors
         juce::juce_audio_utils

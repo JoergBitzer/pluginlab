@@ -183,22 +183,6 @@ private:
 };
 }
 
-juce::File getProgressFile(const juce::File& reportFile)
-{
-    return juce::File(reportFile.getFullPathName() + ".progress");
-}
-
-JobProgress readProgressFile(const juce::File& progressFile)
-{
-    JobProgress progress;
-    const juce::StringArray lines = juce::StringArray::fromLines(progressFile.loadFileAsString());
-    if (lines.size() >= 2 && lines[0].containsOnly("0123456789."))
-    {
-        progress.fraction = lines[0].getDoubleValue();
-        progress.step = lines[1];
-    }
-    return progress;
-}
 
 bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier)
 {

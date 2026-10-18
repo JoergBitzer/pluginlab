@@ -1,7 +1,7 @@
-# W10: the final products (plan for review)
+# W10: the final products (plan)
 
-Status: **draft v1, for the author's review** (2026-10-18). Nothing here is decided. Milestone of `planning.md` §8: "**Final products: the
-stand-alone application and the plugin** (two main targets since 2026-10-12): 4 slots, parallel rendering, real-time transfer function
+Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done). Milestone of
+`planning.md` §8: "**Final products: the stand-alone application and the plugin** (two main targets since 2026-10-12): 4 slots, parallel rendering, real-time transfer function
 display, three-level GUI, measurement presets, in both. Done when: persona walkthroughs succeed in the stand-alone application and in the
 plugin (musician compares a demo with an owned plugin; developer checks an algorithm)." The questions for the author are in section 7.
 
@@ -136,16 +136,35 @@ and the expert page.
 
 ## 7. Questions for the author
 1. **One code base, two thin shells** (3.1), the plugin as a shell around the same pages? Proposal: yes.
+Answer yes
 2. **Pages in the plugin**: all levels including the Developer page, or easy and expert only (the Developer page's jobs start the
    application as a child process)? Proposal: all, the Developer page's jobs through the application binary.
+   Answer yes and we should keep the Developer page in the stand-alone application only, to avoid confusion for the musician.
 3. **Live display rate**: 5 updates per second per changed slot (proposal), faster, or on release of the knob only?
+Answer yes follow your proposal, 5 updates per second per changed slot.
 4. **The easy page**: is the walkthrough of 3.4 what the musician should see, and is medium (0.25 dB) the right default tolerance there?
    Proposal: yes, with "the same / audibly close / different" in words.
+   Answer yes
 5. **Gain trim after a match**: should the product level-match the slots for listening automatically (proposal), or only show the level
    difference?
+   Answer level match but with a parameter / slider, so that it is transparent to the user and can be manually adjusted if desired.
 6. **Measurement presets**: JSON in the settings folder, shared by both products (proposal)?
+   Answer yes, JSON in the settings folder, shared by both products.
 7. **Crash protection**: option (c) of 3.7 (in process for listening, child processes for all measurements)? Proposal: yes.
+   Answer yes
 8. **First release**: which OSes (proposal: Linux and Windows first, macOS when signing and the sandbox questions are solved) and which
    formats of the plugin product (proposal: VST3; VST2 where the FST headers allow; AU later)?
+   Answer, we should check MAc and au during development via CI Processing.
 9. **Distribution**: GPLv3 source, binaries from CI as archives (proposal), or installers? Under the name "pluginlab" or "Jade Benchmark"?
+Jade Benchmark and binaries from CI, as we do it with all plugins
 10. **DAWs to test** beyond Bitwig (Linux): Reaper (Linux, Windows) and one on macOS? Proposal: Reaper on Linux and Windows for W10.2.
+Yeah, macos I will ask someone to test it 
+
+## Progress
+### W10.1 pages library (0.62.1, done)
+`src/pages` (library `pluginlab_pages`): the Plugins page (`HostMainComponent`), Compare, Matcher, Developer and the settings folder
+(`HostSettings`), moved from `apps/host`; `PageServices` with what a shell provides: the program that runs the jobs in a process of its own
+(the application itself by default; the plugin will set the PluginLabHost in its bundle) and the progress file of the jobs. The application
+links the library and works as before (its tests); the library builds as a target of its own. The pages keep the namespace `pluginlab::host`
+and the start options of the application for now (`StartupOptions`, used by the Plugins page for a scan folder and a plugin to load).
+

@@ -1,6 +1,6 @@
 #include "DeveloperPanel.h"
 
-#include "HostFingerprint.h"
+#include "PageServices.h"
 #include "pluginlab/engine/Mapping.h"
 
 #include "pluginlab/engine/OfflineRenderer.h"
@@ -111,7 +111,7 @@ public:
             option = "--calibrate";
         }
         juce::ChildProcess process;
-        const juce::File host = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+        const juce::File host = getHelperExecutable(); // the application, or the PluginLabHost in the plugin's bundle
         const juce::StringArray arguments{host.getFullPathName(), option, m_pluginFile.getFullPathName(), temporary.getFullPathName(), m_identifier};
         bool success = false;
         juce::String message;

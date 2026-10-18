@@ -4,7 +4,7 @@
 #include <array>
 #include <cmath>
 
-#include "HostFingerprint.h"
+#include "PageServices.h"
 #include "pluginlab/engine/LivePluginDevice.h"
 #include "pluginlab/engine/Mapping.h"
 #include "pluginlab/engine/OfflineRenderer.h"
@@ -84,7 +84,7 @@ public:
     void run() override
     {
         juce::ChildProcess process;
-        const juce::File host = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+        const juce::File host = getHelperExecutable(); // the application, or the PluginLabHost in the plugin's bundle
         bool success = false;
         juce::String message;
         if (process.start(juce::StringArray{host.getFullPathName(), "--match", m_job.getFullPathName(), m_report.getFullPathName()}, 0))
