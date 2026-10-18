@@ -35,6 +35,7 @@ target_sources(PluginLabTests
         ParameterSurveyTests.cpp
         PluginMatchTests.cpp
         BandFitTests.cpp
+        BenchmarkTests.cpp
         CalibrationTests.cpp
         BrowserTests.cpp
         CatalogTests.cpp
@@ -72,6 +73,7 @@ target_link_libraries(PluginLabTests
         pluginlab_measure
         pluginlab_hosting_ui
         pluginlab_loader_core
+        pluginlab_benchmark_core
         juce::juce_core
         juce::juce_dsp
         juce::juce_events

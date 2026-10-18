@@ -81,6 +81,9 @@ public:
     // ---- audio ----
     // Fills the output (kChannels channels) with the audible slot. Audio thread.
     void processBlock(juce::AudioBuffer<float>& output);
+    // Inside a DAW (W10.2): the buffer is the input of all slots instead of the files, and receives the audible slot (1 or kChannels channels;
+    // a mono buffer feeds both inputs and gets their mean). While the slots are being changed the audio passes unchanged. Audio thread.
+    void processExternal(juce::AudioBuffer<float>& buffer);
 
     // Offline use: processes numSamples (at most the maximum block) and gives the output of every slot, aligned (compensated).
     void processAllSlots(int numSamples, std::vector<juce::AudioBuffer<float>>& slotOutputs);
@@ -114,6 +117,7 @@ private:
     juce::AudioBuffer<float> m_input;
     std::vector<juce::AudioBuffer<float>> m_slotBuffers;
     juce::AudioBuffer<float> m_chunk;
+    juce::AudioBuffer<float> m_external;   // the output of processExternal before it goes back into the DAW's buffer
 
     int m_activeSlot = 0;
     int m_previousSlot = 0;

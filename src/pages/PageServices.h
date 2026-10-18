@@ -11,6 +11,11 @@ namespace pluginlab::host
 juce::File getHelperExecutable();
 void setHelperExecutable(const juce::File& executable);
 
+// Inside a DAW (the plugin, W10.2): the DAW plays its track through the engine; the pages hide what belongs to the application's own audio
+// (files, the audio device, play and render on the page Compare)
+bool isInsideDaw();
+void setInsideDaw(bool inside);
+
 // While --fingerprint, --map, --calibrate and --match run, they write what they are doing to <report file>.progress: the fraction done (0 ... 1) on the first line, the
 // step on the second (the Developer page draws a progress bar from it), and print each new step. The file is removed at the end.
 juce::File getProgressFile(const juce::File& reportFile);

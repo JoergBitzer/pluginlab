@@ -1,4 +1,5 @@
 #include "ComparePanel.h"
+#include "PageServices.h"
 
 #include "pluginlab/engine/OfflineRenderer.h"
 #include "pluginlab/engine/SessionFiles.h"
@@ -256,6 +257,18 @@ ComparePanel::ComparePanel(pluginlab::engine::MeasurementEngine& engine, HostSet
     m_slotsLabel.setText("Slots: the dry reference and the plugins loaded on the Plugins page. Select a row or press 1 ... 9 to hear a slot.", juce::dontSendNotification);
     updateFileControls();
     setStatus("Add audio files, load plugins on the Plugins page, then press Play.");
+    if (isInsideDaw())
+    {
+        // the DAW plays: no files, no audio device, no play or render of its own (W10.2)
+        for (juce::Component* component : std::initializer_list<juce::Component*>{&m_addFileButton, &m_removeFileButton, &m_saveListButton, &m_loadListButton,
+                                                                                  &m_passesLabel, &m_passesBox, &m_regionLabel, &m_regionStart, &m_regionEnd,
+                                                                                  &m_fileTable, &m_playButton, &m_rewindButton, &m_deviceButton,
+                                                                                  &m_renderButton, &m_rateLabel, &m_rateBox})
+        {
+            component->setVisible(false);
+        }
+        setStatus("Inside the DAW: the track plays through the audible slot. Select a slot or press 1 ... 9 to hear it.");
+    }
     startTimer(kTimerMs);
 }
 
@@ -272,6 +285,23 @@ ComparePanel::~ComparePanel()
 void ComparePanel::resized()
 {
     juce::Rectangle<int> area = getLocalBounds().reduced(kMargin);
+    if (isInsideDaw())
+    {
+        // the slots, the crossfade and the parameters of the selected slot
+        juce::Rectangle<int> row = area.removeFromTop(kButtonHeight);
+        m_slotEditorButton.setBounds(row.removeFromRight(110));
+        m_slotsLabel.setBounds(row);
+        area.removeFromTop(kMargin);
+        m_slotTable.setBounds(area.removeFromTop(kSlotTableHeight));
+        area.removeFromTop(kMargin);
+        row = area.removeFromTop(kButtonHeight);
+        m_crossfadeLabel.setBounds(row.removeFromLeft(kLabelWidth + 30));
+        m_crossfadeSlider.setBounds(row.removeFromLeft(kSliderWidth));
+        area.removeFromTop(kMargin);
+        m_statusLabel.setBounds(area.removeFromBottom(kStatusHeight));
+        m_parameters.setBounds(area);
+        return;
+    }
 
     juce::Rectangle<int> row = area.removeFromTop(kButtonHeight);
     m_addFileButton.setBounds(row.removeFromLeft(150));

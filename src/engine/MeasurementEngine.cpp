@@ -11,6 +11,7 @@ void MeasurementEngine::prepare(double sampleRate, int maxBlockSize)
     m_maxBlockSize = maxBlockSize;
     m_input.setSize(kChannels, maxBlockSize);
     m_chunk.setSize(kChannels, maxBlockSize);
+    m_external.setSize(kChannels, maxBlockSize);
     m_slotBuffers.clear();
     m_slots.clear();
     m_fadeLength = static_cast<int>(sampleRate * m_crossfadeMs / 1000.0f);
@@ -336,6 +337,37 @@ void MeasurementEngine::processBlock(juce::AudioBuffer<float>& output)
         const int count = juce::jmin(m_maxBlockSize, total - start);
         fillInput(count);
         processChunk(output, start, count);
+    }
+}
+
+void MeasurementEngine::processExternal(juce::AudioBuffer<float>& buffer)
+{
+    const juce::ScopedTryLock lock(m_lock);
+    if (! lock.isLocked() || m_slots.empty() || buffer.getNumChannels() == 0)
+    {
+        return; // the audio passes unchanged
+    }
+    const int total = buffer.getNumSamples();
+    const int channels = buffer.getNumChannels();
+    for (int start = 0; start < total; start += m_maxBlockSize)
+    {
+        const int count = juce::jmin(m_maxBlockSize, total - start);
+        for (int channel = 0; channel < kChannels; ++channel)
+        {
+            m_input.copyFrom(channel, 0, buffer, juce::jmin(channel, channels - 1), start, count);
+        }
+        processChunk(m_external, 0, count);
+        if (channels == 1)
+        {
+            buffer.copyFrom(0, start, m_external, 0, 0, count);
+            buffer.addFrom(0, start, m_external, 1, 0, count);
+            buffer.applyGain(0, start, count, 0.5f);
+            continue;
+        }
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            buffer.copyFrom(channel, start, m_external, juce::jmin(channel, kChannels - 1), 0, count);
+        }
     }
 }
 

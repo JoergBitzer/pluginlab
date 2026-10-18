@@ -9,6 +9,12 @@ juce::File& getHelperSetting()
     static juce::File executable;
     return executable;
 }
+
+bool& getInsideDawSetting()
+{
+    static bool inside = false;
+    return inside;
+}
 }
 
 juce::File getHelperExecutable()
@@ -20,6 +26,16 @@ juce::File getHelperExecutable()
 void setHelperExecutable(const juce::File& executable)
 {
     getHelperSetting() = executable;
+}
+
+bool isInsideDaw()
+{
+    return getInsideDawSetting();
+}
+
+void setInsideDaw(bool inside)
+{
+    getInsideDawSetting() = inside;
 }
 
 juce::File getProgressFile(const juce::File& reportFile)

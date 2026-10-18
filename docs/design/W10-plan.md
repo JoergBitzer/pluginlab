@@ -1,6 +1,6 @@
 # W10: the final products (plan)
 
-Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done). Milestone of
+Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done). Milestone of
 `planning.md` §8: "**Final products: the stand-alone application and the plugin** (two main targets since 2026-10-12): 4 slots, parallel rendering, real-time transfer function
 display, three-level GUI, measurement presets, in both. Done when: persona walkthroughs succeed in the stand-alone application and in the
 plugin (musician compares a demo with an owned plugin; developer checks an algorithm)." The questions for the author are in section 7.
@@ -168,3 +168,18 @@ Yeah, macos I will ask someone to test it
 links the library and works as before (its tests); the library builds as a target of its own. The pages keep the namespace `pluginlab::host`
 and the start options of the application for now (`StartupOptions`, used by the Plugins page for a scan folder and a plugin to load).
 
+
+### W10.2 plugin shell (0.63.0, code done; the DAW checks open)
+`plugins/benchmark`: the plugin **Jade Benchmark** (VST3, `JadeBenchmark.vst3`, copied to `build/benchmark_plugin`). The processor
+(`BenchmarkProcessor`, library `pluginlab_benchmark_core`) owns a `MeasurementEngine` with the dry slot; the DAW's track is the source
+(`MeasurementEngine::processExternal`: every slot processes the block, the audible one comes out, the crossfade as in the application; a
+mono track feeds both inputs). The latency the DAW is told is the engine's (all slots aligned to the slowest one). Another sample rate or
+larger blocks: the engine is prepared again and the slots are loaded again with their states. The state in the project: the slots with
+their plugin descriptions and states, and the audible slot. The editor: the pages Plugins, Compare and Matcher as tabs (no Developer page);
+Compare inside a DAW hides the file, play, device and render controls (`PageServices::isInsideDaw`). The bundle carries PluginLabScanner
+and PluginLabHost next to the plugin binary; the Matcher's jobs run in that PluginLabHost.
+Tests (`BenchmarkTests`): dry pass-through, a gain plugin in the audible slot and back to dry, the latency, the state round trip with the
+plugin's setting, a foreign state ignored.
+Open: the run in Bitwig and Reaper with 4 slots and pluginval (not installed here); the limit of 4 slots is not enforced yet; a match
+report opens in the system's viewer (the report window is a Developer-page component); macOS: PluginLabHost as an app bundle inside the
+plugin bundle is not handled yet (W10.7, CI).
