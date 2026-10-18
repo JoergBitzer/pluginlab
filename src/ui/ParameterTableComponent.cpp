@@ -17,6 +17,9 @@ constexpr int kWidthIndex = 40;
 constexpr int kWidthName = 200;
 constexpr int kWidthValue = 140;
 constexpr int kWidthSlider = 300;
+constexpr int kMinimumWidthName = 110;
+constexpr int kMinimumWidthValue = 90;
+constexpr int kMinimumWidthSlider = 160;
 }
 
 // A text table with a slider in the last column.
@@ -113,10 +116,13 @@ ParameterTableComponent::ParameterTableComponent()
     m_table.setModel(m_model.get());
     m_table.setRowHeight(kRowHeight);
     m_table.setHeaderHeight(kHeaderHeight);
-    m_table.getHeader().addColumn("#", kColumnIndex, kWidthIndex);
-    m_table.getHeader().addColumn("Parameter", kColumnName, kWidthName);
-    m_table.getHeader().addColumn("Value", kColumnValue, kWidthValue);
-    m_table.getHeader().addColumn("", kColumnSlider, kWidthSlider);
+    // the columns shrink to the width the table gets (the page Compare shares it with the live curves), each down to its minimum
+    const int columnFlags = juce::TableHeaderComponent::defaultFlags;
+    m_table.getHeader().addColumn("#", kColumnIndex, kWidthIndex, kWidthIndex, -1, columnFlags);
+    m_table.getHeader().addColumn("Parameter", kColumnName, kWidthName, kMinimumWidthName, -1, columnFlags);
+    m_table.getHeader().addColumn("Value", kColumnValue, kWidthValue, kMinimumWidthValue, -1, columnFlags);
+    m_table.getHeader().addColumn("", kColumnSlider, kWidthSlider, kMinimumWidthSlider, -1, columnFlags);
+    m_table.getHeader().setStretchToFitActive(true);
     addAndMakeVisible(m_table);
     startTimerHz(kRefreshHz);
 }

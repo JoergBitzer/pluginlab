@@ -235,7 +235,7 @@ void LiveResponseView::rebuildPlot()
                 notes.add("deviation from the reference: largest " + formatDb(deviation.largestDb) + ", rms " + formatDb(deviation.rmsDb));
             }
             curves.push_back(curve);
-            lines.add(name + ": " + notes.joinIntoString("; "));
+            lines.add(notes.isEmpty() ? name : name + ": " + notes.joinIntoString("; "));
         }
     }
     ui::ResponsePlotOptions options;

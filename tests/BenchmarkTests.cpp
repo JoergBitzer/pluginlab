@@ -3,7 +3,11 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <cstdlib>
+
 #include "BenchmarkProcessor.h"
+#include "ComparePanel.h"
+#include "pluginlab/ui/ParameterTableComponent.h"
 #include "TestPluginPaths.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/HostedPlugin.h"
@@ -21,6 +25,9 @@ constexpr float kTolerance = 0.002f;
 constexpr int kLatencyPluginDelay = 64;
 constexpr int kBlocksToSettle = 200;               // the engine's alignment delay and the crossfade must be through
 constexpr int kRestoreWaitMs = 3000;
+constexpr int kEditorWidth = 1100;                 // the editor's default size
+constexpr int kEditorHeight = 760;
+constexpr int kCompareTab = 1;
 }
 
 // W10.2: the processor of Jade Benchmark, the plugin product (docs/design/W10-plan.md): the DAW's track through the slots, the latency the DAW
@@ -100,6 +107,46 @@ public:
             }
         }
 
+        beginTest("the editor: on the page Compare the parameter table fits next to the live curves (its slider column is visible)");
+        {
+            // the pages read the settings folder: one of the test's own
+            const juce::File settingsFolder = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("pluginlab_benchmark_test_settings");
+            settingsFolder.createDirectory();
+            setenv("PLUGINLAB_SETTINGS_FOLDER", settingsFolder.getFullPathName().toRawUTF8(), 1);
+            BenchmarkProcessor processor;
+            processor.prepareToPlay(kSampleRate, kBlockSize);
+            const int slot = addSlot(processor, gain.descriptions[0]);
+            processor.getEngine().setActiveSlot(slot);
+            std::unique_ptr<juce::AudioProcessorEditor> editor(processor.createEditor());
+            editor->setSize(kEditorWidth, kEditorHeight);
+            if (auto* tabs = findChild<juce::TabbedComponent>(*editor))
+            {
+                tabs->setCurrentTabIndex(kCompareTab);
+            }
+            if (auto* compare = findChild<pluginlab::host::ComparePanel>(*editor))
+            {
+                compare->slotsChanged();
+            }
+            auto* table = findChild<pluginlab::ui::ParameterTableComponent>(*editor);
+            expect(table != nullptr, "a parameter table");
+            if (auto* list = table != nullptr ? findChild<juce::TableListBox>(*table) : nullptr)
+            {
+                const int columns = list->getHeader().getTotalWidth();
+                logMessage("parameter table " + juce::String(list->getWidth()) + " px wide, its columns " + juce::String(columns) + " px");
+                expectLessOrEqual(columns, list->getWidth());
+            }
+            const juce::File picture = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("pluginlab_benchmark_compare.png");
+            juce::FileOutputStream stream(picture);
+            if (stream.openedOk())
+            {
+                stream.setPosition(0);
+                stream.truncate();
+                juce::PNGImageFormat().writeImageToStream(editor->createComponentSnapshot(editor->getLocalBounds()), stream);
+                logMessage("picture: " + picture.getFullPathName());
+            }
+            editor.reset();
+        }
+
         beginTest("a state that is not ours is ignored");
         {
             BenchmarkProcessor processor;
@@ -111,6 +158,23 @@ public:
     }
 
 private:
+    template <typename Type>
+    static Type* findChild(juce::Component& parent)
+    {
+        for (juce::Component* child : parent.getChildren())
+        {
+            if (auto* found = dynamic_cast<Type*>(child))
+            {
+                return found;
+            }
+            if (auto* deeper = findChild<Type>(*child))
+            {
+                return deeper;
+            }
+        }
+        return nullptr;
+    }
+
     int addSlot(BenchmarkProcessor& processor, const juce::PluginDescription& description)
     {
         juce::String error;

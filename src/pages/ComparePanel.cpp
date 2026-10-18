@@ -1,4 +1,7 @@
 #include "ComparePanel.h"
+
+#include <algorithm>
+
 #include "PageServices.h"
 
 #include "pluginlab/engine/OfflineRenderer.h"
@@ -28,7 +31,9 @@ constexpr double kMsPerSecond = 1000.0;
 constexpr int kLabelWidth = 70;
 constexpr int kSmallEditorWidth = 70;
 constexpr int kSliderWidth = 220;
-constexpr float kParameterShare = 0.42f;
+constexpr float kParameterShare = 0.5f;
+constexpr int kMinimumParameterWidth = 560;
+constexpr int kMinimumLiveWidth = 380;
 constexpr int kFileColumnNumber = 1;
 constexpr int kFileColumnName = 2;
 constexpr int kFileColumnLength = 3;
@@ -354,7 +359,17 @@ void ComparePanel::resized()
 void ComparePanel::layOutParametersAndLive(juce::Rectangle<int> area)
 {
     // the parameters of the selected slot on the left, the live curves of all slots on the right
-    m_parameters.setBounds(area.removeFromLeft(juce::roundToInt(static_cast<float>(area.getWidth()) * kParameterShare)));
+    // the parameters get at least what their columns need at their minimum widths (the slider must stay usable), the curves the rest; on a narrow
+    // page the curves go below the parameters
+    const int parameterWidth = std::max(kMinimumParameterWidth, juce::roundToInt(static_cast<float>(area.getWidth()) * kParameterShare));
+    if (area.getWidth() - parameterWidth - kMargin < kMinimumLiveWidth)
+    {
+        m_parameters.setBounds(area.removeFromTop(area.getHeight() / 2));
+        area.removeFromTop(kMargin);
+        m_live.setBounds(area);
+        return;
+    }
+    m_parameters.setBounds(area.removeFromLeft(parameterWidth));
     area.removeFromLeft(kMargin);
     m_live.setBounds(area);
 }
