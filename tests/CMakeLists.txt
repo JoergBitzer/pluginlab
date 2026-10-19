@@ -43,6 +43,7 @@ target_sources(PluginLabTests
         CatalogTests.cpp
         EasyTests.cpp
         EngineTests.cpp
+        ExpertTests.cpp
         EqModelTests.cpp
         FingerprintTests.cpp
         GuiReviewTests.cpp

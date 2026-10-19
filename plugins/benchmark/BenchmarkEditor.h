@@ -4,6 +4,7 @@
 
 #include "ComparePanel.h"
 #include "EasyPanel.h"
+#include "ExpertPanel.h"
 #include "HostMainComponent.h"
 #include "MatcherPanel.h"
 
@@ -30,6 +31,7 @@ private:
     pluginlab::host::HostMainComponent* m_pluginsPage = nullptr;
     pluginlab::host::ComparePanel* m_comparePage = nullptr;
     pluginlab::host::MatcherPanel* m_matcherPage = nullptr;
+    pluginlab::host::ExpertPanel* m_expertPage = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BenchmarkEditor)
 };

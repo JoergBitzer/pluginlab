@@ -11,6 +11,7 @@ constexpr int kMinimumHeight = 560;
 constexpr int kTabBarHeight = 30;
 constexpr int kPluginsTab = 1;
 constexpr int kCompareTab = 2;
+constexpr int kMatcherTab = 3;
 }
 
 BenchmarkEditor::BenchmarkEditor(BenchmarkProcessor& owner)
@@ -22,6 +23,10 @@ BenchmarkEditor::BenchmarkEditor(BenchmarkProcessor& owner)
     m_easyPage = new pluginlab::host::EasyPanel(owner.getEngine(), owner.getSettings());
     m_easyPage->onShowPlugins = [this] { m_tabs.setCurrentTabIndex(kPluginsTab); };
     m_easyPage->onShowEditorOfSlot = [this](int slot) { m_pluginsPage->showEditorOfSlot(slot); };
+    m_expertPage = new pluginlab::host::ExpertPanel(owner.getEngine(), owner.getSettings());
+    m_expertPage->onShowReport = [](const juce::String&, const juce::File& report) { report.startAsProcess(); };
+    m_expertPage->onShowMatcher = [this] { m_tabs.setCurrentTabIndex(kMatcherTab); };
+    m_expertPage->onShowCompare = [this] { m_tabs.setCurrentTabIndex(kCompareTab); };
     m_pluginsPage->onSlotsChanged = [this] { slotsChanged(); };
     m_comparePage->onShowEditorOfSlot = [this](int slot) { m_pluginsPage->showEditorOfSlot(slot); };
     m_matcherPage->onListen = [this] { m_tabs.setCurrentTabIndex(kCompareTab); };
@@ -32,6 +37,7 @@ BenchmarkEditor::BenchmarkEditor(BenchmarkProcessor& owner)
         m_comparePage->slotsChanged();
         m_matcherPage->slotsChanged();
         m_easyPage->slotsChanged();
+        m_expertPage->slotsChanged();
     };
     const juce::Colour background = getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId);
     m_tabs.setTabBarDepth(kTabBarHeight);
@@ -39,6 +45,7 @@ BenchmarkEditor::BenchmarkEditor(BenchmarkProcessor& owner)
     m_tabs.addTab("Plugins", background, m_pluginsPage, true);
     m_tabs.addTab("EQ Compare", background, m_comparePage, true);
     m_tabs.addTab("Matcher", background, m_matcherPage, true);
+    m_tabs.addTab("Expert", background, m_expertPage, true);
     addAndMakeVisible(m_tabs);
     setResizable(true, true);
     setResizeLimits(kMinimumWidth, kMinimumHeight, 4 * kWidth, 4 * kHeight);
@@ -57,6 +64,7 @@ void BenchmarkEditor::slotsChanged()
     m_comparePage->slotsChanged();
     m_matcherPage->slotsChanged();
     m_easyPage->slotsChanged();
+    m_expertPage->slotsChanged();
     m_processor.slotsChanged();
 }
 

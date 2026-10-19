@@ -13,6 +13,7 @@ const juce::String kPluginsTabName = "Plugins";
 const juce::String kCompareTabName = "EQ Compare"; // the curves and the deviations assume EQs (LTI); listening works for any plugin
 const juce::String kDeveloperTabName = "Developer";
 const juce::String kMatcherTabName = "Matcher";
+const juce::String kExpertTabName = "Expert";    // the measurement units and null tests (W10.5)
 const juce::String kEasyTabName = "Easy";        // the musician's walkthrough (W10.4); last, so that the tabs of the tests keep their places
 constexpr int kPluginsTab = 0;
 constexpr int kCompareTab = 1;
@@ -53,6 +54,10 @@ HostShell::HostShell(const StartupOptions& options)
         }
     };
     m_easyPage->isPlaying = [this] { return m_comparePage->isPlaying(); };
+    m_expertPage = new ExpertPanel(m_engine, m_settings);
+    m_expertPage->onShowReport = [this](const juce::String& title, const juce::File& report) { m_developerPage->showReport(title, report); };
+    m_expertPage->onShowMatcher = [this] { setCurrentTabIndex(kMatcherTab); };
+    m_expertPage->onShowCompare = [this] { setCurrentTabIndex(kCompareTab); };
     m_matcherPage->onListen = [this] { setCurrentTabIndex(kCompareTab); };
     m_matcherPage->onShowReport = [this](const juce::String& title, const juce::File& report) { m_developerPage->showReport(title, report); };
     m_pluginsPage->onSlotsChanged = [this] { slotsChanged(); };
@@ -67,6 +72,7 @@ HostShell::HostShell(const StartupOptions& options)
     addTab(kDeveloperTabName, background, m_developerPage, true);
     addTab(kMatcherTabName, background, m_matcherPage, true);
     addTab(kEasyTabName, background, m_easyPage, true);
+    addTab(kExpertTabName, background, m_expertPage, true);
     setSize(kWindowWidth, kWindowHeight);
     m_comparePage->slotsChanged();
 
@@ -223,6 +229,7 @@ void HostShell::changeEngineRate(double sampleRate)
     m_developerPage->refresh();
     m_matcherPage->slotsChanged();
     m_easyPage->slotsChanged();
+    m_expertPage->slotsChanged();
     saveSession();
 }
 

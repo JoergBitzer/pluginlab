@@ -222,9 +222,9 @@ int saveMatchedPresets(engine::MeasurementEngine& engine, const HostSettings& se
 class MatchJob::Runner : public juce::Thread
 {
 public:
-    Runner(juce::File job, juce::File report, Progress progress, Finished finished, std::shared_ptr<std::atomic<bool>> alive)
+    Runner(juce::File job, juce::File report, Progress progress, Finished finished, std::shared_ptr<std::atomic<bool>> alive, juce::String option)
         : juce::Thread("MatchJob"), m_job(std::move(job)), m_report(std::move(report)), m_progress(std::move(progress)), m_finished(std::move(finished)),
-          m_alive(std::move(alive))
+          m_alive(std::move(alive)), m_option(std::move(option))
     {
     }
 
@@ -240,7 +240,7 @@ public:
         const juce::File host = getHelperExecutable(); // the application, or the PluginLabHost in the plugin's bundle
         bool success = false;
         juce::String message;
-        if (process.start(juce::StringArray{host.getFullPathName(), "--match", m_job.getFullPathName(), m_report.getFullPathName()}, 0))
+        if (process.start(juce::StringArray{host.getFullPathName(), m_option, m_job.getFullPathName(), m_report.getFullPathName()}, 0))
         {
             const juce::uint32 started = juce::Time::getMillisecondCounter();
             juce::uint32 lastProgress = 0;
@@ -267,12 +267,12 @@ public:
             success = m_report.existsAsFile() && m_report.getSize() > 0;
             if (! success && message.isEmpty())
             {
-                message = "the match process ended without a report (a crash?)";
+                message = "the process ended without a report (a crash?)";
             }
         }
         else
         {
-            message = "could not start the match process (" + host.getFullPathName() + ")";
+            message = "could not start the process (" + host.getFullPathName() + ")";
         }
         // a copy of the callback: it may destroy the job (and this thread object) while it runs
         post([callback = m_finished, success, message] {
@@ -301,12 +301,13 @@ private:
     Progress m_progress;
     Finished m_finished;
     std::shared_ptr<std::atomic<bool>> m_alive;
+    juce::String m_option;
 };
 
-MatchJob::MatchJob(juce::File job, juce::File report, Progress progress, Finished finished)
+MatchJob::MatchJob(juce::File job, juce::File report, Progress progress, Finished finished, juce::String option)
     : m_report(report), m_alive(std::make_shared<std::atomic<bool>>(true))
 {
-    m_runner = std::make_unique<Runner>(std::move(job), std::move(report), std::move(progress), std::move(finished), m_alive);
+    m_runner = std::make_unique<Runner>(std::move(job), std::move(report), std::move(progress), std::move(finished), m_alive, std::move(option));
     m_runner->startThread();
 }
 

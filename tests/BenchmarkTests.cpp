@@ -27,7 +27,8 @@ constexpr int kBlocksToSettle = 200;               // the engine's alignment del
 constexpr int kRestoreWaitMs = 3000;
 constexpr int kEditorWidth = 1100;                 // the editor's default size
 constexpr int kEditorHeight = 760;
-constexpr int kCompareTab = 2; // Easy, Plugins, EQ Compare, Matcher
+constexpr int kCompareTab = 2; // Easy, Plugins, EQ Compare, Matcher, Expert
+constexpr int kExpertTab = 4;
 }
 
 // W10.2: the processor of Jade Benchmark, the plugin product (docs/design/W10-plan.md): the DAW's track through the slots, the latency the DAW
@@ -123,6 +124,8 @@ public:
             {
                 expectEquals(tabs->getTabNames()[0], juce::String("Easy"), "the musician's page first (W10.4)");
                 writePicture(*editor, "pluginlab_benchmark_easy.png");
+                tabs->setCurrentTabIndex(kExpertTab);
+                writePicture(*editor, "pluginlab_benchmark_expert.png");
                 tabs->setCurrentTabIndex(kCompareTab);
             }
             if (auto* compare = findChild<pluginlab::host::ComparePanel>(*editor))

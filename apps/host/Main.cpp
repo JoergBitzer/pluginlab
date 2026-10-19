@@ -22,6 +22,7 @@ juce::File resolveFile(const juce::String& text)
 //   --report <plugin folder> <file>     scans the folder, loads the plugins, writes a report (see HostReport.h) and quits
 //   --fingerprint <plugin file> <file> [<plugin id>]  measures the fingerprint of the plugin (see HostFingerprint.h), writes it and quits
 //   --measure <plugin file> <file> [<plugin id>]      runs the measurement units of W7 on the plugin (see HostFingerprint.h), writes them and quits
+//   --expert <job file> <file>                       the measurement units and null tests of the page Expert (see HostFingerprint.h)
 //   --map <plugin file> <file> [<plugin id>]          parameter survey and mapping proposal (see HostFingerprint.h); JSON into the user's mapping folder
 //   --gui-snapshot <plugin file> <folder> [<plugin id>] captures the plugin's editor and writes the GUI review (see HostGuiSnapshot.h); in a virtual display
 // Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
@@ -33,6 +34,7 @@ const juce::String kMeasureOption = "--measure";         // --measure <plugin fi
 const juce::String kMapOption = "--map";                 // --map <plugin file> <report file>
 const juce::String kCalibrateOption = "--calibrate";     // --calibrate <plugin file> <report file>
 const juce::String kMatchOption = "--match";             // --match <job file> <report file>
+const juce::String kExpertOption = "--expert";           // --expert <job file> <report file>
 const juce::String kGuiSnapshotOption = "--gui-snapshot"; // --gui-snapshot <plugin file> <folder>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
@@ -150,6 +152,15 @@ public:
                 identifier = arguments[identifierIndex].unquoted();
             }
             const bool written = pluginlab::host::writeMappingProposal(resolveFile(arguments[mapIndex + 1]), resolveFile(arguments[mapIndex + 2]), identifier);
+            setApplicationReturnValue(written ? kExitOk : kExitReportFailed);
+            quit();
+            return;
+        }
+
+        const int expertIndex = arguments.indexOf(kExpertOption);
+        if (expertIndex >= 0 && expertIndex + kArgumentsOfReport < arguments.size())
+        {
+            const bool written = pluginlab::host::writeExpertReport(resolveFile(arguments[expertIndex + 1]), resolveFile(arguments[expertIndex + 2]));
             setApplicationReturnValue(written ? kExitOk : kExitReportFailed);
             quit();
             return;

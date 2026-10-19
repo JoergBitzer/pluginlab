@@ -5,6 +5,7 @@
 #include "ComparePanel.h"
 #include "DeveloperPanel.h"
 #include "EasyPanel.h"
+#include "ExpertPanel.h"
 #include "HostMainComponent.h"
 #include "HostSettings.h"
 #include "MatcherPanel.h"
@@ -44,5 +45,6 @@ private:
     DeveloperPanel* m_developerPage = nullptr;  // owned by the tab
     MatcherPanel* m_matcherPage = nullptr;      // owned by the tab
     EasyPanel* m_easyPage = nullptr;            // owned by the tab
+    ExpertPanel* m_expertPage = nullptr;        // owned by the tab
 };
 }

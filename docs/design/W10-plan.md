@@ -1,6 +1,6 @@
 # W10: the final products (plan)
 
-Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done; W10.4 done). Milestone of
+Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done; W10.4 done; W10.5 done). Milestone of
 `planning.md` §8: "**Final products: the stand-alone application and the plugin** (two main targets since 2026-10-12): 4 slots, parallel rendering, real-time transfer function
 display, three-level GUI, measurement presets, in both. Done when: persona walkthroughs succeed in the stand-alone application and in the
 plugin (musician compares a demo with an owned plugin; developer checks an algorithm)." The questions for the author are in section 7.
@@ -228,3 +228,16 @@ process: both "the same" (0.02 and 0.00 dB) in 15 s, the values applied, the lev
 editor shows Easy first (`BenchmarkTests`).
 Open: the walkthrough by a person (the author) in both products; loading a saved preset back (W10.6 brings presets of measurements; plugin
 presets are files for now).
+
+### W10.5 expert page (0.67.0, done)
+`ExpertPanel` (`src/pages/ExpertPanel.*`), the last tab in both products: the slots to measure (the plugins by default, the dry slot on demand),
+the units (`engine::getMeasurementUnitKeys()`: level and gain, frequency response, delay and polarity, phase, THD and THD+N, intermodulation,
+noise, crosstalk, maximum input level, gain linearity; the system class always first; the slow linearity off by default), the null test of the
+other slots against a chosen master; "Measure" runs `PluginLabHost --expert <job> <report>` in a process of its own (the job runner of the
+Matcher, now with a mode) with a progress bar per slot and unit; the results side by side (a column per slot, a row per quantity, the null depth
+and its alignment as rows); "View report" opens the Markdown report (the report window in the application, the system's viewer in the plugin);
+links to the Matcher (all options) and to EQ Compare (the live curves).
+Engine: `MeasurementOptions::units` (the units to run) and `progress`; the summary as JSON (`createMeasurementJson`, `parseMeasurementJson`);
+`--measure` writes `<report>.json` too.
+Test (`ExpertTests`): every unit on the gain plugin from the page gives the same text as `--measure` (all rows equal), in 27 s; the gain plugin
+against the dry slot nulls bit-identically ("identical"). The measurement presets (W10.6) will store the choices of this page.

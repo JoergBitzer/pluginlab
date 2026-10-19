@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -29,10 +30,16 @@ struct MeasurementSummary
     double seconds = 0.0;                        // wall-clock time of the measurement
 };
 
+// The units by key (the Expert page chooses them, W10.5); the system class always runs first
+const juce::StringArray& getMeasurementUnitKeys();       // gain, response, delay, phase, distortion, imd, noise, crosstalk, maximum, linearity
+juce::String getMeasurementUnitTitle(const juce::String& key);
+
 struct MeasurementOptions
 {
     double sampleRate = 48000.0;
     bool linearity = true;                       // gain non-linearity (the slowest unit: up to 28 levels)
+    juce::StringArray units;                     // the keys of getMeasurementUnitKeys() to run; empty: all
+    std::function<void(double fraction, const juce::String& unit)> progress; // before each unit
 };
 
 // All units on a device with `channels` output channels (1 or 2 are used)
@@ -44,6 +51,10 @@ MeasurementSummary measurePlugin(juce::AudioPluginFormatManager& formatManager, 
 
 // The summary as a Markdown section (for the fingerprint report and --measure)
 juce::String createMeasurementReport(const MeasurementSummary& summary);
+
+// The summary as JSON (device, rate, channels, seconds, rows) and back: the Expert page reads what the measurement process wrote
+juce::var createMeasurementJson(const MeasurementSummary& summary);
+MeasurementSummary parseMeasurementJson(const juce::var& json);
 
 // Finds a row by its quantity (nullptr if there is none)
 const MeasurementRow* findRow(const MeasurementSummary& summary, const juce::String& quantity);

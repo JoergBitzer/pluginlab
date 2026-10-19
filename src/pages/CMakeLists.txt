@@ -5,6 +5,7 @@ add_library(pluginlab_pages STATIC
     ComparePanel.cpp
     DeveloperPanel.cpp
     EasyPanel.cpp
+    ExpertPanel.cpp
     HostMainComponent.cpp
     HostSettings.cpp
     LiveResponseView.cpp

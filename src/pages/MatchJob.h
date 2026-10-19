@@ -70,15 +70,15 @@ std::vector<int> getContinuousParameters(engine::MeasurementEngine& engine, int 
 // The state of each plugin of `slots` as a preset "matched to <master> <date>" in the settings folder (shared by both products); returns how many
 int saveMatchedPresets(engine::MeasurementEngine& engine, const HostSettings& settings, const std::vector<int>& slots, const juce::String& masterName);
 
-// Runs PluginLabHost --match <job> <report> (the helper of PageServices) in a child process on a thread of its own; tells its progress and its end
-// on the message thread. Destroying it stops the child.
+// Runs PluginLabHost --match <job> <report> (the helper of PageServices; another mode such as --expert by `option`) in a child process on a
+// thread of its own; tells its progress and its end on the message thread. Destroying it stops the child.
 class MatchJob
 {
 public:
     using Progress = std::function<void(double fraction, const juce::String& step)>;
     using Finished = std::function<void(bool success, const juce::String& message)>;
 
-    MatchJob(juce::File job, juce::File report, Progress progress, Finished finished);
+    MatchJob(juce::File job, juce::File report, Progress progress, Finished finished, juce::String option = "--match");
     ~MatchJob();
 
     const juce::File& getReport() const { return m_report; }

@@ -37,5 +37,11 @@ bool writeCalibrationReport(const juce::File& pluginFile, const juce::File& repo
 // setting by position) and "releaseIndices". Writes the report (Markdown) and <report>.json (per target: the found setting, released, matched).
 bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile);
 
+// Command line mode --expert <job file> <report file>: the page Expert (W10.5). The job (JSON): "slots" (each "name", "plugin" = the plugin file or
+// identifier, empty for the dry slot, "values" = the whole setting by position), "units" (the keys of engine::getMeasurementUnitKeys(); none: all),
+// "linearity", "sampleRate", "nullMaster" (the index of the slot the others are null-tested against; -1: none). Writes the report (Markdown) and
+// <report>.json (per slot the rows of engine::createMeasurementJson, and the null tests).
+bool writeExpertReport(const juce::File& jobFile, const juce::File& reportFile);
+
 // (the progress file of the jobs: PageServices.h of the pages library)
 }

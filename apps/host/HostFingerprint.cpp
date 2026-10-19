@@ -13,6 +13,7 @@
 #include "pluginlab/engine/ParameterSurvey.h"
 #include "pluginlab/engine/PluginMeasurement.h"
 #include "pluginlab/engine/ReportText.h"
+#include "pluginlab/measure/NullTest.h"
 #include "pluginlab/measure/Spectrogram.h"
 #include "pluginlab/ui/Logo.h"
 #include "pluginlab/ui/ResponsePlotImage.h"
@@ -191,6 +192,7 @@ bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& repo
     hosting::addHeadlessFormats(formatManager);
     const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(formatManager, pluginFile);
     juce::String report;
+    juce::Array<juce::var> results; // <report>.json: the rows for programs (the Expert page's test compares them)
     for (const juce::PluginDescription& description : scan.descriptions)
     {
         if (pluginIdentifier.isNotEmpty() && description.createIdentifierString() != pluginIdentifier)
@@ -199,6 +201,7 @@ bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& repo
         }
         const pluginlab::engine::MeasurementSummary summary = pluginlab::engine::measurePlugin(
             formatManager, description, pluginlab::engine::getDefaultSetting(formatManager, description, getMeasurementRate()), {});
+        results.add(pluginlab::engine::createMeasurementJson(summary));
         report += pluginlab::engine::signReport("# Measurements: " + description.name + " " + description.version + "\n\n"
                                                     + pluginlab::engine::createMeasurementReport(summary),
                                                 "PluginLabHost, measurement")
@@ -209,6 +212,9 @@ bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& repo
         return false;
     }
     pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
+    auto root = std::make_unique<juce::DynamicObject>();
+    root->setProperty("plugins", results);
+    juce::File(reportFile.getFullPathName() + ".json").replaceWithText(juce::JSON::toString(juce::var(root.release())));
     return reportFile.replaceWithText(report);
 }
 
@@ -656,5 +662,133 @@ bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
                                                                         + pluginlab::engine::createPluginMatchReportFooter(),
                                                                     "PluginLabHost, match"));
 }
-}
 
+bool writeExpertReport(const juce::File& jobFile, const juce::File& reportFile)
+{
+    const juce::var job = juce::JSON::parse(jobFile.loadFileAsString());
+    const juce::Array<juce::var>* slots = job.getProperty("slots", {}).getArray();
+    if (slots == nullptr || slots->isEmpty())
+    {
+        std::fprintf(stderr, "the job has no slots\n");
+        return false;
+    }
+    juce::AudioPluginFormatManager formatManager;
+    hosting::addHeadlessFormats(formatManager);
+    pluginlab::engine::MeasurementOptions options;
+    options.sampleRate = job.getProperty("sampleRate", getMeasurementRate());
+    options.linearity = job.getProperty("linearity", false);
+    if (const juce::Array<juce::var>* units = job.getProperty("units", {}).getArray())
+    {
+        for (const juce::var& unit : *units)
+        {
+            options.units.add(unit.toString());
+        }
+    }
+    struct Measured
+    {
+        juce::String name;
+        std::optional<juce::PluginDescription> plugin;   // none: the dry slot
+        std::vector<float> setting;
+    };
+    std::vector<Measured> measured;
+    for (const juce::var& entry : *slots)
+    {
+        Measured item;
+        item.name = entry.getProperty("name", "").toString();
+        const juce::String path = entry.getProperty("plugin", "").toString();
+        if (path.isNotEmpty())
+        {
+            item.plugin = scanFirst(formatManager, path);
+            if (! item.plugin)
+            {
+                std::fprintf(stderr, "cannot scan %s\n", path.toRawUTF8());
+                return false;
+            }
+            item.setting = pluginlab::engine::getDefaultSetting(formatManager, *item.plugin, options.sampleRate);
+            applyValues(entry.getProperty("values", {}), item.setting);
+        }
+        measured.push_back(item);
+    }
+    // a device per slot: the plugin with its setting (the careful delivery), or the dry path
+    const auto makeDevice = [&formatManager](const Measured& item) -> pluginlab::measure::Device {
+        if (item.plugin)
+        {
+            return pluginlab::engine::makePluginDevice(formatManager, *item.plugin, item.setting);
+        }
+        return [](const juce::AudioBuffer<float>& input, double) { return input; };
+    };
+    const auto channelsOf = [&formatManager, &options](const Measured& item) {
+        return item.plugin ? pluginlab::engine::getPluginChannels(formatManager, *item.plugin, options.sampleRate) : 2;
+    };
+
+    ProgressWriter progress(reportFile);
+    const int nullMaster = job.getProperty("nullMaster", -1);
+    const int nulls = nullMaster >= 0 && nullMaster < static_cast<int>(measured.size()) ? static_cast<int>(measured.size()) - 1 : 0;
+    const double total = static_cast<double>(measured.size() + static_cast<size_t>(nulls));
+    juce::String report = "# Expert measurements\n\n";
+    report << "The measurement units of W7 (AES17 defaults, docs/measurements/) on the slots of the page Expert with their settings as they were when "
+              "the measurement started, each in a fresh instance per render (the careful delivery of W7.11); the system class first (W8.1).\n\n";
+    juce::Array<juce::var> results;
+    for (size_t index = 0; index < measured.size(); ++index)
+    {
+        const Measured& item = measured[index];
+        pluginlab::engine::MeasurementOptions slotOptions = options;
+        slotOptions.progress = [&progress, index, total, &item](double fraction, const juce::String& unit) {
+            progress((static_cast<double>(index) + fraction) / total, item.name + ": " + unit);
+        };
+        const pluginlab::engine::MeasurementSummary summary = pluginlab::engine::measureDevice(makeDevice(item), channelsOf(item), item.name, slotOptions);
+        report << "## " << item.name << "\n\n" << pluginlab::engine::createMeasurementReport(summary).fromFirstOccurrenceOf("\n\n", false, false) << "\n";
+        juce::var result = pluginlab::engine::createMeasurementJson(summary);
+        result.getDynamicObject()->setProperty("name", item.name);
+        results.add(result);
+    }
+    juce::Array<juce::var> nullResults;
+    if (nulls > 0)
+    {
+        const Measured& master = measured[static_cast<size_t>(nullMaster)];
+        report << "## Null test against " << master.name << "\n\n";
+        report << "Noise at -20 dBFS through the master and each slot; each output aligned to the master's (delay, also fractional, and gain, also "
+                  "inverted) and subtracted (docs/measurements/null-test.md). The depth is the residual re the master in 20 Hz ... 20 kHz: the lower, "
+                  "the closer. Not meaningful for time-variant slots.\n\n";
+        report << "| slot | null depth | without alignment | delay | gain | inverted |\n|---|---|---|---|---|---|\n";
+        int done = 0;
+        for (size_t index = 0; index < measured.size(); ++index)
+        {
+            if (static_cast<int>(index) == nullMaster)
+            {
+                continue;
+            }
+            const Measured& item = measured[index];
+            progress((static_cast<double>(measured.size()) + done++) / total, "null test: " + item.name);
+            pluginlab::measure::NullTestSettings settings;
+            settings.sampleRate = options.sampleRate;
+            settings.channels = std::min(channelsOf(master), channelsOf(item));
+            const pluginlab::measure::NullTestResult result = pluginlab::measure::measureNull(makeDevice(master), makeDevice(item), settings);
+            if (result.channels.empty())
+            {
+                continue;
+            }
+            const pluginlab::measure::ChannelNull& first = result.channels.front();
+            report << "| " << item.name << " | " << juce::String(first.nullDepthDb, 1) << " dB | " << juce::String(first.unalignedNullDb, 1) << " dB | "
+                   << juce::String(first.delaySamples, 2) << " samples | " << juce::String(first.gainDb, 2) << " dB | " << (first.inverted ? "yes" : "no")
+                   << " |\n";
+            auto entry = std::make_unique<juce::DynamicObject>();
+            entry->setProperty("name", item.name);
+            entry->setProperty("nullDepthDb", first.nullDepthDb);
+            entry->setProperty("unalignedNullDb", first.unalignedNullDb);
+            entry->setProperty("delaySamples", first.delaySamples);
+            entry->setProperty("gainDb", first.gainDb);
+            entry->setProperty("inverted", first.inverted);
+            nullResults.add(juce::var(entry.release()));
+        }
+    }
+    auto root = std::make_unique<juce::DynamicObject>();
+    root->setProperty("slots", results);
+    root->setProperty("nullMaster", nullMaster >= 0 ? juce::var(measured[static_cast<size_t>(std::min(nullMaster, static_cast<int>(measured.size()) - 1))].name)
+                                                    : juce::var());
+    root->setProperty("nulls", nullResults);
+    juce::File(reportFile.getFullPathName() + ".json").replaceWithText(juce::JSON::toString(juce::var(root.release())));
+    pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
+    return reportFile.replaceWithText(pluginlab::engine::signReport(report, "PluginLabHost, expert measurements"));
+}
+}
