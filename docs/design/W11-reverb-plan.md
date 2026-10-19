@@ -1,6 +1,6 @@
 # W11.2: reverb (plan)
 
-Status: **plan v1** (2026-10-18, for review; questions for the author in section 9). Part of W11, after the delay (`W11-delay-plan.md`), before
+Status: **plan v2** (v1 2026-10-18; v2 2026-10-19 with the author's answers and comments, section 9). Part of W11, after the delay (`W11-delay-plan.md`), before
 dynamics (`W11-dynamics-plan.md`). Room acoustics has measured reverberation for a century; most of its methods carry over to a plugin, which
 is a room without a noise floor and without a loudspeaker.
 
@@ -42,6 +42,9 @@ test (W7.8), the matcher's general layer (W9.1), the reports; from W11.1a: long 
   of the response for a 100 % wet reverb: stated in the report).
 - **Pre-delay**: from the input (corrected for the latency) to the onset of the reverb (the first sample above a threshold re the peak, and the
   rise of the envelope).
+- **Direct path delay (DPD) and direct-to-reverberant ratio (DRR)** (the author: mix is often a parameter): the delay of the direct path against
+  the input (the latency, and any extra delay of the dry signal), and the energy of the direct path (a short window around it) against the energy
+  of the rest of the response, in dB; reported at the plugin's setting and, with the mix known from the mapping, as a check of the mix knob.
 
 ### 4.3 Texture: density, diffusion, coloration
 - **Echo density profile** (Abel and Huang 2006): the normalized echo density over time (1 = Gaussian, like noise); its rise shows the diffusion,
@@ -68,13 +71,15 @@ two outputs), the balance of the cross terms, the width as a number.
 The impulse response at three levels (as the system class): non-linear reverbs (saturated tanks, gated reverbs) show it.
 
 ## 5. Comparing two reverbs (and matching)
-- Per band: T30 and EDT differences in %, C80 in dB, pre-delay in ms, the spectral balance of the tail in dB, the echo density profile and the
+- Bands: octaves and third octaves, both (the author).
+- Per band: T30 and EDT differences in %, C80 in dB, pre-delay in ms, DPD and DRR, the spectral balance of the tail in dB, the echo density profile and the
   mixing time, the stereo coherence.
 - **Just noticeable differences** for a "the same / audibly close / different" scale: ISO 3382-1 gives 5 % for the reverberation time (from
   Seraphim 1958); studies since then found 3 % to 26 % depending on the signal, and recent work shows a dependence on the listener and on the
-  level. Proposal: 5 % as "the same" with the literature range in the report, to be confirmed by the author. The clarity JND (often quoted as
+  level. Decided (the author): 5 % as "the same" to start with, the literature range in the report. The clarity JND (often quoted as
   1 dB) is to be checked against the text of ISO 3382-1 before it is used.
-- **Matching**: a "reverb domain" for the general matcher: T30 per octave, EDT, pre-delay, C80, the tail's spectral balance; released
+- Recovering the IR of a convolution reverb and comparing it to its file: not wanted (the author).
+- **Matching** (later): a "reverb domain" for the general matcher: T30 per octave, EDT, pre-delay, C80, the tail's spectral balance; released
   parameters decay, size, pre-delay, damping (from a mapping). Differentiable reverberation (Lee, Choi, Lee 2022) shows that FDN parameters can be
   estimated from an impulse response; here the plugin stays a black box and the matcher searches its knobs as for the EQ (W9).
 - The null test is meaningless for a modulated or diffuse tail (two equal-sounding tails do not cancel); it applies to the early reflections of
@@ -89,7 +94,16 @@ The impulse response at three levels (as the system class): non-linear reverbs (
 - **Stereo coherence** over frequency.
 - The spectrogram of the sweep response (exists); for spring reverbs it shows the dispersion.
 
-## 7. Reference plugin (ground truth)
+## 6b. The 100 % wet question (the author)
+The measurements want the reverb alone; listening wants the dry signal too. The products guide the user: measure with the plugin at 100 % wet
+(the mix from the mapping, or the user is asked to set it), and our own mixer adds the direct path for listening (dry/wet in the product, not in
+the plugin), so that nobody has to listen to 100 % wet. Where the plugin's mix is left as it is, DPD and DRR (4.2) describe the direct path.
+
+## 7. Reference plugins (ground truth)
+The author's choice: our own **Moorer-type reverb** (Freeverb as the candidate: parallel combs with damping, series all-passes) in the
+reference set; if source code is found, **Dattorro's plate tank** and **Gardner's nested (coupled) all-pass** reverbs; **convolution** with
+impulse responses from open libraries; a **spring** reverb is a special case (strongly dispersive, a chirp in the impulse response) and needs a
+free example. In addition, for exact values:
 **Reference Reverb**: an FDN with absorption filters that give an exact T60 per band (Jot's design), an exact pre-delay, a few early reflection
 taps, a modulation switch (time-variant on demand) and a freeze; plus a "convolution" mode with a synthetic impulse response (exponentially
 decaying Gaussian noise with a known T60 per band): every value of 4 has an expected value.
@@ -98,7 +112,7 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
 | Step | Content | Done when |
 |---|---|---|
 | W11.2a | impulse response with the tail, 2 x 2; band filters (IEC 61260) | the reference's response complete, its bands as designed |
-| W11.2b | EDC with Lundeby truncation, T20/T30/EDT, C50/C80/D50/Ts, pre-delay | the reference's T60 per band within 2 %, pre-delay within 0.1 ms |
+| W11.2b | EDC with Lundeby truncation, T20/T30/EDT, C50/C80/D50/Ts, pre-delay, DPD, DRR | the reference's T60 per band within 2 %, pre-delay within 0.1 ms, DRR within 0.1 dB |
 | W11.2c | EDR, echo density profile, mixing time, coloration measure | the synthetic noise tail gives an echo density of 1; a sparse reference setting does not |
 | W11.2d | stereo coherence; time variance (per-render decay, interrupted noise) | the modulated reference: decays agree across renders within the stated spread |
 | W11.2e | report section "Reverb", Developer page, views of 6 | readable reports for the reference and two real reverbs |
@@ -106,10 +120,15 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
 
 ## 9. Questions for the author
 1. **Test set**: which free reverbs (an FDN algorithm, a plate, a spring, a convolution reverb with a known IR)?
+Answer: I will collect a list of free reverbs. We should have at least A Moorer based reverb (Freeverb is a good candidate) in our own referenc plugin). Perhaps we will find source code for Dattoros tank and the coupled allpass from William Gardner. For convolution we can download some IRs from open source libraries. The spring reverb is a special case, since it is strongly dispersive and has a chirp in the impulse response. We will have to find a free example of that as well.
 2. **Bands**: octaves (ISO 3382-1 default) or third octaves for the reports?
+Answer: Both
 3. **100 % wet**: should the rig set the mix to 100 % (from the mapping) before measuring, or measure as set and separate the direct path?
+Answer: This is something where we have to guide the user. For us it would be better, if the user always use 100% wet and we have our own mixer for the direct path (listening options, no one wants to listen to 100% wet signals).
 4. **JND scale**: 5 % for T30 as "the same", the range from the literature in the report: right?
+Lets start with that-
 5. **Convolution reverbs**: is it interesting to recover the loaded IR and compare it to the file (a null test against the file)?
+   NO
 
 ## 10. References
 - ISO 3382-1:2009, "Acoustics - Measurement of room acoustic parameters - Part 1: Performance spaces" (T20, T30, EDT, C50, C80, D50, Ts, IACC;
@@ -138,3 +157,8 @@ Sources found 2026-10-18:
 [Differentiable artificial reverberation](https://arxiv.org/abs/2105.13940),
 [RT JND discussion](https://ar5iv.arxiv.org/html/1902.06880),
 [Fifty years of artificial reverberation](https://aes2.org/publications/elibrary-page/?id=18061).
+
+
+## Comments
+* often mix is a  parameter, so we should measure the direct to reverb ratio (DRR) and the direct path delay (DPD) as well, and report them.
+* 

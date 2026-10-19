@@ -1,6 +1,6 @@
 # W11.1: delay effects (plan)
 
-Status: **plan v1** (2026-10-18, for review; questions for the author in section 9). Part of W11 (`planning.md` §8: dynamics, delay, reverb after
+Status: **plan v2** (v1 2026-10-18; v2 2026-10-19 with the author's answers and comments, section 9). Part of W11 (`planning.md` §8: dynamics, delay, reverb after
 the EQ). The author's order: delay first ("it should be the easiest"), then reverb (`W11-reverb-plan.md`), then dynamics (`W11-dynamics-plan.md`).
 
 ## 1. What W11.1 has to answer
@@ -35,7 +35,10 @@ The system class goes first, as everywhere: it decides which of the measurements
 
 ## 4. Measurements
 ### 4.1 The echo response (LTI delays)
-- Stimulus: the synchronized sweep with **silence after it longer than the echo train** (the deconvolution must see the whole tail; the length
+- **First test signal: a delta impulse** (the author: "since we are in the digital domain, this should work in any case"): one sample of
+  -6 dBFS after a pre-delay, then silence until the output has decayed. It gives the echo train directly, without deconvolution and without the
+  time aliasing of a too short sweep period; the sweep follows only where the impulse is not enough (the harmonic responses of 4.4, noise).
+- Stimulus for the sweep-based parts: the synchronized sweep with **silence after it longer than the echo train** (the deconvolution must see the whole tail; the length
   comes from a first impulse: render an impulse until the output stays below -100 dBFS for 1 s, at most 30 s; feedback near 100 % is cut there
   and reported as "does not decay within 30 s").
 - From the impulse response: the **echoes** by peak picking on the envelope (Hilbert magnitude, smoothed), refined by fitting the first echo's
@@ -46,7 +49,8 @@ The system class goes first, as everywhere: it decides which of the measurements
 - The **loop filter**: each echo windowed (a few ms around it, as wide as its spread allows), its spectrum; the ratio of the spectra of successive
   echoes is the transfer function of one trip through the loop (low and high cut, the "darkening per repeat"). Averaged over the echoes that are
   above the noise.
-- **Tempo sync**: the same at two host tempi (e.g. 120 and 90 BPM through the play head): the delay time must scale with 60/BPM for a note value.
+- **Tempo sync**: the same at two host tempi, **120 BPM and 97 BPM** (the author: an odd second tempo shows a plugin that is hard-coded to one
+  tempo) through the play head: the delay time must scale with 60/BPM for a note value.
 - **Sample rate and block size**: the echo times at 44.1/48/96 kHz and block sizes (the fingerprint's pattern): a delay that rounds to samples or
   blocks shows it here.
 
@@ -72,18 +76,27 @@ A modulated delay (tape, BBD, chorus region) has a delay time that moves: tau(t)
   W11 renders).
 - Ducking: the wet level during and after a loud burst (the dynamics methods of `W11-dynamics-plan.md`, on the wet path).
 
+### 4.4b Changing the delay time (a behaviour of this class)
+What happens while the time knob moves is reported as its own behaviour, not as zipper noise (the author): the delay time is ramped (as the
+fingerprint's zipper test ramps a parameter) while a steady tone runs, and the output tells which of the three known strategies the plugin uses:
+- **jump** (digital): the read position jumps: a click per change (broadband residual, as the zipper test sees it);
+- **crossfade** (fade): two read positions crossfaded over a switch time: two tones overlapping for the fade time, no pitch change;
+- **glide** (tape): the read position moves continuously: the pitch changes during the move (the instantaneous frequency of 4.3 follows
+  -dtau/dt), no click.
+Reported: the strategy, the switch or glide time, the pitch deviation (cents) of a glide. The author's delay class (`jade::BasicDelayEffect`
+of AAT_Delay and delay_and_pray: switch algorithms digital, fade, tape) has all three: it is the reference for this test.
+
 ### 4.5 Noise and band limits
 The idle noise (W7.7) with the feedback up (BBD and tape hiss builds up in the loop), the band limit of the wet path (the loop filter at the
 first echo).
 
-## 5. Comparing two delays (and matching)
+## 5. Comparing two delays (no matching at this point: the author)
 - Echo by echo: time differences (ms, and % of the period), level differences (dB), loop filter difference (dB over frequency), stereo pattern
   (same / different), modulation (rate, depth, shape).
 - The null test on the first N echoes after alignment (W7.8), as a single number of how close; the time-domain null is strict (a few samples
   of difference in the delay time break it), so it comes after the parameter comparison.
-- **Matching** (the general matcher, W9.1): a new "echo domain" with the features delay time, the levels of the first echoes, the loop filter
-  curve; released parameters time, feedback, mix, tone (from a mapping, as for EQs). For an LTI delay the fast render path (W9.3) applies with a
-  longer impulse; for tape models the features are the means over the modulation.
+- Matching is not part of W11.1 (the author). The features above are chosen so that an "echo domain" of the general matcher (W9.1) can use them
+  later.
 - Perception: the audibility of timing and level differences of echoes is to be checked in the literature before a "the same / audibly close"
   scale is fixed (for rhythmic delays a few milliseconds matter; for level the 1 dB of the EQ work is a start).
 
@@ -97,7 +110,8 @@ first echo).
 - The spectrogram of the sweep response (exists) shows echoes as repeated sweeps.
 
 ## 7. Reference plugin (ground truth)
-**Reference Delay**: time (ms or note value with the host tempo), feedback, mix, one-pole low and high cut in the loop, ping-pong, an LFO on the
+Built on the author's delay class (`jade::BasicDelayEffect`, ~/AudioDev/AAT_Delay and delay_and_pray: delay per channel, feedback, cross
+feedback, low and high cut in the loop, dry/wet, switch algorithms digital / fade / tape). **Reference Delay**: time (ms or note value with the host tempo), feedback, mix, one-pole low and high cut in the loop, ping-pong, an LFO on the
 time (rate, depth, sine/triangle), a tanh saturation in the loop, fractional delay by an all-pass or Lagrange interpolation (switchable: the
 interpolation leaves its mark in the loop filter). Every measurement of 4 has an exact expected value; tests as for the Reference EQ.
 
@@ -110,18 +124,27 @@ interpolation leaves its mark in the loop filter). Every measurement of 4 has an
 | W11.1d | delay trajectory (impulse train, tone demodulation, chirp train), AES6 flutter | the reference LFO's rate and depth within 1 % |
 | W11.1e | level dependence and saturation, self-oscillation guard | the reference's saturation shows as level-dependent echo gains |
 | W11.1f | report section "Delay" (fingerprint and --measure), Developer page column, the views of 6 | readable report for the reference and two real delays |
-| W11.1g | comparison and the echo domain of the matcher | the reference matched to itself with another start; two real delays compared |
+| W11.1g | comparison of two delays (no matching) | two real delays compared echo by echo in a report |
+| W11.1h | changing the delay time: jump / crossfade / glide (4.4b) | the reference's three switch algorithms told apart, the glide's pitch deviation within 1 cent |
 
-The boundary to modulation effects: chorus and flanger (delays below about 30 ms with an LFO) use the trajectory methods of 4.3 but are no
-"delays" for the musician; proposal: they get their own small package after W11 (with phaser), reusing 4.3.
+The boundary to modulation effects: chorus, flanger and phaser are a class of their own (the author); they get their own plan, W11.4
+(`W11-modulation-plan.md`, written during the long builds), reusing the trajectory methods of 4.3.
+
+Test set (the author): every kind; the author's digital and tape delays in ~/AudioDev; no BBD model for now; a list of free delay plugins is
+collected by the author.
 
 ## 9. Questions for the author
 1. **Which delays** form the test set (free ones: e.g. a clean digital delay, a tape echo model, a BBD model, a ping-pong)?
+   Answer: all. You will find a full delay class with digital and tape in ~/AudioDev. I have no modell for BBD. I will look for some free examples of delays as well. We will collect a list for some free delay plugins
 2. **Tempo sync**: the rig gives the plugin a play head with a tempo; is 120 BPM as the standard tempo right, plus one other for the scaling test?
+Answer: that should suffice. I would recommend  something odd for the second tempo, like 97 BPM. This will make sure that the plugin is not hard coded to a specific tempo.
 3. **Chorus and flanger**: in W11.1 or a later package (proposal: later, reusing the trajectory methods)?
+Answer: Flanger and Chorus and even Phaser are a different class of effects. If you have spare time during build processes you can work on the planning document for this class.
 4. **Matching**: is matching delays wanted (time, feedback, tone), or only the comparison?
+Answer: No matching at this point.
 5. **Time knob zipper**: a delay whose time knob moves produces pitch glides (tape) or clicks (digital): measure it as "zipper noise" (0.65.0)
    or as its own behaviour ("time change: glide / jump / crossfade")?
+   Answer: No this is a special case for this class and should be reported as that.
 
 ## 10. References
 - A. Novak, P. Lotton, L. Simon, "Synchronized swept-sine: theory, application, and implementation," JAES 63(10), 2015.
@@ -145,3 +168,7 @@ Sources found 2026-10-18:
 [arXiv 2305.13262](https://arxiv.org/pdf/2305.13262),
 [AES Standards Store: AES6](https://aes2.org/standards-store/?id=15),
 [AES E-Library: Farina 2000](https://aes2.org/publications/elibrary-page/?id=10211).
+
+## Comments of the author (v1)
+Perhaps it is easier to use a simple delta impulse as a first test signal. Since we are in the digital domain, this should work in any case.
+(v2: done, 4.1.)
