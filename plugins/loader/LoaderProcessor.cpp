@@ -153,7 +153,7 @@ void LoaderProcessor::setCurrentProgram(int index)
 const juce::String LoaderProcessor::getProgramName(int index)
 {
     juce::ignoreUnused(index);
-    return {};
+    return "Default"; // pluginval 2.x (VST3 validator) rejects a program without a name
 }
 
 void LoaderProcessor::changeProgramName(int index, const juce::String& newName)
