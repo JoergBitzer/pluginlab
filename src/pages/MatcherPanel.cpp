@@ -4,9 +4,10 @@
 #include <array>
 #include <cmath>
 
+#include "LiveWorker.h"
 #include "MatchJob.h"
 #include "PageServices.h"
-#include "pluginlab/engine/LivePluginDevice.h"
+#include "pluginlab/engine/LiveResponse.h"
 #include "pluginlab/engine/Mapping.h"
 #include "pluginlab/engine/OfflineRenderer.h"
 #include "pluginlab/engine/PluginDevice.h"
@@ -18,7 +19,8 @@ namespace pluginlab::host
 {
 namespace
 {
-constexpr double kLivePerOctave = 48.0; // the live view: dense up to fs / 2
+constexpr int kLiveMaster = 0;            // the slots of the live worker
+constexpr int kLiveTarget = 1;
 constexpr int kMargin = 8;
 constexpr int kRowHeight = 26;
 constexpr int kLabelWidth = 70;
@@ -37,7 +39,6 @@ constexpr int kWidthPlugin = 240;
 constexpr int kWidthReleased = 520;
 constexpr int kWidthChoose = 90;
 constexpr int kLiveIntervalMs = 300;            // the live view reads the knobs this often (no audio plays while matching)
-constexpr int kStopTimeoutMs = 10000;
 constexpr int kCurveItem = 1;                   // the first item of the master box
 constexpr double kPlotRangeDb = 24.0;           // the curves
 constexpr double kDifferenceRangeDb = 2.0;      // the difference below them
@@ -64,98 +65,6 @@ void setUpSlider(juce::Slider& slider, double low, double high, double value, do
     slider.setTextValueSuffix(suffix);
 }
 }
-
-// The live deviation: copies of the master and the target (live instances of the fast path, W9.3) render the settings the page hands over
-// (read from the loaded plugins on the message thread); the probe's magnitude goes back to the page. No audio, no access to the loaded plugins.
-class LiveDeviationThread : public juce::Thread
-{
-public:
-    LiveDeviationThread(MatcherPanel& owner, juce::AudioPluginFormatManager& formatManager, std::optional<juce::PluginDescription> master,
-                        std::vector<double> curve, const juce::PluginDescription& target)
-        : juce::Thread("LiveDeviation"), m_owner(owner), m_curve(std::move(curve))
-    {
-        match::MagnitudeProbeSettings settings;
-        settings.sampleRate = kSampleRate;
-        settings.stimulus = match::ProbeStimulus::Impulse;
-        settings.upToNyquist = true; // the curves up to fs / 2 (the match itself keeps its frequency range)
-        settings.perOctave = kLivePerOctave;
-        m_probe = std::make_unique<match::MagnitudeProbe>(settings);
-        if (master)
-        {
-            m_master = std::make_unique<engine::LivePluginTarget>(formatManager, *master, kSampleRate);
-        }
-        m_target = std::make_unique<engine::LivePluginTarget>(formatManager, target, kSampleRate);
-    }
-
-    ~LiveDeviationThread() override
-    {
-        signalThreadShouldExit();
-        notify();
-        stopThread(kStopTimeoutMs);
-    }
-
-    const std::vector<double>& getFrequencies() const { return m_probe->getFrequencies(); }
-
-    // the current knob values of the loaded plugins (message thread); rendered on the next turn if they changed
-    void setSettings(const std::vector<float>& master, const std::vector<float>& target)
-    {
-        const juce::ScopedLock lock(m_lock);
-        if (master != m_masterSetting || target != m_targetSetting)
-        {
-            m_masterSetting = master;
-            m_targetSetting = target;
-            m_changed = true;
-            notify();
-        }
-    }
-
-    void run() override
-    {
-        while (! threadShouldExit())
-        {
-            std::vector<float> master;
-            std::vector<float> target;
-            {
-                const juce::ScopedLock lock(m_lock);
-                if (m_changed)
-                {
-                    master = m_masterSetting;
-                    target = m_targetSetting;
-                    m_changed = false;
-                }
-            }
-            if (! target.empty() && m_target->isValid())
-            {
-                std::vector<double> masterFeatures = m_curve;
-                if (m_master != nullptr && m_master->isValid() && ! master.empty())
-                {
-                    masterFeatures = m_probe->measure(m_master->makeDevice(master));
-                }
-                const std::vector<double> targetFeatures = m_probe->measure(m_target->makeDevice(target));
-                const std::vector<double> frequencies = m_probe->getFrequencies();
-                const juce::Component::SafePointer<MatcherPanel> owner(&m_owner);
-                juce::MessageManager::callAsync([owner, frequencies, masterFeatures, targetFeatures] {
-                    if (owner != nullptr)
-                    {
-                        owner->liveUpdate(frequencies, masterFeatures, targetFeatures);
-                    }
-                });
-            }
-            wait(-1);
-        }
-    }
-
-private:
-    MatcherPanel& m_owner;
-    std::vector<double> m_curve;
-    std::unique_ptr<match::MagnitudeProbe> m_probe;
-    std::unique_ptr<engine::LivePluginTarget> m_master;
-    std::unique_ptr<engine::LivePluginTarget> m_target;
-    juce::CriticalSection m_lock;
-    std::vector<float> m_masterSetting;
-    std::vector<float> m_targetSetting;
-    bool m_changed = false;
-};
 
 void MatcherPanel::Plot::setCurves(std::vector<double> frequencies, std::vector<double> master, std::vector<double> target, juce::String caption)
 {
@@ -425,6 +334,7 @@ void MatcherPanel::rebuildTargets()
 void MatcherPanel::rebuildLive()
 {
     m_live.reset();
+    m_liveGenerations = {-1, -1};
     const int row = m_table.getSelectedRow();
     if (row < 0 || row >= static_cast<int>(m_targets.size()))
     {
@@ -436,31 +346,26 @@ void MatcherPanel::rebuildLive()
     {
         return;
     }
+    // the live deviation: copies of the master and the target in the live worker (W10.7: a crash there does not end the program); the band
+    // curve as master is computed here on the worker's grid
+    m_live = std::make_unique<RemoteLiveResponse>(kSampleRate);
     std::optional<juce::PluginDescription> master;
-    std::vector<double> curve;
     const int masterSlot = getMasterSlot();
     if (masterSlot >= 0 && m_engine.getPlugin(masterSlot) != nullptr)
     {
         master = m_engine.getPlugin(masterSlot)->getDescription();
     }
+    m_liveCurve.clear();
     if (! master)
     {
-        // the band curve: its exact magnitude on the probe's grid
-        match::MagnitudeProbeSettings settings;
-        settings.sampleRate = kSampleRate;
-        settings.stimulus = match::ProbeStimulus::Impulse; // the grid of the live view (up to fs / 2)
-        settings.upToNyquist = true;
-        settings.perOctave = kLivePerOctave;
-        const match::MagnitudeProbe grid(settings);
         eqmodel::Band band;
         band.type = static_cast<reference::FilterType>(std::array<int, 5>{6, 7, 8, 0, 1}[static_cast<size_t>(std::max(0, m_curveType.getSelectedItemIndex()))]);
         band.frequencyHz = m_curveFrequency.getValue();
         band.gainDb = m_curveGain.getValue();
         band.q = m_curveQ.getValue();
-        curve = match::getCurveMagnitude(eqmodel::EqModel{{band}, 0.0}, grid.getFrequencies(), kSampleRate);
+        m_liveCurve = match::getCurveMagnitude(eqmodel::EqModel{{band}, 0.0}, m_live->getFrequencies(), kSampleRate);
     }
-    m_live = std::make_unique<LiveDeviationThread>(*this, m_formatManager, master, curve, target->getDescription());
-    m_live->startThread();
+    m_live->setSlots({master, std::optional<juce::PluginDescription>(target->getDescription())});
     timerCallback();
 }
 
@@ -470,7 +375,7 @@ void MatcherPanel::timerCallback()
     {
         repaint(m_progressArea); // the elapsed time
     }
-    // the knobs of the loaded plugins, read here on the message thread and handed to the live view
+    // the knobs of the loaded plugins, read here on the message thread and handed to the live worker; its new curves shown
     if (m_live == nullptr)
     {
         return;
@@ -485,13 +390,27 @@ void MatcherPanel::timerCallback()
     {
         return;
     }
-    std::vector<float> master;
     const int masterSlot = getMasterSlot();
-    if (masterSlot >= 0 && m_engine.getPlugin(masterSlot) != nullptr)
+    const bool pluginMaster = masterSlot >= 0 && m_engine.getPlugin(masterSlot) != nullptr;
+    if (pluginMaster)
     {
-        master = engine::getSetting(m_engine.getPlugin(masterSlot)->getInstance());
+        m_live->setSetting(kLiveMaster, engine::getSetting(m_engine.getPlugin(masterSlot)->getInstance()));
     }
-    m_live->setSettings(master, engine::getSetting(target->getInstance()));
+    m_live->setSetting(kLiveTarget, engine::getSetting(target->getInstance()));
+    const engine::LiveSlotResponse masterResponse = m_live->getResponse(kLiveMaster);
+    const engine::LiveSlotResponse targetResponse = m_live->getResponse(kLiveTarget);
+    if (targetResponse.error.isNotEmpty())
+    {
+        m_plot.setCurves({}, {}, {}, "live view: " + targetResponse.error);
+        return;
+    }
+    const std::array<int, 2> generations{pluginMaster ? masterResponse.generation : 0, targetResponse.generation};
+    if (targetResponse.generation == 0 || (pluginMaster && masterResponse.generation == 0) || generations == m_liveGenerations)
+    {
+        return;
+    }
+    m_liveGenerations = generations;
+    liveUpdate(m_live->getFrequencies(), pluginMaster ? masterResponse.magnitudeDb : m_liveCurve, targetResponse.magnitudeDb);
 }
 
 void MatcherPanel::liveUpdate(const std::vector<double>& frequencies, const std::vector<double>& master, const std::vector<double>& target)

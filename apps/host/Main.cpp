@@ -6,6 +6,7 @@
 #include "HostFingerprint.h"
 #include "HostGuiSnapshot.h"
 #include "HostReport.h"
+#include "LiveWorker.h"
 #include "pluginlab/PluginLabVersion.h"
 
 namespace
@@ -96,6 +97,11 @@ public:
 
     void initialise(const juce::String& commandLine) override
     {
+        // the worker of the live transfer functions (W10.7): no window, it serves the page that started it until that is gone
+        if (pluginlab::host::startLiveWorker(commandLine))
+        {
+            return;
+        }
         const juce::StringArray arguments = juce::StringArray::fromTokens(commandLine, true);
         const int versionIndex = arguments.indexOf(kWriteVersionOption);
         if (versionIndex >= 0 && versionIndex + kArgumentsOfWriteVersion < arguments.size())
@@ -286,6 +292,7 @@ public:
     void shutdown() override
     {
         m_mainWindow.reset();
+        pluginlab::host::stopLiveWorker();
     }
 
     void systemRequestedQuit() override

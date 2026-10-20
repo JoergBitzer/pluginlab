@@ -40,7 +40,6 @@ juce::String formatDb(double value)
 LiveResponseView::LiveResponseView(engine::MeasurementEngine& engine)
     : m_engine(engine)
 {
-    hosting::addHeadlessFormats(m_formatManager);
     m_enabled.setToggleState(true, juce::dontSendNotification);
     m_enabled.setTooltip("The magnitude response of every slot while you turn its knobs (measuring copies of the plugins, 5 updates per second "
                          "per changed slot; the audio is not touched). Valid for LTI plugins only: the system class is checked when the knobs rest.");
@@ -94,7 +93,7 @@ void LiveResponseView::slotsChanged()
     }
     if (m_monitor == nullptr || ! juce::approximatelyEqual(m_monitor->getSampleRate(), m_engine.getSampleRate()))
     {
-        m_monitor = std::make_unique<engine::LiveResponseMonitor>(m_formatManager, m_engine.getSampleRate());
+        m_monitor = std::make_unique<RemoteLiveResponse>(m_engine.getSampleRate());
     }
     std::vector<std::optional<juce::PluginDescription>> slots;
     for (int slot = 0; slot < m_engine.getNumSlots(); ++slot)
@@ -182,7 +181,7 @@ void LiveResponseView::rebuildPlot()
             const juce::String name = juce::String(slot + 1) + ": " + m_engine.getSlotInfo(slot).name;
             if (response.error.isNotEmpty())
             {
-                lines.add(name + ": no measuring instance (" + response.error + ")");
+                lines.add(name + ": no curve (" + response.error + ")");
                 continue;
             }
             if (response.generation == 0)

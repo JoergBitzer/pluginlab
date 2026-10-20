@@ -38,6 +38,13 @@ struct LiveSlotResponse
     juce::String error;              // the measuring instance could not be created
 };
 
+// The frequencies of the curves (the impulse probe's grid up to fs / 2), without a monitor: a client of a monitor in another process (W10.7)
+std::vector<double> getLiveResponseFrequencies(double sampleRate, const LiveResponseOptions& options = {});
+
+// A response as JSON and back (the live worker sends them to the page, W10.7)
+juce::var toJson(const LiveSlotResponse& response);
+LiveSlotResponse liveSlotResponseFromJson(const juce::var& json);
+
 class LiveResponseMonitor
 {
 public:

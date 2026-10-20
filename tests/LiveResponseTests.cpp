@@ -7,6 +7,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "LiveResponseView.h"
+#include "PageServices.h"
 #include "TestPluginPaths.h"
 #include "pluginlab/engine/MeasurementEngine.h"
 #include "pluginlab/hosting/HostedPlugin.h"
@@ -166,6 +167,7 @@ public:
             {
                 pluginlab::hosting::HostedPlugin* playing = plugin.get();
                 audio.addSlot(std::move(plugin), "Test EQ", error);
+                pluginlab::host::setHelperExecutable(juce::File(PLUGINLAB_HOST_EXECUTABLE)); // the view's measuring copies run in the live worker (W10.7)
                 pluginlab::host::LiveResponseView view(audio);
                 view.setBounds(0, 0, kViewWidth, kViewHeight);
                 view.setVisible(true); // the view measures only while it is visible (the page is shown)

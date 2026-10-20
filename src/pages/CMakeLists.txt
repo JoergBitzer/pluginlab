@@ -9,6 +9,7 @@ add_library(pluginlab_pages STATIC
     HostMainComponent.cpp
     HostSettings.cpp
     LiveResponseView.cpp
+    LiveWorker.cpp
     MatchJob.cpp
     MeasurementPresets.cpp
     MatcherPanel.cpp

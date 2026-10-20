@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -11,7 +12,7 @@
 namespace pluginlab::host
 {
 class MatchJob;
-class LiveDeviationThread;
+class RemoteLiveResponse;
 
 // The page "Matcher" (W9.6, docs/matching/matcher-page.md): the master (a loaded plugin as it is set, or a band curve), the targets (the other
 // loaded plugins) with the parameters the user releases, the tolerance, the frequency range, the time per target and the model start; the live
@@ -117,7 +118,9 @@ private:
     juce::Rectangle<int> m_progressArea;
 
     std::unique_ptr<MatchJob> m_job;
-    std::unique_ptr<LiveDeviationThread> m_live;
+    std::unique_ptr<RemoteLiveResponse> m_live;
+    std::vector<double> m_liveCurve;           // the band curve as master, on the worker's grid
+    std::array<int, 2> m_liveGenerations{-1, -1};
     juce::File m_lastReport;
     double m_fraction = -1.0;
     juce::String m_step;

@@ -211,8 +211,9 @@ private:
     std::unique_ptr<LoopThread> m_classifyThread;
 };
 
-LiveResponseMonitor::LiveResponseMonitor(juce::AudioPluginFormatManager& formatManager, double sampleRate, const LiveResponseOptions& options)
-    : m_formatManager(formatManager), m_sampleRate(sampleRate), m_options(options), m_shared(std::make_shared<Shared>())
+namespace
+{
+match::MagnitudeProbeSettings makeProbeSettings(double sampleRate, const LiveResponseOptions& options)
 {
     match::MagnitudeProbeSettings settings;
     settings.stimulus = match::ProbeStimulus::Impulse;
@@ -220,7 +221,62 @@ LiveResponseMonitor::LiveResponseMonitor(juce::AudioPluginFormatManager& formatM
     settings.lowestHz = options.lowestHz;
     settings.upToNyquist = true;
     settings.perOctave = options.perOctave;
-    m_shared->probe = std::make_unique<match::MagnitudeProbe>(settings);
+    return settings;
+}
+}
+
+std::vector<double> getLiveResponseFrequencies(double sampleRate, const LiveResponseOptions& options)
+{
+    return match::MagnitudeProbe(makeProbeSettings(sampleRate, options)).getFrequencies();
+}
+
+juce::var toJson(const LiveSlotResponse& response)
+{
+    auto object = std::make_unique<juce::DynamicObject>();
+    object->setProperty("generation", response.generation);
+    juce::Array<juce::var> magnitude;
+    for (const double value : response.magnitudeDb)
+    {
+        magnitude.add(value);
+    }
+    object->setProperty("magnitudeDb", magnitude);
+    object->setProperty("renderSeconds", response.renderSeconds);
+    object->setProperty("classified", response.classified);
+    object->setProperty("lti", response.lti);
+    object->setProperty("systemClass", response.systemClass);
+    object->setProperty("reason", response.reason);
+    object->setProperty("classOfCurrentSetting", response.classOfCurrentSetting);
+    object->setProperty("classifications", response.classifications);
+    object->setProperty("error", response.error);
+    return juce::var(object.release());
+}
+
+LiveSlotResponse liveSlotResponseFromJson(const juce::var& json)
+{
+    LiveSlotResponse response;
+    response.generation = json.getProperty("generation", 0);
+    if (const juce::Array<juce::var>* magnitude = json.getProperty("magnitudeDb", {}).getArray())
+    {
+        for (const juce::var& value : *magnitude)
+        {
+            response.magnitudeDb.push_back(static_cast<double>(value));
+        }
+    }
+    response.renderSeconds = json.getProperty("renderSeconds", 0.0);
+    response.classified = json.getProperty("classified", false);
+    response.lti = json.getProperty("lti", true);
+    response.systemClass = json.getProperty("systemClass", "").toString();
+    response.reason = json.getProperty("reason", "").toString();
+    response.classOfCurrentSetting = json.getProperty("classOfCurrentSetting", false);
+    response.classifications = json.getProperty("classifications", 0);
+    response.error = json.getProperty("error", "").toString();
+    return response;
+}
+
+LiveResponseMonitor::LiveResponseMonitor(juce::AudioPluginFormatManager& formatManager, double sampleRate, const LiveResponseOptions& options)
+    : m_formatManager(formatManager), m_sampleRate(sampleRate), m_options(options), m_shared(std::make_shared<Shared>())
+{
+    m_shared->probe = std::make_unique<match::MagnitudeProbe>(makeProbeSettings(sampleRate, options));
 }
 
 LiveResponseMonitor::~LiveResponseMonitor()

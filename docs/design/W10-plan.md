@@ -1,6 +1,6 @@
 # W10: the final products (plan)
 
-Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done; W10.4 done; W10.5 done; W10.6 done). Milestone of
+Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done; W10.4 done; W10.5 done; W10.6 done; W10.7 done). Milestone of
 `planning.md` §8: "**Final products: the stand-alone application and the plugin** (two main targets since 2026-10-12): 4 slots, parallel rendering, real-time transfer function
 display, three-level GUI, measurement presets, in both. Done when: persona walkthroughs succeed in the stand-alone application and in the
 plugin (musician compares a demo with an owned plugin; developer checks an algorithm)." The questions for the author are in section 7.
@@ -254,3 +254,23 @@ The page Expert: a preset menu (choosing applies it; the note is shown), "Save a
 Test (`PresetTests`): the shipped presets are written; a preset survives its JSON; a preset saved on the page in the application loads on the
 page in the plugin (the processor's engine, the same plugins) and gives the same results, row by row.
 Plugin presets (the matched settings of the Easy page and the Matcher, `presets/<plugin>/`) stay files; loading them back is for later.
+
+### W10.7 crash protection (0.69.0, done)
+Option (c) of 3.7, decided by the author: **in process for listening, a process of its own for everything that measures.**
+
+| What | Where it runs | A crashing plugin |
+|---|---|---|
+| scanning (both products) | PluginLabScanner, one process per file (W2) | the file is marked as crashing, the program goes on |
+| Developer page jobs (fingerprint, mapping, calibration, GUI review) | PluginLabHost in a child process (W5, W8) | the job reports "no report (a crash?)" |
+| Matcher, Easy ("make them the same"), Expert, measurement presets | PluginLabHost --match / --expert in a child process (`MatchJob`) | the job fails with a message, the page goes on |
+| **live transfer functions** (EQ Compare, the Matcher's live view) | **new: the live worker**, PluginLabHost started by `juce::ChildProcessCoordinator` (`RemoteLiveResponse`, `src/pages/LiveWorker.*`) | the worker ends; the page marks the curves ("the measuring process ended (a plugin crashed?)"), starts the worker once more with the slots and the last settings; after a second crash the live curves stay off with the reason |
+| listening (the slots of the engine: EQ Compare, Easy, the DAW's track in the plugin) | in process (the engine's slots) | **the application or the DAW ends**: a plugin that crashes while it plays cannot be caught; the start marker of the application tells what happened (at the next start loading the last session's plugins did not finish); the crash log of the loader plugin (W3) is not yet in Jade Benchmark (open) |
+
+The live worker: the page sends JSON messages (setup with the rate and the options, the slots as plugin descriptions, the settings of the
+playing instances when they change); the worker runs `engine::LiveResponseMonitor` (the measuring copies, the 5 renders per second, the
+system class) and sends each new curve back (`engine::toJson(LiveSlotResponse)`); the page computes the frequency grid itself
+(`getLiveResponseFrequencies`); the dry slot is flat without the worker. In the plugin the worker is the PluginLabHost in its bundle (as the jobs).
+Tests (`CrashProtectionTests`): the Test EQ's curve from the worker equals the exact curve; the crash-in-process plugin ends the worker, it is
+started once more and then stays off with the reason; an `--expert` and a `--match` job with that plugin fail with a message; the test program
+(the application, the DAW) runs on. The live view's test now runs through the worker too.
+Option (b) (listening in another process, audio through shared memory) stays for later, if real use shows crashes while listening.

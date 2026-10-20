@@ -40,6 +40,7 @@ target_sources(PluginLabTests
         BandFitTests.cpp
         BenchmarkTests.cpp
         CalibrationTests.cpp
+        CrashProtectionTests.cpp
         BrowserTests.cpp
         CatalogTests.cpp
         EasyTests.cpp
@@ -94,9 +95,9 @@ if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
 
-add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)|Fast render path (W9.3)|Plugin matching (W9.4)|Match attribution (W9.5)")
+add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)|Fast render path (W9.3)|Plugin matching (W9.4)|Match attribution (W9.5)|Easy page (W10.4)|Expert page (W10.5)|Measurement presets (W10.6)|Crash protection (W10.7)")
 # a hanging test (a dialog nobody can click, a plugin that never returns) must fail soon, not after the default 25 minutes
-set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 600 RESOURCE_LOCK display)
+set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 1200 RESOURCE_LOCK display) # about 580 s in Debug on the development machine (2026-10-21); to be split further (W10.8)
 # the fingerprint measures many test plugins (with the system class at A and B since 0.49.0): a test with a limit of its own; not at the same
 # time as PluginLabTests (the lock: both are long and render much)
 add_test(NAME PluginLabFingerprint COMMAND PluginLabTests --only "PluginFingerprint")
@@ -115,6 +116,16 @@ set_tests_properties(PluginLabPluginMatching PROPERTIES TIMEOUT 1800)
 # why a match misses the tolerance (W9.5): a knob at its end, another family, a band missing, interacting bands
 add_test(NAME PluginLabMatchAttribution COMMAND PluginLabTests --only "Match attribution (W9.5)")
 set_tests_properties(PluginLabMatchAttribution PROPERTIES TIMEOUT 1800)
+
+# the pages of W10 that start PluginLabHost in child processes (match, expert measurements, the live worker): minutes each
+add_test(NAME PluginLabEasyPage COMMAND PluginLabTests --only "Easy page (W10.4)")
+set_tests_properties(PluginLabEasyPage PROPERTIES TIMEOUT 1200)
+add_test(NAME PluginLabExpertPage COMMAND PluginLabTests --only "Expert page (W10.5)")
+set_tests_properties(PluginLabExpertPage PROPERTIES TIMEOUT 1800)
+add_test(NAME PluginLabMeasurementPresets COMMAND PluginLabTests --only "Measurement presets (W10.6)")
+set_tests_properties(PluginLabMeasurementPresets PROPERTIES TIMEOUT 1200)
+add_test(NAME PluginLabCrashProtection COMMAND PluginLabTests --only "Crash protection (W10.7)")
+set_tests_properties(PluginLabCrashProtection PROPERTIES TIMEOUT 1200)
 # the interactions between bands (W8.7): one entry per plugin
 foreach(COMBINED "Test EQ Two Bands" "Test EQ Parallel" "Reference EQ")
     string(REPLACE " " "" INTERACTION_TEST_NAME "${COMBINED}")
