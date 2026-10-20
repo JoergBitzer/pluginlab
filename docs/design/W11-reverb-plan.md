@@ -1,6 +1,7 @@
 # W11.2: reverb (plan)
 
-Status: **plan v2** (v1 2026-10-18; v2 2026-10-19 with the author's answers and comments, section 9). Part of W11, after the delay (`W11-delay-plan.md`), before
+Status: **plan v3** (v1 2026-10-18; v2 2026-10-19 with the author's answers; v3 2026-10-21 with the author's AES 121 papers and Matlab
+tools: the monaural and the stereo analysis of artificial reverberation, sections 4.3, 4.4, 4.7, 6, 8). Part of W11, after the delay (`W11-delay-plan.md`), before
 dynamics (`W11-dynamics-plan.md`). Room acoustics has measured reverberation for a century; most of its methods carry over to a plugin, which
 is a room without a noise floor and without a loudspeaker.
 
@@ -26,15 +27,21 @@ test (W7.8), the matcher's general layer (W9.1), the reports; from W11.1a: long 
 
 ## 4. Measurements
 ### 4.1 The impulse response
-- Stimulus: the synchronized sweep (ISO 18233 describes sweep methods for room acoustics), long enough and followed by silence longer than the
-  tail (from a first impulse, as for the delay; at most 30 s; a freeze or an infinite decay is reported as such).
+- **First stimulus: a delta impulse** (as in the author's AES 121 papers: a plugin is digital, so a single delta gives the noise-free impulse
+  response of the device directly, without deconvolution; as in `W11-delay-plan.md` 4.1), followed by silence until the output has decayed (at
+  most 30 s; a freeze or an infinite decay is reported as such). The synchronized sweep (ISO 18233) only where the impulse is not enough: the
+  harmonic responses of a non-linear reverb (4.6).
 - Per channel pair (L to L, L to R, R to L, R to R): a stereo reverb is a 2 x 2 system; the stereo width comes from the cross terms.
 
 ### 4.2 Decay (ISO 3382-1)
-- **Energy decay curve** by Schroeder's backward integration of the squared impulse response (Schroeder 1965), per octave and third-octave band
-  (the band filters of IEC 61260). A plugin has no acoustic noise floor, but dither, modelled noise and the numerical floor exist: the truncation
+- **Energy decay curve** by Schroeder's backward integration of the squared impulse response (Schroeder 1965), per octave and third-octave band.
+  The band filters: third octaves after IEC 61260 (the author's Terzband design with its check against the IEC tolerance masks,
+  `~/SoftDev/MatlabTools/matlabOldThings/MatlabTools/Filterbank/Terzband/`); octaves also by the author's doubly complementary filterbank of
+  coupled all-passes (FB_Init / FB_process there: Butterworth bands whose sum is flat in power and in magnitude, after Vaidyanathan and Mitra), so
+  that the bands add up to the broadband response. Not used: the older QuasiTerzbank, whose bands below 500 Hz are 100 Hz wide (not IEC 61260). A plugin has no acoustic noise floor, but dither, modelled noise and the numerical floor exist: the truncation
   and its compensation after Lundeby et al. (1995).
-- **T20, T30, EDT** per band by the regressions of ISO 3382-1; the curvature of the EDC (two-slope decays: a reverb with a fast early and a slow
+- **T20, T30, EDT** per band by the linear regressions of ISO 3382-1 (the old AnalyseTime.m counted the samples between -5 and -35 dB instead of
+  fitting a line); the curvature of the EDC (two-slope decays: a reverb with a fast early and a slow
   late part).
 - **Energy decay relief** (Jot 1992): the EDC per frequency bin from the short-time spectrum: the decay time as a continuous function of frequency
   (what "damping" and "low multiplier" knobs do).
@@ -55,12 +62,40 @@ test (W7.8), the matcher's general layer (W9.1), the reports; from W11.1a: long 
   density; the spectral balance of the tail (tail spectrum against the input).
 - **Dispersion** (spring models): the group delay over frequency of the early response (the "chirp" of the spring is visible in the spectrogram).
 
+From the author's monaural toolbox (Extra, Simmer, Fischer, Bitzer, AES 121, 2006), tools that tell good from poor artificial reverberation:
+- **Echo count after Griesinger**: blocks of 20 ms, per block the number of reflections within 20 dB of the block's largest one (Griesinger
+  asks for about 10000 per second for percussive sounds); next to the normalized echo density of Abel and Huang above.
+- **Short-time histogram and kurtosis**: the impulse response normalized by the square root of its EDC (h(n) / sqrt(EDC(n)): the decay
+  removed, a stationary signal remains), cut into blocks of 1024 samples; per block the histogram of the amplitudes (a heat map over time) and
+  the kurtosis (0 for Gaussian noise). Moorer found that the best reverberation sounds like exponentially decaying Gaussian noise: a late
+  kurtosis near 0 is good; Schroeder's reverberator stays far from it.
+- **Normalized autocorrelation** of the EDC-normalized response (Griesinger): repetitions in the tail (periodic peaks) are audible as a metallic or
+  grainy sound; a natural room shows none.
+
 ### 4.4 Stereo
-The inter-channel coherence of the late tail over frequency (for a binaural room the IACC of ISO 3382-1; for a plugin the plain coherence of its
-two outputs), the balance of the cross terms, the width as a number.
+From the author's stereo toolbox (Bitzer, Extra, AES 121, 2006; Bitzer, AES 122, 2007). A stereo reverb's two outputs are not two ears, but the
+binaural measures, adapted, describe its spatial impression:
+- **IACC** (interaural cross-correlation): the maximum of the normalized cross-correlation of L and R within +-1 ms, over the first 100 ms;
+  **with and without the direct sound** (with it the IACC is dominated by the dry signal; from 0.1 to 100 ms it shows the reverb's own
+  spaciousness: lower = wider), with the lag of the maximum; also per octave or third octave.
+- **IAD** (interaural difference, Griesinger): 10 lg((l - r)^2 / (l^2 + r^2)) over time and frequency (40 ms RMS per octave band) as a
+  time-frequency plot; in the author's version without the normalization by l^2 + r^2, which is easier to read.
+- **LEDT** (lateral early decay time, Griesinger): the decay of the interaural difference (the Schroeder sum of (l - r)^2, IADDC) against the sum of
+  the two EDCs, by two definitions (Griesinger's 350 ms point and the -10 dB point), referred to -60 dB.
+- **RLE** (room level early, Trautmann; Blau): the early part of the room level from the first 80 ms in 2 ms segments; per segment the dominant
+  lateral angle from the lag of the cross-correlation (low-passed at 800 Hz, weighted by the level difference), weighted by a growing factor
+  q = 1 - exp(-t / 15 ms); **computed with and without the direct sound** (E_D = 0): without it the values spread from -8 to +3 dB between the six
+  algorithms of the paper, positive values as in good concert halls; the author: "a good candidate for quality evaluation".
+- **Time-angle phase scope (Spatial Distribution Meter)**: the phase scope (L against R, turned by 45 degrees: centre up) of overlapping blocks
+  (50 % overlap; 50 ms for the whole response, 20 ms for the first 0.3 s), the circle split into 32 sectors, per sector the mean energy in dB: a
+  heat map of the direction over time. It shows where the early reflections come from (the centre, one side), when the response becomes
+  spatially diffuse, and negative correlation (nL, nR) - the most telling stereo picture of the paper.
+- The plain inter-channel coherence of the late tail over frequency, the balance of the cross terms of the 2 x 2 response.
 
 ### 4.5 Time variance (modulated reverbs)
-- The system class flags it. A modulated tail differs between two renders: **synchronous averaging of repeated sweeps cancels the late tail**
+- The system class flags it. The author's method (AES 121): many impulse responses (the paper used 1000) of the same setting; single peaks
+  (early reflections) are picked and the distribution of their values over the renders shown as a histogram: a modulated reflection spreads,
+  a fixed one does not. With a plugin the renders follow each other without the gap of about one second the hardware needed. A modulated tail differs between two renders: **synchronous averaging of repeated sweeps cancels the late tail**
   (a known effect in room acoustics), so the decay is taken from each render alone and the spread across renders is reported.
 - The **interrupted-noise method** of ISO 3382-1 (noise switched off, the decay of the ensemble average) is natural for time-variant reverbs:
   the decay curves of several noise bursts are averaged in energy, not in amplitude.
@@ -69,6 +104,25 @@ two outputs), the balance of the cross terms, the width as a number.
 
 ### 4.6 Level dependence
 The impulse response at three levels (as the system class): non-linear reverbs (saturated tanks, gated reverbs) show it.
+
+### 4.7 Porting the author's Matlab tools: what to correct
+The tools are from 2006 ... 2018 (the author: "check the code for mistakes and errors, it's quite old"). Found while reading them for this plan;
+each port gets a test against an analytic case (a synthetic stereo response with known delays, levels and angles):
+- **RLE.m**: the 6 kHz low-pass does nothing: `b = a./a(1)` makes the numerator equal to the denominator (meant: `b = [1 1]./a(1)`); the
+  800 Hz filter above it is a correct first-order low-pass (bilinear, not pre-warped), the comment "das ist kein TP" there is wrong; the
+  analysis window `ir(i_0:i_80*4, :)` multiplies the absolute index (meant: from i_0 for 4 x 80 ms) and fails when the direct sound does not
+  start at 0; the input checks test argument 1 four times; the direct-sound energy scaling `(Fs/10000*74+1)/75` (a correction for the 10-sample
+  hop) is to be derived again, it does not match the overlap of the 2 ms segments at 44.1 or 48 kHz; `n_delays` assumes a time vector that starts
+  at 0.
+- **EchoDensity.m** (Abel and Huang): the Hann-weighted mode counts unweighted and does not normalize by the window (its values are a window
+  length too large); the blocks do not overlap (Abel and Huang slide the window sample by sample); the port uses the weighted, normalized,
+  sliding definition of the paper.
+- **SDM.m**: the sector edges start at a quarter of a sector (pi / (2N) instead of half a sector, pi / N), so the last sector's computed
+  value is overwritten by the wrap-around sector and part of it lost; the angle axis labels do not match the sector centres.
+- **STH.m**: the direct sound and the pre-delay are found by absolute thresholds (0.004, the mean of |h|) that depend on the level; the histogram
+  range is fixed (+-0.05) although the EDC normalization changes the scale; the port uses relative thresholds and a range from the data.
+- **AnalyseTime.m**: T60 counted instead of regressed (4.2); the EDC start found by an absolute energy difference (`Edc_Dif > -1`); the output
+  names in the comment are swapped (Edt_vek / RT_vek).
 
 ## 5. Comparing two reverbs (and matching)
 - Bands: octaves and third octaves, both (the author).
@@ -93,6 +147,16 @@ The impulse response at three levels (as the system class): non-linear reverbs (
 - **Echo density profile** over time with the mixing time marked.
 - **Stereo coherence** over frequency.
 - The spectrogram of the sweep response (exists); for spring reverbs it shows the dispersion.
+- **Short-time histogram** as a heat map over time with the **kurtosis** below it (4.3).
+- **Normalized autocorrelation** of the tail (repetitions as peaks).
+- **Echo count per 20 ms** (Griesinger) as stems over time.
+- **IAD time-frequency plot** (octave bands over time, dB).
+- **Time-angle phase scope / Spatial Distribution Meter**: direction (nR, L, C, R, nL) over time, energy as colour, 50 ms frames for the whole
+  response and 20 ms for the first 0.3 s.
+- **Stereo table**: IACC with and without the direct sound (and its lag), LEDT (both definitions), RLE with and without the direct sound.
+- For the manual of Jade Benchmark the author's figures may be used (the author's permission): the EPS files in
+  `~/Research/Paper/OldFiles/AES_121_Stereo/matlab/Tools/` (ExplainTimePhase, ExplainLEDT, ExamplePhaseScope, IAD_Comparison, PS_Comparison)
+  and the figures of the two papers; redrawn from our measurements where possible.
 
 ## 6b. The 100 % wet question (the author)
 The measurements want the reverb alone; listening wants the dry signal too. The products guide the user: measure with the plugin at 100 % wet
@@ -113,8 +177,9 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
 |---|---|---|
 | W11.2a | impulse response with the tail, 2 x 2; band filters (IEC 61260) | the reference's response complete, its bands as designed |
 | W11.2b | EDC with Lundeby truncation, T20/T30/EDT, C50/C80/D50/Ts, pre-delay, DPD, DRR | the reference's T60 per band within 2 %, pre-delay within 0.1 ms, DRR within 0.1 dB |
-| W11.2c | EDR, echo density profile, mixing time, coloration measure | the synthetic noise tail gives an echo density of 1; a sparse reference setting does not |
-| W11.2d | stereo coherence; time variance (per-render decay, interrupted noise) | the modulated reference: decays agree across renders within the stated spread |
+| W11.2c | EDR, echo density profile, mixing time, Griesinger echo count, short-time histogram and kurtosis, normalized autocorrelation, coloration | the synthetic noise tail gives an echo density of 1 and a kurtosis near 0; a Schroeder setting of the reference shows repetitions in the autocorrelation |
+| W11.2d | time variance (per-render decay, interrupted noise, the distribution of single peaks over many renders) | the modulated reference: decays agree across renders within the stated spread; its modulated reflections spread in the histogram |
+| W11.2g | stereo: IACC (with and without the direct sound), IAD time-frequency, LEDT (both definitions), RLE (with and without the direct sound), time-angle phase scope, coherence; the corrections of 4.7 | a synthetic stereo response with known delays, levels and angles gives its expected values in every tool; the six example cases of the paper's figure 3 reproduced |
 | W11.2e | report section "Reverb", Developer page, views of 6 | readable reports for the reference and two real reverbs |
 | W11.2f | comparison with JNDs, the reverb domain of the matcher | the reference matched to itself; two real reverbs compared per band |
 
@@ -130,7 +195,30 @@ Lets start with that-
 5. **Convolution reverbs**: is it interesting to recover the loaded IR and compare it to the file (a null test against the file)?
    NO
 
+6. **RLE for stereo reverbs**: the angle comes from the inter-channel lag with tau_0 = 0.7 ms (the ears' maximal delay); for a plugin's two
+   outputs that is a convention, not a direction. Keep it as in the paper (comparable with the 2006 results), or scale tau_0 to the largest
+   lag the plugin produces?
+7. **Order of the stereo tools**: is the Spatial Distribution Meter (the most telling picture) the first stereo tool to port, before IACC, LEDT
+   and RLE?
+
 ## 10. References
+- D. Extra, U. Simmer, S. Fischer, J. Bitzer, "Artificial reverberation: comparing algorithms by using monaural analysis tools," AES 121st
+  Convention, San Francisco, 2006 (EDC, EDR, T60/EDT, echo density, short-time histogram, kurtosis, autocorrelation, C80, time variance; the
+  author is a co-author).
+- J. Bitzer, D. Extra, "Artificial reverberation: comparing algorithms by using binaural analysis tools," AES 121st Convention, San Francisco,
+  2006 (IACC, IAD, LEDT, RLE, the time-angle phase scope).
+- J. Bitzer, "Spatial Distribution Meter: a new method to display spatial impression over time," AES 122nd Convention, Vienna, 2007.
+- D. Griesinger, "Spaciousness and envelopment in musical acoustics," AES 101st Convention, 1996, preprint 4401; "Objective measures of
+  spaciousness and envelopment," AES 16th International Conference, 1999.
+- J. A. Moorer, "About this reverberation business," Computer Music Journal 3(2), 1979, pp. 13-28.
+- M. Blau, "Correlation of apparent source width with objective measures in synthetic sound fields," Acta Acustica united with Acustica 90,
+  2004, pp. 720-730; U. Trautmann, "Die messtechnische Erfassung der Räumlichkeit in Sälen für musikalische Darbietungen," PhD thesis, TU Dresden,
+  1986 (the room level RL).
+- M. R. Schroeder, "Natural sounding artificial reverberation," JAES 10(3), 1962, pp. 219-223.
+- J. Dattorro, "Effect design, part 1: reverberator and other filters," JAES 45(9), 1997, pp. 660-684.
+- W. G. Gardner, "The virtual acoustic room," Master's thesis, MIT Media Lab, 1992.
+- P. P. Vaidyanathan, S. K. Mitra, Y. Neuvo, "A new approach to the realization of low-sensitivity IIR digital filters," IEEE Trans. ASSP 34(2),
+  1986 (doubly complementary filters from coupled all-passes: the structure of the author's FB_Init).
 - ISO 3382-1:2009, "Acoustics - Measurement of room acoustic parameters - Part 1: Performance spaces" (T20, T30, EDT, C50, C80, D50, Ts, IACC;
   the interrupted-noise and integrated-impulse methods; the JND of 5 % for the reverberation time).
 - ISO 18233:2006, "Acoustics - Application of new measurement methods in building and room acoustics" (sweeps and MLS).
@@ -184,7 +272,53 @@ You are allowed to look in these two sub-directories for other material that cou
 
 And something for the one-third band split: /home/bitzer/SoftDev/MatlabTools/matlabOldThings/MatlabTools/Filterbank/
 
-
-
 ## possible test candidates
+
+https://www.kvraudio.com/product/main-st-63-spring-by-main-st-audio-labs/downloads
+(open source)
+
+https://www.kvraudio.com/product/voyage-voyage-by-musical-entropy/downloads
+
+https://mikey.audio/shu
+
+https://www.kvraudio.com/product/vitalreverb-by-manaswolrd/downloads
+(open source)
+
+https://duskaudio.com/plugins/duskverb/
+
+https://github.com/lucianoiam/castello
+(open source)
+
+https://socalabs.com/effects/simpleverb/
+
+https://www.kvraudio.com/product/vitaliumverb-by-billy-messenger/downloads
+open source
+
+https://github.com/giulioz/smol-rack
+
+https://www.kvraudio.com/product/reev-r-by-tilr/downloads
+
+https://superflydsp.com/index.php/flying-reverb/
+
+https://www.kvraudio.com/product/fdn64reverb-by-uhhyou/downloads
+
+https://www.elephantdsp.com/products/room-reverb/
+
+https://www.kvraudio.com/product/l4reverb-by-uhhyou/downloads
+
+https://www.kvraudio.com/product/latticereverb-by-uhhyou/downloads
+
+https://www.kvraudio.com/product/mverb2020-by-socalabs/downloads
+
+https://github.com/michaelwillis/dragonfly-reverb/releases/tag/3.2.10
+
+https://tal-software.com/products/tal-reverb-4
+
+https://www.kvraudio.com/product/hybridreverb2-by-christian-bor/downloads
+
+https://tal-software.com/products/tal-reverb
+
+https://rekkerd.org/martin-eastwood-audio-free-plugins/
+
+https://freeverb3-vst.sourceforge.io/
 
