@@ -21,6 +21,12 @@ target_link_libraries(pluginlab_benchmark_core
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
 
+# AU on macOS (the author: check the Mac and AU during development through CI)
+set(PLUGINLAB_BENCHMARK_FORMATS VST3)
+if(APPLE)
+    list(APPEND PLUGINLAB_BENCHMARK_FORMATS AU)
+endif()
+
 juce_add_plugin(JadeBenchmark
     COMPANY_NAME "Jade_Hochschule"
     IS_SYNTH FALSE
@@ -30,7 +36,7 @@ juce_add_plugin(JadeBenchmark
     COPY_PLUGIN_AFTER_BUILD FALSE
     PLUGIN_MANUFACTURER_CODE IHAJ
     PLUGIN_CODE Jdbm
-    FORMATS VST3
+    FORMATS ${PLUGINLAB_BENCHMARK_FORMATS}
     PLUGIN_NAME "Jade Benchmark"
     PRODUCT_NAME "JadeBenchmark"
     VERSION "${PROJECT_VERSION}")
@@ -53,13 +59,35 @@ target_link_libraries(JadeBenchmark
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
 
-# the scanner and the host next to the plugin binary in the bundle (Contents/<platform>/), then the bundle to the plugin folder
+# the scanner next to the plugin binary in the bundle (Contents/<platform>/, Contents/MacOS/); the host next to it, on macOS as the whole
+# application bundle in Contents/Helpers/ (BenchmarkProcessor::getBundledHelper); then the bundles to the plugin folder
 get_target_property(PLUGINLAB_BENCHMARK_BUNDLE JadeBenchmark_VST3 JUCE_PLUGIN_ARTEFACT_FILE)
-add_custom_target(JadeBenchmarkBundle ALL
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:PluginLabScanner> $<TARGET_FILE_DIR:JadeBenchmark_VST3>
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:PluginLabHost> $<TARGET_FILE_DIR:JadeBenchmark_VST3>
+set(PLUGINLAB_BENCHMARK_COMMANDS
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:PluginLabScanner> $<TARGET_FILE_DIR:JadeBenchmark_VST3>)
+if(APPLE)
+    list(APPEND PLUGINLAB_BENCHMARK_COMMANDS
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PLUGINLAB_BENCHMARK_BUNDLE}/Contents/Helpers"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory $<TARGET_BUNDLE_DIR:PluginLabHost> "${PLUGINLAB_BENCHMARK_BUNDLE}/Contents/Helpers/PluginLabHost.app")
+else()
+    list(APPEND PLUGINLAB_BENCHMARK_COMMANDS
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:PluginLabHost> $<TARGET_FILE_DIR:JadeBenchmark_VST3>)
+endif()
+list(APPEND PLUGINLAB_BENCHMARK_COMMANDS
     COMMAND ${CMAKE_COMMAND} -E remove_directory "${PLUGINLAB_BENCHMARK_PLUGIN_DIR}/JadeBenchmark.vst3"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLUGINLAB_BENCHMARK_BUNDLE}" "${PLUGINLAB_BENCHMARK_PLUGIN_DIR}/JadeBenchmark.vst3"
-    COMMENT "Putting PluginLabScanner and PluginLabHost into the Jade Benchmark bundle"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLUGINLAB_BENCHMARK_BUNDLE}" "${PLUGINLAB_BENCHMARK_PLUGIN_DIR}/JadeBenchmark.vst3")
+set(PLUGINLAB_BENCHMARK_DEPENDENCIES JadeBenchmark_VST3 PluginLabScanner PluginLabHost)
+if(APPLE)
+    get_target_property(PLUGINLAB_BENCHMARK_AU_BUNDLE JadeBenchmark_AU JUCE_PLUGIN_ARTEFACT_FILE)
+    list(APPEND PLUGINLAB_BENCHMARK_COMMANDS
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:PluginLabScanner> $<TARGET_FILE_DIR:JadeBenchmark_AU>
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PLUGINLAB_BENCHMARK_AU_BUNDLE}/Contents/Helpers"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory $<TARGET_BUNDLE_DIR:PluginLabHost> "${PLUGINLAB_BENCHMARK_AU_BUNDLE}/Contents/Helpers/PluginLabHost.app"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${PLUGINLAB_BENCHMARK_PLUGIN_DIR}/JadeBenchmark.component"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PLUGINLAB_BENCHMARK_AU_BUNDLE}" "${PLUGINLAB_BENCHMARK_PLUGIN_DIR}/JadeBenchmark.component")
+    list(APPEND PLUGINLAB_BENCHMARK_DEPENDENCIES JadeBenchmark_AU)
+endif()
+add_custom_target(JadeBenchmarkBundle ALL
+    ${PLUGINLAB_BENCHMARK_COMMANDS}
+    COMMENT "Putting PluginLabScanner and PluginLabHost into the Jade Benchmark bundle(s)"
     VERBATIM)
-add_dependencies(JadeBenchmarkBundle JadeBenchmark_VST3 PluginLabScanner PluginLabHost)
+add_dependencies(JadeBenchmarkBundle ${PLUGINLAB_BENCHMARK_DEPENDENCIES})

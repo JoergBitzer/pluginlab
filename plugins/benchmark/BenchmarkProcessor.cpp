@@ -34,10 +34,13 @@ BenchmarkProcessor::~BenchmarkProcessor() = default;
 
 juce::File BenchmarkProcessor::getBundledHelper()
 {
-    // currentExecutableFile is the plugin binary when this code runs in a plugin; the bundle carries PluginLabHost next to it
+    // currentExecutableFile is the plugin binary when this code runs in a plugin; the bundle carries PluginLabHost next to it (on macOS the
+    // application bundle in Contents/Helpers, next to Contents/MacOS)
     const juce::File folder = juce::File::getSpecialLocation(juce::File::currentExecutableFile).getParentDirectory();
 #if JUCE_WINDOWS
     return folder.getChildFile("PluginLabHost.exe");
+#elif JUCE_MAC
+    return folder.getSiblingFile("Helpers").getChildFile("PluginLabHost.app/Contents/MacOS/PluginLabHost");
 #else
     return folder.getChildFile("PluginLabHost");
 #endif

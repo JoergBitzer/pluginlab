@@ -30,7 +30,10 @@ pluginlab (mission: divide the myth from reality) measures, compares and matches
   Built into `<build>/reference_plugins`; a Release build installs them into `~/.vst3`.
 - `tests/`: `PluginLabTests` (`juce::UnitTest` console app, registered with CTest), `CheckHostVersion.cmake`, `CheckHostReport.cmake`;
   `tests/plugins/`: test plugins with known behavior (Gain: 4 parameters, state, VST3 + VST2; Crash: crashes when created; Crash Process: crashes while processing), built into `<build>/test_plugins`.
-- `tools/`: `run_pluginval.sh` / `.ps1`.
+- `tools/`: `run_pluginval.sh` / `.ps1`; `package.sh` (the archives of the two products, W10.8; CI calls it).
+- `plugins/benchmark/`: the plugin product **Jade Benchmark** (VST3; AU on macOS) with the pages Easy, Plugins, EQ Compare, Matcher, Expert;
+  its bundle carries PluginLabScanner and PluginLabHost (on macOS `Contents/Helpers/PluginLabHost.app`). `src/pages/`: the pages of both products.
+- `docs/manual/`: the manual of Jade Benchmark and PluginLabHost (installation, first steps, the pages); `THIRD_PARTY.md`: the licences of others.
 - `docs/`: `design/` (one design note per work package), `prototype/` (evidence from the prototype), `reference/`.
 - `CMakeLists.txt`: the version of the whole project (`project(pluginlab VERSION x.y.z)`).
 
@@ -46,7 +49,9 @@ Develop with the Debug build (JUCE assertions are on). **Run the tests offscreen
 `tools/ctest_offscreen.sh` runs CTest in Xvfb with openbox (hosted VST2 editors need a window manager; without one they die with an X "BadAtom"
 error). Compared on 2026-10-08: offscreen and desktop give the same results. `tools/run_pluginval.sh` runs itself in Xvfb (+ openbox) when
 `xvfb-run` exists (pluginval opens the plugin's editor); `PLUGINVAL_ON_DESKTOP=1` overrides. `PluginLabTests --only <part of a test name>` runs single tests.
-CI (`.github/workflows/ci.yml`) builds, tests and runs pluginval on Windows and macOS, only for a version tag (see "CI and tags" below).
+CI (`.github/workflows/ci.yml`, W10.8) builds, tests, runs pluginval (and auval for the AU on macOS) and packages both products on Linux,
+Windows and macOS, only for a version tag (see "CI and tags" below); for a tag it attaches the archives to a draft GitHub release, which the
+author publishes.
 
 ## Workflow rules (from the author)
 - Development rules of `planning.md` section 7 apply: step by step; for each new feature design (a note in `docs/design/`),

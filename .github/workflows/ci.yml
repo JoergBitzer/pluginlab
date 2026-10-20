@@ -1,8 +1,9 @@
-# CI: build, run the tests and validate the loader plugin with pluginval on Windows and macOS (Linux is the development machine).
+# CI (W10.8): build, test and package both products - the stand-alone application PluginLabHost and the plugin Jade Benchmark - on Linux,
+# Windows and macOS; validate the plugins with pluginval (and the AU with auval on macOS).
 # It does not run on a normal push. It runs
 #  - when a tag vX.Y.Z is pushed that matches project(pluginlab VERSION X.Y.Z) in CMakeLists.txt (a tag that does not match
-#    stops the run before anything is built), or
-#  - with the "Run workflow" button on the Actions page (no tag check).
+#    stops the run before anything is built); then the archives are attached to a draft GitHub release of that tag, or
+#  - with the "Run workflow" button on the Actions page (no tag check, the archives only as artifacts of the run).
 name: CI
 
 on:
@@ -12,20 +13,25 @@ on:
 
 env:
   LOADER_VST3: build/plugins/loader/PluginLabLoader_artefacts/Release/VST3/PluginLabLoader.vst3
+  BENCHMARK_VST3: build/benchmark_plugin/JadeBenchmark.vst3
+  BENCHMARK_AU: build/benchmark_plugin/JadeBenchmark.component
 
 jobs:
   check-version:
     name: Tag matches the version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Compare the tag with the version in CMakeLists.txt
-        if: startsWith(github.ref, 'refs/tags/')
+        id: version
         run: |
           version=$(sed -n 's/^project(pluginlab VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag ${GITHUB_REF_NAME}, CMakeLists version ${version}"
-          test "${GITHUB_REF_NAME}" = "v${version}"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then test "${GITHUB_REF_NAME}" = "v${version}"; fi
 
   build-and-test:
     name: ${{ matrix.name }}
@@ -35,15 +41,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: Linux
+            os: ubuntu-24.04
+            archive: linux-x86_64
           - name: Windows
             os: windows-latest
+            archive: windows-x64
           - name: macOS
             os: macos-latest
+            archive: macos
 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: JUCE dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev libcurl4-openssl-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev \
+            libglu1-mesa-dev mesa-common-dev xvfb openbox
 
       - name: Configure
         shell: bash
@@ -55,18 +74,68 @@ jobs:
 
       # pluginval first: the scripts download it (tools/run_pluginval.*), the validator tests of PluginLabTests then find it
       # and must not be skipped (PLUGINLAB_REQUIRE_PLUGINVAL)
-      - name: Validate the loader plugin with pluginval (macOS)
-        if: runner.os == 'macOS'
-        run: tools/run_pluginval.sh "$LOADER_VST3" 1
+      - name: Validate the plugins with pluginval (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: |
+          tools/run_pluginval.sh "$LOADER_VST3" 1
+          tools/run_pluginval.sh "$BENCHMARK_VST3" 1
 
-      - name: Validate the loader plugin with pluginval (Windows)
+      - name: Validate the plugins with pluginval (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: tools/run_pluginval.ps1 "$env:LOADER_VST3" 1
+        run: |
+          tools/run_pluginval.ps1 "$env:LOADER_VST3" 1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tools/run_pluginval.ps1 "$env:BENCHMARK_VST3" 1
 
-      # PluginLabTests (juce::UnitTest), the end-to-end report of the host and the smoke test of PluginLabHost
+      - name: Validate the AU with auval (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R "$BENCHMARK_AU" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -v aufx Jdbm IHAJ
+
+      # PluginLabTests (juce::UnitTest), the end-to-end tests of the host; on Linux in a virtual display
       - name: Test
         shell: bash
         env:
           PLUGINLAB_REQUIRE_PLUGINVAL: "1"
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a ctest --test-dir build -C Release --output-on-failure
+          else
+            ctest --test-dir build -C Release --output-on-failure
+          fi
+
+      - name: Package
+        shell: bash
+        run: tools/package.sh build "${{ needs.check-version.outputs.version }}" "${{ matrix.archive }}" dist
+
+      - name: Upload the archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: pluginlab-${{ needs.check-version.outputs.version }}-${{ matrix.archive }}
+          path: dist/*.zip
+
+  release:
+    name: Release (draft)
+    needs: [check-version, build-and-test]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Draft release with the archives
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          draft: true
+          body: |
+            Jade Benchmark (VST3; AU on macOS) and the stand-alone application PluginLabHost, version ${{ needs.check-version.outputs.version }}.
+            A draft: published by the author after the walkthroughs (docs/design/W10-plan.md, W10.8).

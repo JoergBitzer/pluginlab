@@ -1,6 +1,6 @@
 # W10: the final products (plan)
 
-Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done; W10.4 done; W10.5 done; W10.6 done; W10.7 done). Milestone of
+Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done; W10.4 done; W10.5 done; W10.6 done; W10.7 done; W10.8 in progress). Milestone of
 `planning.md` §8: "**Final products: the stand-alone application and the plugin** (two main targets since 2026-10-12): 4 slots, parallel rendering, real-time transfer function
 display, three-level GUI, measurement presets, in both. Done when: persona walkthroughs succeed in the stand-alone application and in the
 plugin (musician compares a demo with an owned plugin; developer checks an algorithm)." The questions for the author are in section 7.
@@ -274,3 +274,19 @@ Tests (`CrashProtectionTests`): the Test EQ's curve from the worker equals the e
 started once more and then stays off with the reason; an `--expert` and a `--match` job with that plugin fail with a message; the test program
 (the application, the DAW) runs on. The live view's test now runs through the worker too.
 Option (b) (listening in another process, audio through shared memory) stays for later, if real use shows crashes while listening.
+
+### W10.8 release preparation (0.70.0, in progress)
+Done here:
+- **pluginval** 2.0.0-beta3 (strictness 10) on Jade Benchmark on Linux: passes, no JUCE assertions (the open point of W10.2).
+- **CI** (`.github/workflows/ci.yml`): Linux (new; tests in Xvfb), Windows and macOS; pluginval for the loader and for Jade Benchmark on all
+  three; **AU** of Jade Benchmark on macOS (`FORMATS VST3 AU`) validated with `auval -v aufx Jdbm IHAJ`; the archives of both products as
+  artifacts; for a version tag a **draft** GitHub release with them (the author publishes it after the walkthroughs).
+- **macOS bundle**: PluginLabHost is an application bundle there; Jade Benchmark carries it whole in `Contents/Helpers/PluginLabHost.app`
+  (VST3 and AU), `getBundledHelper` finds it; the scanner sits next to the plugin binary in `Contents/MacOS` (not tested here: CI).
+- **Archives** (`tools/package.sh`): `JadeBenchmark-<version>-<platform>.zip` (the bundles) and `PluginLabHost-<version>-<platform>.zip` (the
+  application with its scanner), each with LICENSE, THIRD_PARTY.md and INSTALL.md (`docs/manual/01-installation.md`). Tested on Linux.
+- **Licences**: `THIRD_PARTY.md` (JUCE AGPLv3, the VST3 SDK MIT, the AU SDK Apache 2.0, FST GPLv3, pluginval as a separate program).
+- **Manual**, first chapters (`docs/manual/`): installation, first steps (the Easy walkthrough), the pages.
+Open: the first CI run (needs a tag from the author); the code-review pass of the code conventions (CLAUDE.md: no ternary operators, which
+the code of W10 and some older code use); splitting PluginLabTests further (about 580 s in Debug); the persona walkthroughs by the author on
+Linux and one more system; the author's sign-off.
