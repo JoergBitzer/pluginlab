@@ -1,6 +1,6 @@
 # W10: the final products (plan)
 
-Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done; W10.4 done; W10.5 done). Milestone of
+Status: **plan v2** (v1 2026-10-18 for review; v2 the same day with the author's answers in section 7; W10.1 done; W10.2 code done; W10.3 done; W10.4 done; W10.5 done; W10.6 done). Milestone of
 `planning.md` §8: "**Final products: the stand-alone application and the plugin** (two main targets since 2026-10-12): 4 slots, parallel rendering, real-time transfer function
 display, three-level GUI, measurement presets, in both. Done when: persona walkthroughs succeed in the stand-alone application and in the
 plugin (musician compares a demo with an owned plugin; developer checks an algorithm)." The questions for the author are in section 7.
@@ -241,3 +241,16 @@ Engine: `MeasurementOptions::units` (the units to run) and `progress`; the summa
 `--measure` writes `<report>.json` too.
 Test (`ExpertTests`): every unit on the gain plugin from the page gives the same text as `--measure` (all rows equal), in 27 s; the gain plugin
 against the dry slot nulls bit-identically ("identical"). The measurement presets (W10.6) will store the choices of this page.
+
+### W10.6 measurement presets (0.68.0, done)
+`MeasurementPresets` (`src/pages/MeasurementPresets.*`): a preset is the choice of the page Expert under a name with a note: the units, whether
+the dry slot is measured, the null-test master **by role** ("none", "dry", "first plugin": a preset must work in another session with other
+plugins in the slots). JSON (`"format": "pluginlab measurement preset"`, version 1) in the settings folder, `measurement_presets/`, shared by the
+application and the plugin (the same settings folder). An unknown unit key (a newer version) is left out when reading.
+Shipped teaching presets, written when missing (a changed one is never overwritten): "Is it LTI?" (only the system class), "Full AES17 set"
+(every unit, the linearity included), "Null test of two EQs" (response, phase, the second against the first), "Orfanidis against RBJ"
+(the Reference EQ twice, response, phase, null test; the note says how to set it up).
+The page Expert: a preset menu (choosing applies it; the note is shown), "Save as preset ..." (name and note).
+Test (`PresetTests`): the shipped presets are written; a preset survives its JSON; a preset saved on the page in the application loads on the
+page in the plugin (the processor's engine, the same plugins) and gives the same results, row by row.
+Plugin presets (the matched settings of the Easy page and the Matcher, `presets/<plugin>/`) stay files; loading them back is for later.

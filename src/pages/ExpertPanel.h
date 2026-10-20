@@ -8,6 +8,7 @@
 
 #include "HostSettings.h"
 #include "MatchJob.h"
+#include "MeasurementPresets.h"
 #include "pluginlab/engine/MeasurementEngine.h"
 #include "pluginlab/engine/PluginMeasurement.h"
 
@@ -35,6 +36,14 @@ public:
     void setSlotChosen(int slot, bool chosen);
     void setUnitChosen(const juce::String& key, bool chosen);
     void setNullMaster(int slot);        // -1: no null test
+
+    // measurement presets (W10.6): the choices of the page under a name; the slots by role (the plugins, the dry slot, the first plugin as master)
+    MeasurementPreset makePreset(const juce::String& name, const juce::String& note) const;
+    void applyPreset(const MeasurementPreset& preset);
+    bool selectPreset(const juce::String& name);   // from the folder; false if there is none of that name
+    juce::StringArray getChosenUnits() const;
+    int getNullMaster() const;                      // -1: none
+    std::vector<int> getChosenSlots() const;
     void startMeasurement();
     bool isMeasuring() const;
     const juce::File& getLastReport() const { return m_lastReport; }
@@ -62,11 +71,19 @@ private:
     void measurementFinished(bool success, const juce::String& message);
     void rebuildTable();
     void setStatus(const juce::String& text);
+    void refreshPresets(const juce::String& select = {});
+    void askToSavePreset();
 
     engine::MeasurementEngine& m_engine;
     HostSettings& m_settings;
 
     juce::Label m_title;
+    juce::Label m_presetLabel{{}, "Preset:"};
+    juce::ComboBox m_presetBox;
+    juce::TextButton m_savePresetButton{"Save as preset ..."};
+    juce::Label m_presetNote;
+    std::vector<MeasurementPreset> m_presets;
+    std::unique_ptr<juce::AlertWindow> m_saveDialog;
     juce::Label m_slotsLabel{{}, "Slots:"};
     std::vector<std::unique_ptr<juce::ToggleButton>> m_slotToggles;
     std::vector<bool> m_slotChosen;

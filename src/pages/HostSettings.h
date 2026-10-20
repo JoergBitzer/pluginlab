@@ -32,6 +32,10 @@ public:
     juce::File getMatcherFolder() const;
     juce::File getPresetFolder() const;
 
+    // The measurement presets (W10.6, JSON, shared by the application and the plugin) and the jobs and reports of the page Expert
+    juce::File getMeasurementPresetFolder() const;
+    juce::File getExpertFolder() const;
+
     // The name of the person who last confirmed a mapping on the Developer page (offered at the next confirmation)
     juce::String getMappingConfirmer() const;
     void setMappingConfirmer(const juce::String& name);

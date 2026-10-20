@@ -64,9 +64,21 @@ ExpertPanel::ExpertPanel(engine::MeasurementEngine& engine, HostSettings& settin
             onShowCompare();
         }
     };
+    m_presetBox.setTooltip("Measurement presets: the units, the slots by role and the null test, shared by the application and the plugin "
+                           "(the settings folder, measurement_presets)");
+    m_presetBox.onChange = [this] {
+        const int index = m_presetBox.getSelectedItemIndex();
+        if (index >= 0 && index < static_cast<int>(m_presets.size()))
+        {
+            applyPreset(m_presets[static_cast<size_t>(index)]);
+        }
+    };
+    m_savePresetButton.onClick = [this] { askToSavePreset(); };
+    m_presetNote.setColour(juce::Label::textColourId, juce::Colours::grey);
+    m_presetNote.setJustificationType(juce::Justification::topLeft);
     m_table.setModel(this);
     m_table.setRowHeight(kRowHeight - 4);
-    for (juce::Component* component : std::initializer_list<juce::Component*>{&m_title, &m_slotsLabel, &m_unitsLabel, &m_systemClassNote, &m_nullLabel,
+    for (juce::Component* component : std::initializer_list<juce::Component*>{&m_title, &m_presetLabel, &m_presetBox, &m_savePresetButton, &m_presetNote, &m_slotsLabel, &m_unitsLabel, &m_systemClassNote, &m_nullLabel,
                                                                                &m_nullBox, &m_measureButton, &m_reportButton, &m_matcherButton,
                                                                                &m_compareButton, &m_table, &m_status})
     {
@@ -74,6 +86,7 @@ ExpertPanel::ExpertPanel(engine::MeasurementEngine& engine, HostSettings& settin
     }
     slotsChanged();
     rebuildTable();
+    refreshPresets();
     startTimer(kTimerMs);
 }
 
@@ -143,6 +156,136 @@ void ExpertPanel::setNullMaster(int slot)
     m_nullBox.setSelectedId(slot >= 0 ? kNoNullItem + 1 + slot : kNoNullItem, juce::dontSendNotification);
 }
 
+juce::StringArray ExpertPanel::getChosenUnits() const
+{
+    juce::StringArray units;
+    for (const auto& toggle : m_unitToggles)
+    {
+        if (toggle->getToggleState())
+        {
+            units.add(toggle->getComponentID());
+        }
+    }
+    return units;
+}
+
+int ExpertPanel::getNullMaster() const
+{
+    return m_nullBox.getSelectedId() > kNoNullItem ? m_nullBox.getSelectedId() - kNoNullItem - 1 : -1;
+}
+
+std::vector<int> ExpertPanel::getChosenSlots() const
+{
+    std::vector<int> slots;
+    for (size_t slot = 0; slot < m_slotChosen.size(); ++slot)
+    {
+        if (m_slotChosen[slot])
+        {
+            slots.push_back(static_cast<int>(slot));
+        }
+    }
+    return slots;
+}
+
+MeasurementPreset ExpertPanel::makePreset(const juce::String& name, const juce::String& note) const
+{
+    MeasurementPreset preset;
+    preset.name = name;
+    preset.note = note;
+    preset.units = getChosenUnits();
+    preset.includeDry = ! m_slotChosen.empty() && m_slotChosen[0];
+    const int master = getNullMaster();
+    int firstPlugin = -1;
+    for (int slot = 0; slot < m_engine.getNumSlots() && firstPlugin < 0; ++slot)
+    {
+        if (m_engine.getPlugin(slot) != nullptr)
+        {
+            firstPlugin = slot;
+        }
+    }
+    // by role: a master that is a plugin is stored as "first plugin" (the slots of another session hold other plugins)
+    juce::ignoreUnused(firstPlugin);
+    preset.nullMaster = master < 0 ? "none" : master == 0 ? "dry" : "first plugin";
+    return preset;
+}
+
+void ExpertPanel::applyPreset(const MeasurementPreset& preset)
+{
+    for (const juce::String& key : engine::getMeasurementUnitKeys())
+    {
+        setUnitChosen(key, preset.units.contains(key));
+    }
+    int firstPlugin = -1;
+    for (int slot = 0; slot < m_engine.getNumSlots(); ++slot)
+    {
+        const bool plugin = m_engine.getPlugin(slot) != nullptr;
+        setSlotChosen(slot, plugin || (slot == 0 && preset.includeDry));
+        if (plugin && firstPlugin < 0)
+        {
+            firstPlugin = slot;
+        }
+    }
+    setNullMaster(preset.nullMaster == "dry" ? 0 : preset.nullMaster == "first plugin" ? firstPlugin : -1);
+    m_presetNote.setText(preset.note, juce::dontSendNotification);
+    setStatus("Preset \"" + preset.name + "\" chosen.");
+}
+
+bool ExpertPanel::selectPreset(const juce::String& name)
+{
+    refreshPresets();
+    for (size_t index = 0; index < m_presets.size(); ++index)
+    {
+        if (m_presets[index].name == name)
+        {
+            m_presetBox.setSelectedItemIndex(static_cast<int>(index), juce::dontSendNotification);
+            applyPreset(m_presets[index]);
+            return true;
+        }
+    }
+    return false;
+}
+
+void ExpertPanel::refreshPresets(const juce::String& select)
+{
+    m_presets = loadMeasurementPresets(m_settings);
+    m_presetBox.clear(juce::dontSendNotification);
+    for (size_t index = 0; index < m_presets.size(); ++index)
+    {
+        m_presetBox.addItem(m_presets[index].name + (m_presets[index].shipped ? "  (shipped)" : ""), static_cast<int>(index) + 1);
+        if (m_presets[index].name == select)
+        {
+            m_presetBox.setSelectedItemIndex(static_cast<int>(index), juce::dontSendNotification);
+        }
+    }
+    m_presetBox.setTextWhenNothingSelected("choose a preset ...");
+}
+
+void ExpertPanel::askToSavePreset()
+{
+    m_saveDialog = std::make_unique<juce::AlertWindow>("Save as preset", "The units, the slots by role and the null test of this page.",
+                                                       juce::MessageBoxIconType::NoIcon, this);
+    m_saveDialog->addTextEditor("name", "My measurement", "Name:");
+    m_saveDialog->addTextEditor("note", "", "Note:");
+    m_saveDialog->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
+    m_saveDialog->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+    const juce::Component::SafePointer<ExpertPanel> self(this);
+    m_saveDialog->enterModalState(true, juce::ModalCallbackFunction::create([self](int result) {
+        if (self == nullptr || self->m_saveDialog == nullptr)
+        {
+            return;
+        }
+        const juce::String name = self->m_saveDialog->getTextEditorContents("name").trim();
+        const juce::String note = self->m_saveDialog->getTextEditorContents("note").trim();
+        self->m_saveDialog->setVisible(false);
+        if (result == 1 && name.isNotEmpty())
+        {
+            const bool saved = saveMeasurementPreset(self->m_settings, self->makePreset(name, note));
+            self->refreshPresets(name);
+            self->setStatus(saved ? "Preset \"" + name + "\" saved." : "The preset could not be saved.");
+        }
+    }), false);
+}
+
 void ExpertPanel::startMeasurement()
 {
     if (m_job != nullptr)
@@ -201,7 +344,7 @@ void ExpertPanel::startMeasurement()
     root->setProperty("linearity", linearity);
     root->setProperty("sampleRate", m_engine.getSampleRate());
     root->setProperty("nullMaster", nullMaster);
-    const juce::File folder = m_settings.getMatcherFolder().getSiblingFile("expert");
+    const juce::File folder = m_settings.getExpertFolder();
     folder.createDirectory();
     const juce::String stamp = juce::Time::getCurrentTime().formatted("%Y-%m-%d_%H-%M-%S");
     const juce::File job = folder.getChildFile("expert_" + stamp + ".json");
@@ -412,6 +555,14 @@ void ExpertPanel::resized()
 {
     juce::Rectangle<int> area = getLocalBounds().reduced(kMargin * 2);
     m_title.setBounds(area.removeFromTop(kRowHeight));
+    area.removeFromTop(kMargin);
+    juce::Rectangle<int> presetRow = area.removeFromTop(kRowHeight);
+    m_presetLabel.setBounds(presetRow.removeFromLeft(kLabelWidth));
+    m_presetBox.setBounds(presetRow.removeFromLeft(kToggleWidth + 60));
+    presetRow.removeFromLeft(kMargin);
+    m_savePresetButton.setBounds(presetRow.removeFromLeft(kButtonWidth - 20));
+    presetRow.removeFromLeft(kMargin);
+    m_presetNote.setBounds(presetRow);
     area.removeFromTop(kMargin);
 
     // the slots and the units as rows of toggles that wrap

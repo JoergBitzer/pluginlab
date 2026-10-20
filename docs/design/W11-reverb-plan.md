@@ -161,4 +161,30 @@ Sources found 2026-10-18:
 
 ## Comments
 * often mix is a  parameter, so we should measure the direct to reverb ratio (DRR) and the direct path delay (DPD) as well, and report them.
-* 
+
+## more comments
+
+Several years ago I programmed a toolbox in matlab to measure mono and stereo reverb algorithms. I Also had a new display to show the room dispersion over time. 
+You can find the paper here: [stereo paper](../../../../Research/Paper/OldFiles/AES_121_Stereo/AES121_BitzerExtra.pdf)
+
+[mono paper](../../../../Research/Paper/OldFiles/AES121_Mono/paper121.pdf)
+You can find the code here:
+
+/home/bitzer/Research/Paper/OldFiles/AES_121_Stereo/matlab/Tools/
+
+and
+
+/home/bitzer/SoftDev/MatlabTools/AudioInspector/RIRTools/
+
+
+Especially Room Level Early was a good candidate for quality evaluation.
+Check the code for mistakes and errors, its quit old.
+
+You are allowed to look in these two sub-directories for other material that could help, e.g. figures to be used in a manual for Jade Benchmark
+
+And something for the one-third band split: /home/bitzer/SoftDev/MatlabTools/matlabOldThings/MatlabTools/Filterbank/
+
+
+
+## possible test candidates
+

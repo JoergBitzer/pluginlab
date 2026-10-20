@@ -79,6 +79,16 @@ juce::File HostSettings::getPresetFolder() const
     return getFolder().getChildFile("presets");
 }
 
+juce::File HostSettings::getMeasurementPresetFolder() const
+{
+    return getFolder().getChildFile("measurement_presets");
+}
+
+juce::File HostSettings::getExpertFolder() const
+{
+    return getFolder().getChildFile("expert");
+}
+
 juce::String HostSettings::getMappingConfirmer() const
 {
     return read(kMappingConfirmerKey);

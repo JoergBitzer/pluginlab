@@ -10,6 +10,7 @@ add_library(pluginlab_pages STATIC
     HostSettings.cpp
     LiveResponseView.cpp
     MatchJob.cpp
+    MeasurementPresets.cpp
     MatcherPanel.cpp
     PageServices.cpp)
 

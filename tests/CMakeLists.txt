@@ -32,6 +32,7 @@ target_sources(PluginLabTests
         MeasureSpectrogramTests.cpp
         MeasureSystemClassTests.cpp
         PluginMeasurementTests.cpp
+        PresetTests.cpp
         NonlinearReferenceTests.cpp
         OracleTests.cpp
         ParameterSurveyTests.cpp
