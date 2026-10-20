@@ -172,3 +172,25 @@ Sources found 2026-10-18:
 ## Comments of the author (v1)
 Perhaps it is easier to use a simple delta impulse as a first test signal. Since we are in the digital domain, this should work in any case.
 (v2: done, 4.1.)
+
+## possible Plugins
+
+https://www.kvraudio.com/product/sirial-by-tilr/downloads
+(seems to be open source)
+
+https://www.patreon.com/unplugred/posts/magic-carpet-123519153
+
+https://socalabs.com/effects/delay/
+
+https://github.com/Chowdhury-DSP/ChowMatrix/releases/tag/v1.3.0
+(open source)
+
+https://www.kvraudio.com/product/dub-delay-lite-by-juqa-solutions/downloads
+(open source?)
+
+https://www.kvraudio.com/product/spaceship-delay-by-musical-entropy/downloads
+
+https://www.kvraudio.com/product/parrot-by-darkpalace-studio/downloads
+
+/home/bitzer/AudioDev/FreeButcommercialPLugins/
+you will find a bbd plugin

@@ -203,3 +203,41 @@ Sources found 2026-10-18:
 * especially for limiter a linear attack is sometimes used.
 * I would like to see and compare gain curves of different compressors. This is a very important feature for musicians and engineers. This should be possible for musical input.
 * It is important that we know, if the current plugin is multiband or an dynamic EQ. Can we test that?
+
+
+## possible plugins:
+
+https://loudmax.blogspot.com/
+
+https://github.com/mzuther/Squeezer
+(open Software and claims feedforward and feedback and Opto)
+
+https://www.kvraudio.com/product/fircomp-1-by-jon-v-audio/downloads
+
+https://github.com/ZL-Audio/ZLCompressor/releases/tag/0.6.1
+
+https://www.auburnsounds.com/products/Lens.html
+(Muliband)
+
+https://www.kvraudio.com/product/tl-easycomp-by-tonelib/downloads
+
+https://socalabs.com/effects/compressor/
+
+https://www.kvraudio.com/product/zerolimit-by-jun-murakami/downloads
+(open source?)
+
+https://www.kvraudio.com/product/ctag-dynamic-range-compressor-by-billy-messenger/downloads
+
+https://socalabs.com/effects/expander/
+Expander
+
+https://www.kvraudio.com/product/zerocomp-by-jun-murakami/downloads
+
+https://www.kvraudio.com/product/aurora-by-13x-audio/downloads
+Dynamic-EQ for the class testing
+
+https://www.audiodamage.com/pages/roughrider3
+
+/home/bitzer/AudioDev/FreeButcommercialPLugins/
+you will find a compressor
+
