@@ -19,6 +19,16 @@ const juce::Colour kText(0xffe0e0e0);
 const juce::Colour kGrid(0xff4a4a4a);
 const juce::Colour kColours[] = {juce::Colour(0xff4fa3e0), juce::Colour(0xffffa040), juce::Colour(0xff7ccf6b), juce::Colour(0xffd96bd1),
                                  juce::Colour(0xffe8d44d)};
+
+// Frequency axis label: whole hertz, or whole kilohertz with a "k" from 1 kHz on.
+juce::String formatFrequencyLabel(double frequency)
+{
+    if (frequency >= 1000.0)
+    {
+        return juce::String(juce::roundToInt(frequency / 1000.0)) + "k";
+    }
+    return juce::String(juce::roundToInt(frequency));
+}
 }
 
 juce::Colour getPlotColour(int index)
@@ -34,8 +44,19 @@ juce::Image renderResponsePlot(const std::vector<double>& frequencies, const std
     g.fillAll(kBackground);
     g.setFont(juce::FontOptions(kFontHeight));
     const juce::Rectangle<int> all(kLeft, kTop, options.width - kLeft - kRight, options.height - kTop - kBottom);
-    const int differenceHeight = differences.empty() ? 0 : juce::roundToInt(static_cast<float>(all.getHeight()) * kDifferenceShare);
-    const juce::Rectangle<int> upper = all.withTrimmedBottom(differences.empty() ? 0 : differenceHeight + kGap);
+    int differenceHeight = 0;
+    int upperTrim = 0;
+    if (differences.empty())
+    {
+        differenceHeight = 0;
+        upperTrim = 0;
+    }
+    else
+    {
+        differenceHeight = juce::roundToInt(static_cast<float>(all.getHeight()) * kDifferenceShare);
+        upperTrim = differenceHeight + kGap;
+    }
+    const juce::Rectangle<int> upper = all.withTrimmedBottom(upperTrim);
     const juce::Rectangle<int> lower = all.withTrimmedTop(all.getHeight() - differenceHeight);
     g.setColour(kText);
     if (options.title.isNotEmpty())
@@ -54,13 +75,22 @@ juce::Image renderResponsePlot(const std::vector<double>& frequencies, const std
     const auto drawBox = [&](const juce::Rectangle<int>& box, double range, std::initializer_list<double> levels) {
         g.setColour(kGrid);
         g.drawRect(box);
+        int decimals = 0;
+        if (range < 5.0)
+        {
+            decimals = 1;
+        }
+        else
+        {
+            decimals = 0;
+        }
         for (const double level : levels)
         {
             const float y = static_cast<float>(box.getCentreY()) - static_cast<float>(level / range) * static_cast<float>(box.getHeight()) / 2.0f;
             g.setColour(kGrid);
             g.drawHorizontalLine(juce::roundToInt(y), static_cast<float>(box.getX()), static_cast<float>(box.getRight()));
             g.setColour(kText);
-            g.drawText(juce::String(level, range < 5.0 ? 1 : 0), 0, juce::roundToInt(y - kFontHeight / 2.0f), kLeft - 6, juce::roundToInt(kFontHeight),
+            g.drawText(juce::String(level, decimals), 0, juce::roundToInt(y - kFontHeight / 2.0f), kLeft - 6, juce::roundToInt(kFontHeight),
                        juce::Justification::centredRight, false);
         }
     };
@@ -70,7 +100,15 @@ juce::Image renderResponsePlot(const std::vector<double>& frequencies, const std
         drawBox(lower, options.differenceRangeDb, {-options.differenceRangeDb, 0.0, options.differenceRangeDb});
     }
     // frequency grid: 1-2-5 per decade
-    const int bottom = differences.empty() ? upper.getBottom() : lower.getBottom();
+    int bottom = 0;
+    if (differences.empty())
+    {
+        bottom = upper.getBottom();
+    }
+    else
+    {
+        bottom = lower.getBottom();
+    }
     for (double decade = 10.0; decade <= highest; decade *= 10.0)
     {
         for (const double multiple : {1.0, 2.0, 5.0})
@@ -84,7 +122,7 @@ juce::Image renderResponsePlot(const std::vector<double>& frequencies, const std
             g.setColour(kGrid);
             g.drawVerticalLine(juce::roundToInt(x), static_cast<float>(upper.getY()), static_cast<float>(bottom));
             g.setColour(kText);
-            const juce::String label = frequency >= 1000.0 ? juce::String(juce::roundToInt(frequency / 1000.0)) + "k" : juce::String(juce::roundToInt(frequency));
+            const juce::String label = formatFrequencyLabel(frequency);
             g.drawText(label, juce::roundToInt(x) - 24, bottom + 4, 48, juce::roundToInt(kFontHeight), juce::Justification::centred, false);
         }
     }
@@ -101,7 +139,14 @@ juce::Image renderResponsePlot(const std::vector<double>& frequencies, const std
             const float x = toX(frequencies[index]);
             const float y = static_cast<float>(box.getCentreY())
                             - static_cast<float>(juce::jlimit(-range, range, curve.valuesDb[index]) / range) * static_cast<float>(box.getHeight()) / 2.0f;
-            index == 0 ? path.startNewSubPath(x, y) : path.lineTo(x, y);
+            if (index == 0)
+            {
+                path.startNewSubPath(x, y);
+            }
+            else
+            {
+                path.lineTo(x, y);
+            }
         }
         g.setColour(curve.colour);
         g.strokePath(path, juce::PathStrokeType(curve.thickness));

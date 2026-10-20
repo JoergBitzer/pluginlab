@@ -134,7 +134,10 @@ juce::String tidyNumberText(const juce::String& text)
     int point = -1;
     while (end < trimmed.length() && (juce::CharacterFunctions::isDigit(trimmed[end]) || (trimmed[end] == '.' && point < 0)))
     {
-        point = trimmed[end] == '.' ? end : point;
+        if (trimmed[end] == '.')
+        {
+            point = end;
+        }
         ++end;
     }
     if (point < 0 || end - point - 1 <= 2)
@@ -142,7 +145,15 @@ juce::String tidyNumberText(const juce::String& text)
         return trimmed;
     }
     const double value = trimmed.substring(start, end).getDoubleValue();
-    juce::String number = std::abs(value) >= 100.0 ? juce::String(juce::roundToInt(value)) : juce::String(value, 2);
+    juce::String number;
+    if (std::abs(value) >= 100.0)
+    {
+        number = juce::String(juce::roundToInt(value));
+    }
+    else
+    {
+        number = juce::String(value, 2);
+    }
     if (number.containsChar('.'))
     {
         number = number.trimCharactersAtEnd("0").trimCharactersAtEnd(".");
@@ -152,7 +163,11 @@ juce::String tidyNumberText(const juce::String& text)
 
 juce::String formatFrequency(double hertz)
 {
-    return std::abs(hertz) < 100.0 ? juce::String(hertz, 1) : juce::String(juce::roundToInt(hertz));
+    if (std::abs(hertz) < 100.0)
+    {
+        return juce::String(hertz, 1);
+    }
+    return juce::String(juce::roundToInt(hertz));
 }
 
 juce::String wrapText(const juce::String& text, int width)

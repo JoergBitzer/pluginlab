@@ -22,9 +22,19 @@ double toDb(std::complex<double> value)
     return 20.0 * std::log10(std::max(std::abs(value), kFloor));
 }
 
+// "+" before a positive number or zero; a negative number brings its own sign
+const char* getSignPrefix(double value)
+{
+    if (value >= 0.0)
+    {
+        return "+";
+    }
+    return "";
+}
+
 juce::String formatGain(double gainDb)
 {
-    return (gainDb >= 0.0 ? "+" : "") + juce::String(gainDb, 1) + " dB";
+    return getSignPrefix(gainDb) + juce::String(gainDb, 1) + " dB";
 }
 
 juce::String formatDistance(double octaves)
@@ -37,12 +47,50 @@ juce::String formatDistance(double octaves)
     {
         return "1/3 octave";
     }
-    return juce::String(octaves, 0) + (std::abs(octaves - 1.0) < 1.0e-9 ? " octave" : " octaves");
+    const char* unitName;
+    if (std::abs(octaves - 1.0) < 1.0e-9)
+    {
+        unitName = " octave";
+    }
+    else
+    {
+        unitName = " octaves";
+    }
+    return juce::String(octaves, 0) + unitName;
 }
 
 bool canSetBand(const Mapping& mapping, int band)
 {
     return mapping.find(band, MappedQuantity::Frequency) != nullptr && mapping.find(band, MappedQuantity::Gain) != nullptr;
+}
+
+// The frequency of the largest deviation, only for a pair that interacts
+juce::String formatInteractionFrequency(const InteractionCase& item)
+{
+    if (item.interacts)
+    {
+        return formatFrequency(item.atHz) + " Hz";
+    }
+    return juce::String("-");
+}
+
+juce::String formatVerdict(const InteractionCase& item)
+{
+    if (item.interacts)
+    {
+        return juce::String("**interacts**");
+    }
+    return juce::String("adds");
+}
+
+// The note of a pair in brackets, nothing without a note
+juce::String formatNote(const juce::String& note)
+{
+    if (note.isNotEmpty())
+    {
+        return " (" + note + ")";
+    }
+    return juce::String();
 }
 }
 
@@ -64,8 +112,14 @@ InteractionResult measureInteractions(const SurveySubject& subject, const Mappin
     }
     if (bands.size() < 2)
     {
-        result.conclusion = bands.empty() ? "no band with a frequency and a gain in the mapping: nothing to combine"
-                                          : "one band with a frequency and a gain: nothing to combine";
+        if (bands.empty())
+        {
+            result.conclusion = "no band with a frequency and a gain in the mapping: nothing to combine";
+        }
+        else
+        {
+            result.conclusion = "one band with a frequency and a gain: nothing to combine";
+        }
         return result;
     }
     result.measured = true;
@@ -90,8 +144,15 @@ InteractionResult measureInteractions(const SurveySubject& subject, const Mappin
         sweep.frequencies = grid;
         const measure::FrequencyResponse response = measure::measureSweptResponse(subject.makeDevice(setting), sweep);
         ++result.renders;
-        std::vector<std::complex<double>> values = response.channels.empty() ? std::vector<std::complex<double>>(grid.size(), 1.0)
-                                                                               : response.channels[0].response;
+        std::vector<std::complex<double>> values;
+        if (response.channels.empty())
+        {
+            values = std::vector<std::complex<double>>(grid.size(), 1.0);
+        }
+        else
+        {
+            values = response.channels[0].response;
+        }
         return cache.emplace(setting, std::move(values)).first->second;
     };
     const auto makePeak = [&settings](double frequency, double gainDb) {
@@ -205,9 +266,9 @@ juce::String createInteractionReport(const InteractionResult& result)
     {
         const double octaves = std::log2(item.frequencyB / item.frequencyA);
         text << "| " << (item.bandA + 1) << " and " << (item.bandB + 1) << " | " << formatDistance(octaves) << " | " << formatGain(item.gainA) << " / "
-             << formatGain(item.gainB) << " | " << (item.largestDeviationDb >= 0.0 ? "+" : "") << juce::String(item.largestDeviationDb, 3) << " dB | "
-             << (item.interacts ? formatFrequency(item.atHz) + " Hz" : juce::String("-")) << " | " << (item.interacts ? juce::String("**interacts**") : juce::String("adds"))
-             << (item.note.isNotEmpty() ? " (" + item.note + ")" : juce::String()) << " |\n";
+             << formatGain(item.gainB) << " | " << getSignPrefix(item.largestDeviationDb) << juce::String(item.largestDeviationDb, 3) << " dB | "
+             << formatInteractionFrequency(item) << " | " << formatVerdict(item)
+             << formatNote(item.note) << " |\n";
     }
     return wrapMarkdownProse(text);
 }

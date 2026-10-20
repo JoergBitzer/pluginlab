@@ -83,8 +83,17 @@ void LiveResponseView::slotsChanged()
     {
         m_reference.addItem(juce::String(slot + 1) + ": " + m_engine.getSlotInfo(slot).name, slot + 1);
     }
-    const int fallback = m_engine.getNumSlots() > 1 ? 1 : 0;
-    m_reference.setSelectedItemIndex(previous >= 0 && previous < m_engine.getNumSlots() ? previous : fallback, juce::dontSendNotification);
+    int fallback = 0;
+    if (m_engine.getNumSlots() > 1)
+    {
+        fallback = 1;
+    }
+    int selected = fallback;
+    if (previous >= 0 && previous < m_engine.getNumSlots())
+    {
+        selected = previous;
+    }
+    m_reference.setSelectedItemIndex(selected, juce::dontSendNotification);
 
     if (! m_enabled.getToggleState())
     {
@@ -99,7 +108,14 @@ void LiveResponseView::slotsChanged()
     for (int slot = 0; slot < m_engine.getNumSlots(); ++slot)
     {
         hosting::HostedPlugin* plugin = m_engine.getPlugin(slot);
-        slots.push_back(plugin != nullptr ? std::optional<juce::PluginDescription>(plugin->getDescription()) : std::nullopt);
+        if (plugin != nullptr)
+        {
+            slots.push_back(std::optional<juce::PluginDescription>(plugin->getDescription()));
+        }
+        else
+        {
+            slots.push_back(std::nullopt);
+        }
     }
     m_monitor->setSlots(slots);
     m_generations.assign(slots.size(), -1);
@@ -198,8 +214,16 @@ void LiveResponseView::rebuildPlot()
             }
             ui::PlotCurve curve;
             curve.valuesDb = response.magnitudeDb;
-            curve.colour = slot == reference ? ui::getPlotColour(0) : ui::getPlotColour(colour++);
-            curve.thickness = slot == reference ? kReferenceThickness : kCurveThickness;
+            if (slot == reference)
+            {
+                curve.colour = ui::getPlotColour(0);
+                curve.thickness = kReferenceThickness;
+            }
+            else
+            {
+                curve.colour = ui::getPlotColour(colour++);
+                curve.thickness = kCurveThickness;
+            }
             curve.name = name;
             juce::StringArray notes;
             if (response.classified && ! response.lti)
@@ -234,18 +258,37 @@ void LiveResponseView::rebuildPlot()
                 notes.add("deviation from the reference: largest " + formatDb(deviation.largestDb) + ", rms " + formatDb(deviation.rmsDb));
             }
             curves.push_back(curve);
-            lines.add(notes.isEmpty() ? name : name + ": " + notes.joinIntoString("; "));
+            juce::String line;
+            if (notes.isEmpty())
+            {
+                line = name;
+            }
+            else
+            {
+                line = name + ": " + notes.joinIntoString("; ");
+            }
+            lines.add(line);
         }
     }
     ui::ResponsePlotOptions options;
     options.width = std::max(1, m_plotArea.getWidth());
     options.height = std::max(1, m_plotArea.getHeight());
     options.rangeDb = juce::jlimit(kSmallestRangeDb, kLargestRangeDb, std::ceil((largest + kHeadroomDb) / kRangeStepDb) * kRangeStepDb);
-    const double differenceStep = largestDifference > kFineDifferenceDb ? kRangeStepDb / 2.0 : 1.0; // 1 dB steps for small deviations, else 3
+    double differenceStep = 1.0; // 1 dB steps for small deviations, else 3
+    if (largestDifference > kFineDifferenceDb)
+    {
+        differenceStep = kRangeStepDb / 2.0;
+    }
     options.differenceRangeDb = std::max(kSmallestDifferenceDb, std::ceil((largestDifference + kHeadroomDb) / differenceStep) * differenceStep);
     options.differenceTitle = "slot - reference (dB)";
-    options.title = m_monitor != nullptr ? "EQ magnitude responses up to Nyquist (impulse, " + juce::String(juce::roundToInt(m_monitor->getSampleRate())) + " Hz, at most 5 updates/s per changed slot)"
-                                         : "Live response switched off";
+    if (m_monitor != nullptr)
+    {
+        options.title = "EQ magnitude responses up to Nyquist (impulse, " + juce::String(juce::roundToInt(m_monitor->getSampleRate())) + " Hz, at most 5 updates/s per changed slot)";
+    }
+    else
+    {
+        options.title = "Live response switched off";
+    }
     if (frequencies.empty())
     {
         frequencies = {20.0, 20000.0};

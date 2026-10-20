@@ -24,7 +24,11 @@ const double kWantedTonesHz[] = {100.0, 315.0, 1000.0, 3150.0, 10000.0};
 
 double powerToDb(double power)
 {
-    return power > 0.0 ? 10.0 * std::log10(power) : kNothingDb;
+    if (power > 0.0)
+    {
+        return 10.0 * std::log10(power);
+    }
+    return kNothingDb;
 }
 
 // 4-term Blackman-Harris: side lobes below -92 dB, main lobe +-4 bins
@@ -91,7 +95,14 @@ ToneResidual measureToneResidual(const std::vector<float>& signal, double sample
             {
                 if (std::abs(frequency - harmonic * tone) <= guardHz)
                 {
-                    (harmonic == 1 ? nearFundamental : nearHarmonic) = true;
+                    if (harmonic == 1)
+                    {
+                        nearFundamental = true;
+                    }
+                    else
+                    {
+                        nearHarmonic = true;
+                    }
                 }
             }
         }
@@ -106,7 +117,14 @@ ToneResidual measureToneResidual(const std::vector<float>& signal, double sample
     }
     result.tonesDbfs = powerToDb(tones);
     result.residualDbfs = powerToDb(residual);
-    result.relativeDb = tones > 0.0 && residual > 0.0 ? powerToDb(residual / tones) : kNothingDb;
+    if (tones > 0.0 && residual > 0.0)
+    {
+        result.relativeDb = powerToDb(residual / tones);
+    }
+    else
+    {
+        result.relativeDb = kNothingDb;
+    }
     return result;
 }
 
@@ -175,7 +193,11 @@ std::vector<float> renderTones(const Bench& bench, const std::vector<float>& set
     std::vector<float> output;
     output.reserve(static_cast<size_t>(kAnalysisLength));
     const int blocks = kAnalysisLength / kReferenceBlock;
-    const float from = rampIndex >= 0 ? setting[static_cast<size_t>(rampIndex)] : 0.0f;
+    float from = 0.0f;
+    if (rampIndex >= 0)
+    {
+        from = setting[static_cast<size_t>(rampIndex)];
+    }
     for (int block = 0; block < blocks; ++block)
     {
         if (rampIndex >= 0)
@@ -205,9 +227,17 @@ double getChangeDb(const std::vector<float>& a, const std::vector<float>& b)
     }
     if (reference <= 0.0)
     {
-        return difference > 0.0 ? 0.0 : kNothingDb;
+        if (difference > 0.0)
+        {
+            return 0.0;
+        }
+        return kNothingDb;
     }
-    return difference > 0.0 ? powerToDb(difference / reference) : kNothingDb;
+    if (difference > 0.0)
+    {
+        return powerToDb(difference / reference);
+    }
+    return kNothingDb;
 }
 }
 
@@ -258,7 +288,10 @@ ZipperFingerprint measureZipperNoise(const Bench& bench, const std::vector<float
         {
             entry.judged = true;
             entry.zipper = entry.excessDb > settings.zipperExcessDb && entry.rampDb > settings.zipperAboveDb;
-            result.zipperCount += entry.zipper ? 1 : 0;
+            if (entry.zipper)
+            {
+                result.zipperCount += 1;
+            }
         }
         result.parameters.push_back(entry);
     }

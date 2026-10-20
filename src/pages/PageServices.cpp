@@ -20,7 +20,11 @@ bool& getInsideDawSetting()
 juce::File getHelperExecutable()
 {
     const juce::File& set = getHelperSetting();
-    return set != juce::File() ? set : juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+    if (set != juce::File())
+    {
+        return set;
+    }
+    return juce::File::getSpecialLocation(juce::File::currentExecutableFile);
 }
 
 void setHelperExecutable(const juce::File& executable)

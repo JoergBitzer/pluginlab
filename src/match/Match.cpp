@@ -26,7 +26,11 @@ double getSumOfSquares(const std::vector<double>& residual)
 
 double getRms(const std::vector<double>& residual)
 {
-    return residual.empty() ? 0.0 : std::sqrt(getSumOfSquares(residual) / static_cast<double>(residual.size()));
+    if (residual.empty())
+    {
+        return 0.0;
+    }
+    return std::sqrt(getSumOfSquares(residual) / static_cast<double>(residual.size()));
 }
 
 double getLargest(const std::vector<double>& residual)
@@ -81,6 +85,16 @@ bool solve(std::vector<std::vector<double>> a, std::vector<double> b, std::vecto
     }
     return true;
 }
+
+// the weight of a point; 1 (unweighted) beyond the given weights
+double getWeight(const std::vector<double>& weights, size_t index)
+{
+    if (index < weights.size())
+    {
+        return weights[index];
+    }
+    return 1.0;
+}
 }
 
 size_t ParameterSpace::size() const
@@ -122,7 +136,7 @@ std::vector<double> WeightedDifference::getResidual(const std::vector<double>& m
     std::vector<double> residual(std::min(master.size(), target.size()));
     for (size_t index = 0; index < residual.size(); ++index)
     {
-        const double weight = index < m_weights.size() ? m_weights[index] : 1.0;
+        const double weight = getWeight(m_weights, index);
         residual[index] = weight * (target[index] - master[index]);
     }
     return residual;
@@ -132,7 +146,7 @@ bool WeightedDifference::isWithinTolerance(const std::vector<double>& residual) 
 {
     for (size_t index = 0; index < residual.size(); ++index)
     {
-        const double weight = index < m_weights.size() ? m_weights[index] : 1.0;
+        const double weight = getWeight(m_weights, index);
         if (weight > 0.0 && std::abs(residual[index] / weight) > m_tolerance)
         {
             return false;

@@ -35,8 +35,11 @@ ReferenceNonlinearAudioProcessorEditor::ReferenceNonlinearAudioProcessorEditor (
 #if WITH_DAYNIGHT
     bool presetFolderWasCreated;
     m_userSettings = jade::createUserSettings(m_processorRef.m_presets.getUserPresetsFolder(presetFolderWasCreated));
-    const auto theme = m_userSettings->getBoolValue("dayTheme", false) ? jade::DayNightLookAndFeel::Theme::Day
-                                                                        : jade::DayNightLookAndFeel::Theme::Night;
+    auto theme = jade::DayNightLookAndFeel::Theme::Night;
+    if (m_userSettings->getBoolValue("dayTheme", false))
+    {
+        theme = jade::DayNightLookAndFeel::Theme::Day;
+    }
     m_lookAndFeel.setTheme(theme);
     m_themeButton.setCurrentTheme(theme);
     m_themeButton.onClick = [this]() { toggleTheme(); };
@@ -70,7 +73,11 @@ void ReferenceNonlinearAudioProcessorEditor::parameterGestureChanged(int, bool g
 void ReferenceNonlinearAudioProcessorEditor::toggleTheme()
 {
     const bool day = m_lookAndFeel.getTheme() != jade::DayNightLookAndFeel::Theme::Day;
-    const auto theme = day ? jade::DayNightLookAndFeel::Theme::Day : jade::DayNightLookAndFeel::Theme::Night;
+    auto theme = jade::DayNightLookAndFeel::Theme::Night;
+    if (day)
+    {
+        theme = jade::DayNightLookAndFeel::Theme::Day;
+    }
     m_lookAndFeel.setTheme(theme);
     m_themeButton.setCurrentTheme(theme);
     m_userSettings->setValue("dayTheme", day);

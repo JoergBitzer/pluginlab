@@ -27,6 +27,16 @@ bool isDiscrete(const SurveyParameter& parameter, const SurveySettings& settings
     return parameter.isBoolean || (parameter.numSteps >= 2 && parameter.numSteps <= settings.maximumSteps);
 }
 
+// "+" before a positive number or zero; a negative number brings its own sign
+const char* getSignPrefix(double value)
+{
+    if (value >= 0.0)
+    {
+        return "+";
+    }
+    return "";
+}
+
 // The band that describes a point: the largest gain, a pass filter counted as kPassBandWeight dB
 const eqmodel::Band* getDominantBand(const SurveyPoint& point)
 {
@@ -38,7 +48,15 @@ const eqmodel::Band* getDominantBand(const SurveyPoint& point)
     double bestSize = 0.0;
     for (const eqmodel::Band& band : point.fit->model.bands)
     {
-        const double size = hasGain(band.type) ? std::abs(band.gainDb) : kPassBandWeight;
+        double size;
+        if (hasGain(band.type))
+        {
+            size = std::abs(band.gainDb);
+        }
+        else
+        {
+            size = kPassBandWeight;
+        }
         if (size > bestSize)
         {
             bestSize = size;
@@ -53,7 +71,7 @@ juce::String describeBand(const eqmodel::Band& band)
     juce::String text = juce::String(reference::getFilterTypeName(band.type)) + " " + formatFrequency(band.frequencyHz) + " Hz";
     if (hasGain(band.type))
     {
-        text << " " << (band.gainDb >= 0.0 ? "+" : "") << juce::String(band.gainDb, 1) << " dB";
+        text << " " << getSignPrefix(band.gainDb) << juce::String(band.gainDb, 1) << " dB";
     }
     if (band.family == eqmodel::DesignFamily::Butterworth || band.family == eqmodel::DesignFamily::LinkwitzRiley)
     {
@@ -95,17 +113,37 @@ std::optional<double> getMeasuredValue(const SurveyPoint& point, MappedQuantity 
     switch (quantity)
     {
         case MappedQuantity::Frequency:
-            return band != nullptr ? std::optional<double>(band->frequencyHz) : std::nullopt;
+            if (band == nullptr)
+            {
+                return std::nullopt;
+            }
+            return std::optional<double>(band->frequencyHz);
         case MappedQuantity::Gain:
             if (band == nullptr)
             {
-                return point.fit && point.fit->goodDescription ? std::optional<double>(0.0) : std::nullopt; // the band vanished: gain 0
+                if (point.fit && point.fit->goodDescription)
+                {
+                    return std::optional<double>(0.0); // the band vanished: gain 0
+                }
+                return std::nullopt;
             }
-            return hasGain(band->type) ? std::optional<double>(band->gainDb) : std::nullopt;
+            if (hasGain(band->type))
+            {
+                return std::optional<double>(band->gainDb);
+            }
+            return std::nullopt;
         case MappedQuantity::Q:
-            return band != nullptr ? std::optional<double>(band->q) : std::nullopt;
+            if (band == nullptr)
+            {
+                return std::nullopt;
+            }
+            return std::optional<double>(band->q);
         case MappedQuantity::Order:
-            return band != nullptr ? std::optional<double>(band->order) : std::nullopt;
+            if (band == nullptr)
+            {
+                return std::nullopt;
+            }
+            return std::optional<double>(band->order);
         case MappedQuantity::OutputLevel:
         {
             if (point.direct.empty())
@@ -207,6 +245,123 @@ bool sameFamilyForSwitch(eqmodel::DesignFamily a, eqmodel::DesignFamily b)
 {
     return a == b;
 }
+
+// The number of texts read for the displayed law: every step of a discrete knob, else kDisplaySamples values
+int getDisplayCount(const SurveyParameter& parameter, bool discrete)
+{
+    if (! discrete)
+    {
+        return kDisplaySamples;
+    }
+    if (parameter.isBoolean)
+    {
+        return 2;
+    }
+    return parameter.numSteps;
+}
+
+// The law of a knob's points: a table for a discrete knob, else the law that fits best
+std::optional<KnobLaw> makeKnobLaw(const std::vector<LawPoint>& points, bool discrete)
+{
+    if (discrete)
+    {
+        return std::optional<KnobLaw>(makeTableLaw(points));
+    }
+    return fitKnobLaw(points);
+}
+
+// The law that sets a parameter: the measured one, else the one the knob shows
+const std::optional<KnobLaw>& getSettingLaw(const MappedParameter& parameter)
+{
+    if (parameter.measuredLaw)
+    {
+        return parameter.measuredLaw;
+    }
+    return parameter.displayedLaw;
+}
+
+juce::String formatConfirmation(const Mapping& mapping)
+{
+    if (mapping.confirmedBy.isEmpty())
+    {
+        return juce::String("**Proposal** (not confirmed)");
+    }
+    return "Confirmed by " + mapping.confirmedBy;
+}
+
+const char* getBandWord(int bands)
+{
+    if (bands == 1)
+    {
+        return " band";
+    }
+    return " bands";
+}
+
+// A law for the report, "-" without a law
+juce::String describeLaw(const std::optional<KnobLaw>& law, const juce::String& unit)
+{
+    if (law)
+    {
+        return law->describe(unit);
+    }
+    return juce::String("-");
+}
+
+juce::String getStepDescription(const SwitchStep& step)
+{
+    if (step.description.isNotEmpty())
+    {
+        return step.description;
+    }
+    return juce::String("?");
+}
+
+juce::String getStepTypeName(const SwitchStep& step)
+{
+    if (step.type)
+    {
+        return juce::String(reference::getFilterTypeName(*step.type));
+    }
+    return juce::String("-");
+}
+
+juce::String getStepFamilyName(const SwitchStep& step)
+{
+    if (step.family)
+    {
+        return juce::String(eqmodel::getFamilyName(*step.family));
+    }
+    return juce::String("-");
+}
+
+// The band number as the report counts (1 ...), "-" for a parameter of no band
+juce::String formatBandNumber(int band)
+{
+    if (band >= 0)
+    {
+        return juce::String(band + 1);
+    }
+    return juce::String("-");
+}
+
+juce::String getQuantityText(const MappedParameter& parameter)
+{
+    if (parameter.quantity == MappedQuantity::Other)
+    {
+        return parameter.role;
+    }
+    return juce::String(getMappedQuantityName(parameter.quantity));
+}
+
+juce::String formatNeeds(const juce::StringArray& needs)
+{
+    if (needs.isEmpty())
+    {
+        return juce::String("-");
+    }
+    return needs.joinIntoString(", ");
+}
 }
 
 const char* getMappedQuantityName(MappedQuantity quantity)
@@ -299,7 +454,7 @@ Mapping proposeMapping(const SurveySubject& subject, const SurveyResult& survey,
         {
             std::vector<LawPoint> points;
             bool allNumbers = true;
-            const int count = discrete ? (surveyParameter.isBoolean ? 2 : surveyParameter.numSteps) : kDisplaySamples;
+            const int count = getDisplayCount(surveyParameter, discrete);
             for (int index = 0; index < count; ++index)
             {
                 const double v = static_cast<double>(index) / static_cast<double>(count - 1);
@@ -313,7 +468,7 @@ Mapping proposeMapping(const SurveySubject& subject, const SurveyResult& survey,
             }
             if (allNumbers && ! points.empty())
             {
-                parameter.displayedLaw = discrete ? std::optional<KnobLaw>(makeTableLaw(points)) : fitKnobLaw(points);
+                parameter.displayedLaw = makeKnobLaw(points, discrete);
             }
         }
         // a switch: its steps, and what kind of switch it is
@@ -401,7 +556,7 @@ Mapping proposeMapping(const SurveySubject& subject, const SurveyResult& survey,
             {
                 points = usualPoints;
             }
-            parameter.measuredLaw = discrete ? std::optional<KnobLaw>(makeTableLaw(points)) : fitKnobLaw(points);
+            parameter.measuredLaw = makeKnobLaw(points, discrete);
         }
         mapping.parameters.push_back(parameter);
     }
@@ -500,7 +655,7 @@ std::vector<float> makeSettingForBand(const Mapping& mapping, const std::vector<
             }
             return;
         }
-        const std::optional<KnobLaw>& law = parameter->measuredLaw ? parameter->measuredLaw : parameter->displayedLaw;
+        const std::optional<KnobLaw>& law = getSettingLaw(*parameter);
         if (! law)
         {
             missing.add(parameter->name + ": no law");
@@ -773,15 +928,15 @@ juce::String createMappingReport(const Mapping& mapping)
 {
     juce::String text;
     text << "## Mapping: " << mapping.pluginName << " " << mapping.version << "\n\n";
-    text << (mapping.confirmedBy.isEmpty() ? juce::String("**Proposal** (not confirmed)") : "Confirmed by " + mapping.confirmedBy) << "; proposed "
-         << mapping.date << " by " << mapping.proposedBy << "; " << mapping.bands << (mapping.bands == 1 ? " band" : " bands")
+    text << formatConfirmation(mapping) << "; proposed "
+         << mapping.date << " by " << mapping.proposedBy << "; " << mapping.bands << getBandWord(mapping.bands)
          << ". Which parameter sets which quantity of which band, and how the knob position becomes the value.\n\n";
     text << "| # | Parameter | Band | Quantity | Law as shown | Law as measured | Needs |\n|---|---|---|---|---|---|---|\n";
     juce::String steps;
     for (const MappedParameter& parameter : mapping.parameters)
     {
         const juce::String unit = getMappedQuantityUnit(parameter.quantity);
-        juce::String measured = parameter.measuredLaw ? parameter.measuredLaw->describe(unit) : juce::String("-");
+        juce::String measured = describeLaw(parameter.measuredLaw, unit);
         const bool describedSteps = std::any_of(parameter.steps.begin(), parameter.steps.end(), [](const SwitchStep& step) { return step.description.isNotEmpty(); });
         if (describedSteps && (! parameter.measuredLaw || parameter.quantity == MappedQuantity::Type || parameter.quantity == MappedQuantity::Family
                                || parameter.quantity == MappedQuantity::BandOnOff))
@@ -789,9 +944,9 @@ juce::String createMappingReport(const Mapping& mapping)
             measured = juce::String(static_cast<int>(parameter.steps.size())) + " steps (below)";
             for (const SwitchStep& step : parameter.steps)
             {
-                steps << "| " << parameter.name << " | " << step.text << " | " << (step.description.isNotEmpty() ? step.description : juce::String("?")) << " | "
-                      << (step.type ? juce::String(reference::getFilterTypeName(*step.type)) : juce::String("-")) << " | "
-                      << (step.family ? juce::String(eqmodel::getFamilyName(*step.family)) : juce::String("-")) << " |\n";
+                steps << "| " << parameter.name << " | " << step.text << " | " << getStepDescription(step) << " | "
+                      << getStepTypeName(step) << " | "
+                      << getStepFamilyName(step) << " |\n";
             }
         }
         juce::StringArray needs;
@@ -799,10 +954,10 @@ juce::String createMappingReport(const Mapping& mapping)
         {
             needs.add(requirement.name + " = " + requirement.text);
         }
-        text << "| " << (parameter.index + 1) << " | " << parameter.name << " | " << (parameter.band >= 0 ? juce::String(parameter.band + 1) : juce::String("-"))
-             << " | " << (parameter.quantity == MappedQuantity::Other ? parameter.role : juce::String(getMappedQuantityName(parameter.quantity))) << " | "
-             << (parameter.displayedLaw ? parameter.displayedLaw->describe(unit) : juce::String("-")) << " | " << measured << " | "
-             << (needs.isEmpty() ? juce::String("-") : needs.joinIntoString(", ")) << " |\n";
+        text << "| " << (parameter.index + 1) << " | " << parameter.name << " | " << formatBandNumber(parameter.band)
+             << " | " << getQuantityText(parameter) << " | "
+             << describeLaw(parameter.displayedLaw, unit) << " | " << measured << " | "
+             << formatNeeds(needs) << " |\n";
     }
     if (steps.isNotEmpty())
     {
@@ -850,7 +1005,14 @@ juce::String getMappingFileName(const juce::String& pluginName)
     juce::String name;
     for (const juce::juce_wchar c : pluginName.toLowerCase())
     {
-        name << (juce::CharacterFunctions::isLetterOrDigit(c) ? juce::String::charToString(c) : juce::String("_"));
+        if (juce::CharacterFunctions::isLetterOrDigit(c))
+        {
+            name << juce::String::charToString(c);
+        }
+        else
+        {
+            name << juce::String("_");
+        }
     }
     while (name.contains("__"))
     {
@@ -875,7 +1037,14 @@ juce::StringArray compareMappings(const Mapping& proposal, const Mapping& confir
     auto compareLaw = [&](const juce::String& what, const std::optional<KnobLaw>& a, const std::optional<KnobLaw>& b) {
         if (a.has_value() != b.has_value())
         {
-            differences.add(what + ": " + (a ? "present" : "missing"));
+            if (a)
+            {
+                differences.add(what + ": present");
+            }
+            else
+            {
+                differences.add(what + ": missing");
+            }
             return;
         }
         if (! a)

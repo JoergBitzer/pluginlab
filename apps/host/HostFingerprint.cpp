@@ -97,7 +97,16 @@ juce::String writeSweepSpectrograms(juce::AudioPluginFormatManager& formatManage
             changes.add(entry.name + " = " + pluginlab::engine::tidyNumberText(entry.textB));
         }
     }
-    const juce::String stem = reportFile.getFileNameWithoutExtension() + "_sweep_spectrogram" + (index > 0 ? "_" + juce::String(index) : juce::String());
+    juce::String stemSuffix; // the first spectrogram without a number, the others with theirs
+    if (index > 0)
+    {
+        stemSuffix = "_" + juce::String(index);
+    }
+    else
+    {
+        stemSuffix = juce::String();
+    }
+    const juce::String stem = reportFile.getFileNameWithoutExtension() + "_sweep_spectrogram" + stemSuffix;
     pluginlab::measure::Spectrogram spectrogram;
     pluginlab::measure::SpectrogramSettings settings;
     const juce::String nameA = stem + ".png";
@@ -130,7 +139,16 @@ juce::String writeSweepSpectrograms(juce::AudioPluginFormatManager& formatManage
     }
     else
     {
-        text << "No picture at B: " << (changes.isEmpty() ? juce::String("no parameter changes the audio, so B is A") : juce::String("nothing came out")) << ".\n\n";
+        juce::String reason;
+        if (changes.isEmpty())
+        {
+            reason = juce::String("no parameter changes the audio, so B is A");
+        }
+        else
+        {
+            reason = juce::String("nothing came out");
+        }
+        text << "No picture at B: " << reason << ".\n\n";
     }
     text << "| Parameter | Value |\n|---|---|\n";
     text << "| signal | synchronized exponential sweep (Novak et al. 2015), " << juce::roundToInt(kSpectrogramStartHz) << " Hz ... "
@@ -239,7 +257,15 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
         {
             continue;
         }
-        const double share = settings.measurements ? kFingerprintShare : 1.0; // the measurement units take the rest
+        double share = 1.0; // the measurement units take the rest
+        if (settings.measurements)
+        {
+            share = kFingerprintShare;
+        }
+        else
+        {
+            share = 1.0;
+        }
         pluginlab::engine::PluginFingerprint fingerprint = pluginlab::engine::measureFingerprint(
             formatManager, description, settings, [&progress, share](double fraction, const juce::String& step) { progress(share * fraction, "fingerprint: " + step); });
         fingerprint.settingsWarning = warning;
@@ -314,8 +340,17 @@ bool writeMappingProposal(const juce::File& pluginFile, const juce::File& report
         {
             target = target.withFileExtension(".proposal.json");
             const juce::StringArray differences = pluginlab::engine::compareMappings(proposal, *existing);
+            juce::String comparison;
+            if (differences.isEmpty())
+            {
+                comparison = juce::String("It agrees with the confirmed one.");
+            }
+            else
+            {
+                comparison = "Differences:\n\n- " + differences.joinIntoString("\n- ");
+            }
             note = "A confirmed mapping exists (" + existing->confirmedBy + "); the proposal was written to `" + target.getFullPathName() + "`. "
-                   + (differences.isEmpty() ? juce::String("It agrees with the confirmed one.") : "Differences:\n\n- " + differences.joinIntoString("\n- "));
+                   + comparison;
         }
         written = proposal.write(target) && written;
         report += pluginlab::engine::signReport("# Parameter survey and mapping: " + description.name + " " + description.version + "\n\n"
@@ -355,7 +390,16 @@ bool writeCalibrationReport(const juce::File& pluginFile, const juce::File& repo
         double share = 0.0; // of the progress that the survey took
         if (mapping)
         {
-            note = "Mapping: `" + file.getFullPathName() + "` (" + (mapping->confirmedBy.isEmpty() ? juce::String("a proposal, not confirmed") : "confirmed by " + mapping->confirmedBy) + ").";
+            juce::String status;
+            if (mapping->confirmedBy.isEmpty())
+            {
+                status = juce::String("a proposal, not confirmed");
+            }
+            else
+            {
+                status = "confirmed by " + mapping->confirmedBy;
+            }
+            note = "Mapping: `" + file.getFullPathName() + "` (" + status + ").";
         }
         else
         {
@@ -586,7 +630,16 @@ bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
     {
         const pluginlab::engine::TargetMatchResult& item = result.targets[index];
         auto object = std::make_unique<juce::DynamicObject>();
-        object->setProperty("plugin", index < targets.size() ? targets[index].plugin.createIdentifierString() : juce::String());
+        juce::String pluginIdentifier;
+        if (index < targets.size())
+        {
+            pluginIdentifier = targets[index].plugin.createIdentifierString();
+        }
+        else
+        {
+            pluginIdentifier = juce::String();
+        }
+        object->setProperty("plugin", pluginIdentifier);
         object->setProperty("name", item.name);
         object->setProperty("refused", item.refused);
         object->setProperty("reason", item.reason);
@@ -609,7 +662,16 @@ bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
                 ++levelCount;
             }
         }
-        object->setProperty("levelDb", levelCount > 0 ? levelSum / levelCount : 0.0);
+        double levelDb = 0.0;
+        if (levelCount > 0)
+        {
+            levelDb = levelSum / levelCount;
+        }
+        else
+        {
+            levelDb = 0.0;
+        }
+        object->setProperty("levelDb", levelDb);
         juce::Array<juce::var> setting;
         for (const float value : item.setting)
         {
@@ -718,12 +780,24 @@ bool writeExpertReport(const juce::File& jobFile, const juce::File& reportFile)
         return [](const juce::AudioBuffer<float>& input, double) { return input; };
     };
     const auto channelsOf = [&formatManager, &options](const Measured& item) {
-        return item.plugin ? pluginlab::engine::getPluginChannels(formatManager, *item.plugin, options.sampleRate) : 2;
+        if (item.plugin)
+        {
+            return pluginlab::engine::getPluginChannels(formatManager, *item.plugin, options.sampleRate);
+        }
+        return 2;
     };
 
     ProgressWriter progress(reportFile);
     const int nullMaster = job.getProperty("nullMaster", -1);
-    const int nulls = nullMaster >= 0 && nullMaster < static_cast<int>(measured.size()) ? static_cast<int>(measured.size()) - 1 : 0;
+    int nulls = 0;
+    if (nullMaster >= 0 && nullMaster < static_cast<int>(measured.size()))
+    {
+        nulls = static_cast<int>(measured.size()) - 1;
+    }
+    else
+    {
+        nulls = 0;
+    }
     const double total = static_cast<double>(measured.size() + static_cast<size_t>(nulls));
     juce::String report = "# Expert measurements\n\n";
     report << "The measurement units of W7 (AES17 defaults, docs/measurements/) on the slots of the page Expert with their settings as they were when "
@@ -769,8 +843,17 @@ bool writeExpertReport(const juce::File& jobFile, const juce::File& reportFile)
                 continue;
             }
             const pluginlab::measure::ChannelNull& first = result.channels.front();
+            juce::String invertedText;
+            if (first.inverted)
+            {
+                invertedText = "yes";
+            }
+            else
+            {
+                invertedText = "no";
+            }
             report << "| " << item.name << " | " << juce::String(first.nullDepthDb, 1) << " dB | " << juce::String(first.unalignedNullDb, 1) << " dB | "
-                   << juce::String(first.delaySamples, 2) << " samples | " << juce::String(first.gainDb, 2) << " dB | " << (first.inverted ? "yes" : "no")
+                   << juce::String(first.delaySamples, 2) << " samples | " << juce::String(first.gainDb, 2) << " dB | " << invertedText
                    << " |\n";
             auto entry = std::make_unique<juce::DynamicObject>();
             entry->setProperty("name", item.name);
@@ -784,8 +867,16 @@ bool writeExpertReport(const juce::File& jobFile, const juce::File& reportFile)
     }
     auto root = std::make_unique<juce::DynamicObject>();
     root->setProperty("slots", results);
-    root->setProperty("nullMaster", nullMaster >= 0 ? juce::var(measured[static_cast<size_t>(std::min(nullMaster, static_cast<int>(measured.size()) - 1))].name)
-                                                    : juce::var());
+    juce::var nullMasterName;
+    if (nullMaster >= 0)
+    {
+        nullMasterName = juce::var(measured[static_cast<size_t>(std::min(nullMaster, static_cast<int>(measured.size()) - 1))].name);
+    }
+    else
+    {
+        nullMasterName = juce::var();
+    }
+    root->setProperty("nullMaster", nullMasterName);
     root->setProperty("nulls", nullResults);
     juce::File(reportFile.getFullPathName() + ".json").replaceWithText(juce::JSON::toString(juce::var(root.release())));
     pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);

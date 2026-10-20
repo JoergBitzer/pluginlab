@@ -54,6 +54,16 @@ constexpr int kArgumentsOfReport = 2;
 constexpr int kArgumentsOfPlay = 2;
 constexpr int kExitOk = 0;
 constexpr int kExitReportFailed = 1;
+
+// the exit code of a command line mode that writes a report: ok if the report was written
+int getReportExitCode(bool written)
+{
+    if (written)
+    {
+        return kExitOk;
+    }
+    return kExitReportFailed;
+}
 }
 
 class MainWindow : public juce::DocumentWindow
@@ -158,7 +168,7 @@ public:
                 identifier = arguments[identifierIndex].unquoted();
             }
             const bool written = pluginlab::host::writeMappingProposal(resolveFile(arguments[mapIndex + 1]), resolveFile(arguments[mapIndex + 2]), identifier);
-            setApplicationReturnValue(written ? kExitOk : kExitReportFailed);
+            setApplicationReturnValue(getReportExitCode(written));
             quit();
             return;
         }
@@ -167,7 +177,7 @@ public:
         if (expertIndex >= 0 && expertIndex + kArgumentsOfReport < arguments.size())
         {
             const bool written = pluginlab::host::writeExpertReport(resolveFile(arguments[expertIndex + 1]), resolveFile(arguments[expertIndex + 2]));
-            setApplicationReturnValue(written ? kExitOk : kExitReportFailed);
+            setApplicationReturnValue(getReportExitCode(written));
             quit();
             return;
         }
@@ -176,7 +186,7 @@ public:
         if (matchIndex >= 0 && matchIndex + kArgumentsOfReport < arguments.size())
         {
             const bool written = pluginlab::host::writeMatchReport(resolveFile(arguments[matchIndex + 1]), resolveFile(arguments[matchIndex + 2]));
-            setApplicationReturnValue(written ? kExitOk : kExitReportFailed);
+            setApplicationReturnValue(getReportExitCode(written));
             quit();
             return;
         }
@@ -192,7 +202,7 @@ public:
             }
             const bool written =
                 pluginlab::host::writeCalibrationReport(resolveFile(arguments[calibrateIndex + 1]), resolveFile(arguments[calibrateIndex + 2]), identifier);
-            setApplicationReturnValue(written ? kExitOk : kExitReportFailed);
+            setApplicationReturnValue(getReportExitCode(written));
             quit();
             return;
         }

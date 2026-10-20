@@ -506,19 +506,78 @@ namespace pluginlab::engine
 {
 namespace
 {
+// the class name in front of the first guess, empty for LTI
+juce::String getSystemClassPrefix(measure::SystemClass systemClass)
+{
+    if (systemClass == measure::SystemClass::Lti)
+    {
+        return juce::String();
+    }
+    return measure::getSystemClassName(systemClass) + ": ";
+}
+
+// the class name in brackets behind the group, empty where the group says it all (LTI, time-variant)
+juce::String getSystemClassNameNote(measure::SystemClass systemClass)
+{
+    if (systemClass == measure::SystemClass::Lti || systemClass == measure::SystemClass::TimeVariant)
+    {
+        return juce::String();
+    }
+    return " (" + measure::getSystemClassName(systemClass) + ")";
+}
+
 // the class in words: the kind (a first guess) at A, and B if it differs
 juce::String describeSystemClass(const SystemClassFingerprint& systemClass)
 {
     const measure::SystemClass a = systemClass.atA.systemClass;
-    juce::String text = (a == measure::SystemClass::Lti ? juce::String() : measure::getSystemClassName(a) + ": ") + "first guess " + measure::getSystemClassGuess(a);
+    juce::String text = getSystemClassPrefix(a) + "first guess " + measure::getSystemClassGuess(a);
     if (systemClass.measuredB)
     {
         const measure::SystemClass b = systemClass.atB.systemClass;
-        text += b == a ? juce::String("; the same at the setting B")
-                       : "; at the setting B: " + measure::getSystemClassGroup(b) + (b == measure::SystemClass::Lti || b == measure::SystemClass::TimeVariant ? juce::String() : " (" + measure::getSystemClassName(b) + ")")
-                             + ", first guess " + measure::getSystemClassGuess(b);
+        if (b == a)
+        {
+            text += juce::String("; the same at the setting B");
+        }
+        else
+        {
+            text += "; at the setting B: " + measure::getSystemClassGroup(b) + getSystemClassNameNote(b) + ", first guess " + measure::getSystemClassGuess(b);
+        }
     }
     return text;
+}
+
+// the zipper noise summary: "not judged" if no parameter was judged, "none", or how many of the judged ones zipper
+juce::String describeZipperCount(int judged, int zipperCount)
+{
+    if (judged == 0)
+    {
+        return "not judged";
+    }
+    if (zipperCount == 0)
+    {
+        return "none";
+    }
+    return juce::String(zipperCount) + " of " + juce::String(judged);
+}
+
+// the largest harmonic for the system class table: "none" for the floor, else its level re the fundamental
+juce::String describeLargestHarmonic(double largestHarmonicDb)
+{
+    if (largestHarmonicDb < -999.0)
+    {
+        return "none";
+    }
+    return juce::String(largestHarmonicDb, 1) + " dB re H_1";
+}
+
+// the zipper noise column of the report
+juce::String getZipperVerdict(bool zipper)
+{
+    if (zipper)
+    {
+        return "**yes**";
+    }
+    return "no";
 }
 
 }
@@ -1075,7 +1134,11 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     if (fingerprint.systemClass.measured)
     {
         const measure::SystemClass a = fingerprint.systemClass.atA.systemClass;
-        const measure::SystemClass b = fingerprint.systemClass.measuredB ? fingerprint.systemClass.atB.systemClass : a;
+        measure::SystemClass b = a;
+        if (fingerprint.systemClass.measuredB)
+        {
+            b = fingerprint.systemClass.atB.systemClass;
+        }
         if (a != measure::SystemClass::Lti || b != measure::SystemClass::Lti)
         {
             fingerprint.findings.push_back("System class: " + describeSystemClass(fingerprint.systemClass) + " ("
@@ -1403,11 +1466,13 @@ std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
         int judged = 0;
         for (const ZipperParameterResult& entry : fingerprint.zipper.parameters)
         {
-            judged += entry.judged ? 1 : 0;
+            if (entry.judged)
+            {
+                judged += 1;
+            }
         }
         const bool none = fingerprint.zipper.zipperCount == 0;
-        add("zipper", "zipper noise while a parameter moves (one new value per block)", judged == 0 ? juce::String("not judged") : none ? juce::String("none")
-                                                                                                    : juce::String(fingerprint.zipper.zipperCount) + " of " + juce::String(judged),
+        add("zipper", "zipper noise while a parameter moves (one new value per block)", describeZipperCount(judged, fingerprint.zipper.zipperCount),
             juce::String(judged) + " continuous parameter(s) judged", none || timeVarying);
     }
     add("blockSizes", "block size independent (steady state)", yesNo(fingerprint.blockSizeIndependent), worstBlock, fingerprint.blockSizeIndependent);
@@ -1731,7 +1796,7 @@ juce::String createReport(const PluginFingerprint& fingerprint)
         const auto addRow = [&text](const juce::String& setting, const measure::SystemClassResult& result) {
             text << "| " << setting << " | " << measure::getSystemClassGroup(result.systemClass) << " | " << measure::getSystemClassName(result.systemClass) << " | "
                  << measure::getSystemClassGuess(result.systemClass) << " | " << result.reason << "; largest harmonic "
-                 << (result.evidence.largestHarmonicDb < -999.0 ? juce::String("none") : juce::String(result.evidence.largestHarmonicDb, 1) + " dB re H_1") << " |\n";
+                 << describeLargestHarmonic(result.evidence.largestHarmonicDb) << " |\n";
         };
         addRow("A (defaults)", fingerprint.systemClass.atA);
         if (fingerprint.systemClass.measuredB)
@@ -1764,7 +1829,13 @@ juce::String createReport(const PluginFingerprint& fingerprint)
         }
         else
         {
-            const auto level = [](double value) { return value <= kZipperNothingDb ? juce::String("none") : juce::String(value, 1) + " dB"; };
+            const auto level = [](double value) {
+                if (value <= kZipperNothingDb)
+                {
+                    return juce::String("none");
+                }
+                return juce::String(value, 1) + " dB";
+            };
             text << "| # | parameter | change low / high | residual while moving | residual standing still | excess | zipper noise |\n|---|---|---|---|---|---|---|\n";
             for (const ZipperParameterResult& entry : zipper.parameters)
             {
@@ -1776,7 +1847,7 @@ juce::String createReport(const PluginFingerprint& fingerprint)
                     continue;
                 }
                 text << juce::String(entry.excessDb, 1) << " dB | "
-                     << (entry.zipper ? juce::String("**yes**") : juce::String("no")) << " |\n";
+                     << getZipperVerdict(entry.zipper) << " |\n";
             }
         }
     }

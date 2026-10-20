@@ -34,6 +34,16 @@ const ref::FilterType kTypes[] = {ref::FilterType::LowPass,  ref::FilterType::Hi
 const EqAlgorithm kAlgorithms[] = {EqAlgorithm::Rbj, EqAlgorithm::Orfanidis, EqAlgorithm::Zoelzer, EqAlgorithm::StateVariable, EqAlgorithm::Butterworth,
                                    EqAlgorithm::LinkwitzRiley, EqAlgorithm::LinearPhase};
 
+// frequency axis label: whole hertz, or whole kilohertz with a "k" from 1 kHz on
+juce::String formatFrequencyLabel(double frequency)
+{
+    if (frequency >= 1000.0)
+    {
+        return juce::String(juce::roundToInt(frequency / 1000.0)) + "k";
+    }
+    return juce::String(juce::roundToInt(frequency));
+}
+
 }
 
 EqSetting makeEqSetting(int algorithmIndex, int typeIndex, double frequencyHz, double gainDb, double q, double order)
@@ -272,7 +282,16 @@ void ReferenceEqGUI::paint(juce::Graphics& g)
     for (const double decibels : {-24.0, -12.0, 0.0, 12.0, 24.0})
     {
         const float y = toY(decibels);
-        g.setColour(text.withAlpha(juce::exactlyEqual(decibels, 0.0) ? 0.5f : 0.25f));
+        float lineAlpha = 0.25f; // the 0 dB line stronger than the others
+        if (juce::exactlyEqual(decibels, 0.0))
+        {
+            lineAlpha = 0.5f;
+        }
+        else
+        {
+            lineAlpha = 0.25f;
+        }
+        g.setColour(text.withAlpha(lineAlpha));
         g.drawHorizontalLine(juce::roundToInt(y), area.getX(), area.getRight());
         g.setColour(text.withAlpha(0.8f));
         g.drawText(juce::String(static_cast<int>(decibels)) + " dB", juce::Rectangle<float>(area.getX() - kLevelLabelWidth * m_scale, y - 7.0f, kLevelLabelWidth * m_scale - 4.0f, 14.0f),
@@ -290,11 +309,20 @@ void ReferenceEqGUI::paint(juce::Graphics& g)
             }
             const bool labelled = multiple == 1 || multiple == 2 || multiple == 5;
             const float x = toX(frequency);
-            g.setColour(text.withAlpha(labelled ? 0.25f : 0.1f));
+            float lineAlpha = 0.1f; // the labelled lines stronger than the others
+            if (labelled)
+            {
+                lineAlpha = 0.25f;
+            }
+            else
+            {
+                lineAlpha = 0.1f;
+            }
+            g.setColour(text.withAlpha(lineAlpha));
             g.drawVerticalLine(juce::roundToInt(x), area.getY(), area.getBottom());
             if (labelled && area.getRight() - x > kNyquistLabelWidth * m_scale) // the last label before the edge gives way to Nyquist's
             {
-                const juce::String label = frequency >= 1000.0 ? juce::String(juce::roundToInt(frequency / 1000.0)) + "k" : juce::String(juce::roundToInt(frequency));
+                const juce::String label = formatFrequencyLabel(frequency);
                 g.setColour(text.withAlpha(0.8f));
                 g.drawText(label, juce::Rectangle<float>(x - 20.0f, area.getBottom() + 2.0f, 40.0f, kAxisLabelHeight * m_scale - 2.0f), juce::Justification::centredTop);
             }

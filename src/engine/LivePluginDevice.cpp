@@ -39,7 +39,11 @@ bool LivePluginTarget::isValid() const
 
 juce::String LivePluginTarget::getError() const
 {
-    return m_state->rig != nullptr ? m_state->rig->getError() : juce::String("no instance");
+    if (m_state->rig != nullptr)
+    {
+        return m_state->rig->getError();
+    }
+    return juce::String("no instance");
 }
 
 double LivePluginTarget::getSampleRate() const

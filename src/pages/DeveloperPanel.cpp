@@ -633,10 +633,23 @@ void DeveloperPanel::paint(juce::Graphics& g)
         g.setColour(kProgressColour);
         g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * static_cast<float>(juce::jlimit(0.0, 1.0, m_running.fraction))), 4.0f);
     }
-    const juce::String job = m_running.kind == JobKind::Mapping       ? "Survey + mapping"
-                             : m_running.kind == JobKind::Calibration ? "Calibration"
-                             : m_running.kind == JobKind::GuiReview   ? "GUI review"
-                                                                      : "Report";
+    juce::String job;
+    if (m_running.kind == JobKind::Mapping)
+    {
+        job = "Survey + mapping";
+    }
+    else if (m_running.kind == JobKind::Calibration)
+    {
+        job = "Calibration";
+    }
+    else if (m_running.kind == JobKind::GuiReview)
+    {
+        job = "GUI review";
+    }
+    else
+    {
+        job = "Report";
+    }
     juce::String text = job + " of " + hosting::getDisplayName(row->description) + ": " + getRunningText(*row, m_running.kind);
     if (! m_queue.empty())
     {
@@ -687,14 +700,28 @@ void DeveloperPanel::refresh()
         row.guiFolder = row.reportFile.getSiblingFile(row.reportFile.getFileNameWithoutExtension() + kGuiFolderSuffix);
         row.mappingFile = row.reportFile.getSiblingFile(row.reportFile.getFileNameWithoutExtension() + kMappingFileSuffix + kReportExtension);
         const Row* known = findRow(row.key);
-        row.mappingState = row.mappingFile.existsAsFile() ? State::Ready : State::NoReport;
+        if (row.mappingFile.existsAsFile())
+        {
+            row.mappingState = State::Ready;
+        }
+        else
+        {
+            row.mappingState = State::NoReport;
+        }
         if (known != nullptr && (known->mappingState == State::Waiting || known->mappingState == State::Running || known->mappingState == State::Failed))
         {
             row.mappingState = known->mappingState;
         }
         updateMappingConfirmation(row);
         row.calibrationFile = row.reportFile.getSiblingFile(row.reportFile.getFileNameWithoutExtension() + kCalibrationFileSuffix + kReportExtension);
-        row.calibrationState = row.calibrationFile.existsAsFile() ? State::Ready : State::NoReport;
+        if (row.calibrationFile.existsAsFile())
+        {
+            row.calibrationState = State::Ready;
+        }
+        else
+        {
+            row.calibrationState = State::NoReport;
+        }
         if (known != nullptr && (known->calibrationState == State::Waiting || known->calibrationState == State::Running || known->calibrationState == State::Failed))
         {
             row.calibrationState = known->calibrationState;
@@ -1059,8 +1086,24 @@ juce::String DeveloperPanel::getRunningText(const Row& row, JobKind kind) const
     }
     else
     {
-        text << (kind == JobKind::Mapping ? "surveying" : kind == JobKind::Calibration ? "calibrating" : kind == JobKind::GuiReview ? "reviewing (editor windows open)" : "measuring")
-             << ", ";
+        juce::String activity;
+        if (kind == JobKind::Mapping)
+        {
+            activity = "surveying";
+        }
+        else if (kind == JobKind::Calibration)
+        {
+            activity = "calibrating";
+        }
+        else if (kind == JobKind::GuiReview)
+        {
+            activity = "reviewing (editor windows open)";
+        }
+        else
+        {
+            activity = "measuring";
+        }
+        text << activity << ", ";
     }
     return text + elapsed;
 }
@@ -1101,7 +1144,14 @@ void DeveloperPanel::jobFinished(const juce::String& key, JobKind kind, bool suc
         }
         else if (kind == JobKind::Calibration)
         {
-            row->calibrationState = success ? State::Ready : State::Failed;
+            if (success)
+            {
+                row->calibrationState = State::Ready;
+            }
+            else
+            {
+                row->calibrationState = State::Failed;
+            }
             updateMappingConfirmation(*row); // a calibration without a mapping proposes one first
             if (success)
             {
@@ -1114,7 +1164,14 @@ void DeveloperPanel::jobFinished(const juce::String& key, JobKind kind, bool suc
         }
         else if (kind == JobKind::Mapping)
         {
-            row->mappingState = success ? State::Ready : State::Failed;
+            if (success)
+            {
+                row->mappingState = State::Ready;
+            }
+            else
+            {
+                row->mappingState = State::Failed;
+            }
             updateMappingConfirmation(*row);
             if (success)
             {
@@ -1238,7 +1295,11 @@ juce::String DeveloperPanel::getMappingStatusText(int row) const
             {
                 return "ready, confirmed by " + entry.mappingConfirmedBy;
             }
-            return entry.mappingJsonExists ? "ready, proposal (not confirmed)" : "ready";
+            if (entry.mappingJsonExists)
+            {
+                return "ready, proposal (not confirmed)";
+            }
+            return "ready";
         }
     }
     return {};
@@ -1338,7 +1399,14 @@ void DeveloperPanel::updateMappingConfirmation(Row& row) const
     juce::String error;
     const std::optional<pluginlab::engine::Mapping> mapping = pluginlab::engine::Mapping::read(getMappingJson(row), error);
     row.mappingJsonExists = mapping.has_value();
-    row.mappingConfirmedBy = mapping ? mapping->confirmedBy : juce::String();
+    if (mapping)
+    {
+        row.mappingConfirmedBy = mapping->confirmedBy;
+    }
+    else
+    {
+        row.mappingConfirmedBy = juce::String();
+    }
 }
 
 void DeveloperPanel::openMappingFile(int row)
@@ -1350,7 +1418,15 @@ void DeveloperPanel::openMappingFile(int row)
     const Row& entry = m_rows[static_cast<size_t>(row)];
     const juce::File json = getMappingJson(entry);
     const juce::File proposal = json.withFileExtension(".proposal.json");
-    const juce::File file = proposal.existsAsFile() ? proposal : json; // a new proposal next to a confirmed mapping is what needs checking
+    juce::File file; // a new proposal next to a confirmed mapping is what needs checking
+    if (proposal.existsAsFile())
+    {
+        file = proposal;
+    }
+    else
+    {
+        file = json;
+    }
     if (file.existsAsFile())
     {
         file.startAsProcess();
@@ -1367,7 +1443,15 @@ void DeveloperPanel::confirmMapping(int row)
     const juce::File json = getMappingJson(entry);
     const juce::File proposal = json.withFileExtension(".proposal.json");
     // a newer proposal next to a confirmed mapping replaces it when confirmed; otherwise the mapping itself is confirmed
-    const juce::File source = proposal.existsAsFile() ? proposal : json;
+    juce::File source;
+    if (proposal.existsAsFile())
+    {
+        source = proposal;
+    }
+    else
+    {
+        source = json;
+    }
     juce::String error;
     if (! pluginlab::engine::Mapping::read(source, error))
     {
@@ -1377,7 +1461,14 @@ void DeveloperPanel::confirmMapping(int row)
     juce::String name = m_settings.getMappingConfirmer();
     if (name.isEmpty())
     {
-        name = juce::SystemStats::getFullUserName().isNotEmpty() ? juce::SystemStats::getFullUserName() : juce::SystemStats::getLogonName();
+        if (juce::SystemStats::getFullUserName().isNotEmpty())
+        {
+            name = juce::SystemStats::getFullUserName();
+        }
+        else
+        {
+            name = juce::SystemStats::getLogonName();
+        }
     }
     auto* window = new juce::AlertWindow("Confirm mapping",
                                          "You have checked every row of the mapping against the survey (and corrected the JSON where it was wrong). "

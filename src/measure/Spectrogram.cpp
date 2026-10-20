@@ -15,7 +15,11 @@ constexpr double kFadeSeconds = 0.005;      // the sweep's fade in and out
 
 const char* getSpectrogramWindowName(SpectrogramWindow window)
 {
-    return window == SpectrogramWindow::Hann ? "Hann" : "Blackman-Harris (4 terms)";
+    if (window == SpectrogramWindow::Hann)
+    {
+        return "Hann";
+    }
+    return "Blackman-Harris (4 terms)";
 }
 
 double Spectrogram::getSeconds() const
@@ -69,7 +73,11 @@ std::vector<std::vector<float>> transform(const std::vector<float>& signal, int 
         for (int bin = 0; bin <= size / 2; ++bin)
         {
             // a sine of amplitude 1 gives |X| = sum(w) / 2 in its bin: 2 |X| / sum(w) = 1 (the DC and Nyquist bins have no mirror)
-            const double scale = (bin == 0 || bin == size / 2) ? 1.0 : 2.0;
+            double scale = 2.0;
+            if (bin == 0 || bin == size / 2)
+            {
+                scale = 1.0;
+            }
             const double amplitude = scale * buffer[static_cast<size_t>(bin)] / windowSum;
             frame[static_cast<size_t>(bin)] = static_cast<float>(20.0 * std::log10(std::max(amplitude, kFloor)));
         }

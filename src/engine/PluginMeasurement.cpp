@@ -62,6 +62,16 @@ juce::String formatDb(double value, const juce::String& unit, int decimals = 2)
     }
     return juce::String(value, decimals) + " " + unit;
 }
+
+// the number of units a run measures: the chosen ones, or all if none is chosen
+int getUnitCount(const MeasurementOptions& options)
+{
+    if (options.units.isEmpty())
+    {
+        return getMeasurementUnitKeys().size();
+    }
+    return options.units.size();
+}
 }
 
 const juce::StringArray& getMeasurementUnitKeys()
@@ -76,14 +86,18 @@ juce::String getMeasurementUnitTitle(const juce::String& key)
                                           "THD and THD+N",        "intermodulation",    "noise",              "crosstalk",
                                           "maximum input level",  "gain linearity (slow)"};
     const int index = getMeasurementUnitKeys().indexOf(key);
-    return index >= 0 ? titles[index] : key;
+    if (index >= 0)
+    {
+        return titles[index];
+    }
+    return key;
 }
 
 MeasurementSummary measureDevice(const measure::Device& device, int channels, const juce::String& deviceName, const MeasurementOptions& options)
 {
     const auto wants = [&options](const juce::String& key) { return options.units.isEmpty() || options.units.contains(key); };
     int step = 0;
-    const int steps = 1 + (options.units.isEmpty() ? getMeasurementUnitKeys().size() : options.units.size());
+    const int steps = 1 + getUnitCount(options);
     const auto announce = [&options, &step, steps](const juce::String& unit) {
         if (options.progress)
         {
@@ -363,7 +377,12 @@ juce::var createMeasurementJson(const MeasurementSummary& summary)
         auto entry = std::make_unique<juce::DynamicObject>();
         entry->setProperty("unit", row.unit);
         entry->setProperty("quantity", row.quantity);
-        entry->setProperty("value", std::isfinite(row.value) ? juce::var(row.value) : juce::var()); // NaN is no JSON
+        juce::var value; // void unless finite: NaN is no JSON
+        if (std::isfinite(row.value))
+        {
+            value = juce::var(row.value);
+        }
+        entry->setProperty("value", value);
         entry->setProperty("text", row.text);
         entry->setProperty("clause", row.clause);
         rows.add(juce::var(entry.release()));
@@ -387,7 +406,14 @@ MeasurementSummary parseMeasurementJson(const juce::var& json)
             row.unit = entry.getProperty("unit", "").toString();
             row.quantity = entry.getProperty("quantity", "").toString();
             const juce::var value = entry.getProperty("value", {});
-            row.value = value.isVoid() ? kNotApplicable : static_cast<double>(value);
+            if (value.isVoid())
+            {
+                row.value = kNotApplicable;
+            }
+            else
+            {
+                row.value = static_cast<double>(value);
+            }
             row.text = entry.getProperty("text", "").toString();
             row.clause = entry.getProperty("clause", "").toString();
             summary.rows.push_back(row);

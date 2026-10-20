@@ -86,7 +86,11 @@ void MatcherPanel::Plot::paint(juce::Graphics& g)
     area.removeFromTop(6.0f);
     const juce::Rectangle<float> difference = area;
     const double lowest = 20.0;
-    const double highest = m_frequencies.empty() ? 20000.0 : m_frequencies.back();
+    double highest = 20000.0;
+    if (! m_frequencies.empty())
+    {
+        highest = m_frequencies.back();
+    }
     const auto toX = [&](double frequency) { return curves.getX() + static_cast<float>(std::log(frequency / lowest) / std::log(highest / lowest)) * curves.getWidth(); };
     g.setFont(juce::FontOptions(12.0f));
     for (const juce::Rectangle<float>& box : {curves, difference})
@@ -107,7 +111,15 @@ void MatcherPanel::Plot::paint(juce::Graphics& g)
             g.setColour(text.withAlpha(0.15f));
             g.drawVerticalLine(juce::roundToInt(x), curves.getY(), difference.getBottom());
             g.setColour(text.withAlpha(0.8f));
-            const juce::String label = frequency >= 1000.0 ? juce::String(juce::roundToInt(frequency / 1000.0)) + "k" : juce::String(juce::roundToInt(frequency));
+            juce::String label;
+            if (frequency >= 1000.0)
+            {
+                label = juce::String(juce::roundToInt(frequency / 1000.0)) + "k";
+            }
+            else
+            {
+                label = juce::String(juce::roundToInt(frequency));
+            }
             g.drawText(label, juce::Rectangle<float>(x - 20.0f, difference.getBottom() + 2.0f, 40.0f, 14.0f), juce::Justification::centredTop);
         }
     }
@@ -118,7 +130,12 @@ void MatcherPanel::Plot::paint(juce::Graphics& g)
             g.setColour(text.withAlpha(0.15f));
             g.drawHorizontalLine(juce::roundToInt(y), box.getX(), box.getRight());
             g.setColour(text.withAlpha(0.8f));
-            g.drawText(juce::String(level, range < 5.0 ? 1 : 0), juce::Rectangle<float>(box.getX() - 40.0f, y - 7.0f, 36.0f, 14.0f), juce::Justification::centredRight);
+            int decimals = 0;
+            if (range < 5.0)
+            {
+                decimals = 1;
+            }
+            g.drawText(juce::String(level, decimals), juce::Rectangle<float>(box.getX() - 40.0f, y - 7.0f, 36.0f, 14.0f), juce::Justification::centredRight);
         }
     };
     drawLevels(curves, kPlotRangeDb, {-24.0, -12.0, 0.0, 12.0, 24.0});
@@ -133,7 +150,14 @@ void MatcherPanel::Plot::paint(juce::Graphics& g)
         {
             const float x = toX(m_frequencies[index]);
             const float y = box.getCentreY() - static_cast<float>(juce::jlimit(-range, range, values[index]) / range) * box.getHeight() / 2.0f;
-            index == 0 ? path.startNewSubPath(x, y) : path.lineTo(x, y);
+            if (index == 0)
+            {
+                path.startNewSubPath(x, y);
+            }
+            else
+            {
+                path.lineTo(x, y);
+            }
         }
         g.setColour(colour);
         g.strokePath(path, juce::PathStrokeType(2.0f));
@@ -404,13 +428,25 @@ void MatcherPanel::timerCallback()
         m_plot.setCurves({}, {}, {}, "live view: " + targetResponse.error);
         return;
     }
-    const std::array<int, 2> generations{pluginMaster ? masterResponse.generation : 0, targetResponse.generation};
+    int masterGeneration = 0;
+    if (pluginMaster)
+    {
+        masterGeneration = masterResponse.generation;
+    }
+    const std::array<int, 2> generations{masterGeneration, targetResponse.generation};
     if (targetResponse.generation == 0 || (pluginMaster && masterResponse.generation == 0) || generations == m_liveGenerations)
     {
         return;
     }
     m_liveGenerations = generations;
-    liveUpdate(m_live->getFrequencies(), pluginMaster ? masterResponse.magnitudeDb : m_liveCurve, targetResponse.magnitudeDb);
+    if (pluginMaster)
+    {
+        liveUpdate(m_live->getFrequencies(), masterResponse.magnitudeDb, targetResponse.magnitudeDb);
+    }
+    else
+    {
+        liveUpdate(m_live->getFrequencies(), m_liveCurve, targetResponse.magnitudeDb);
+    }
 }
 
 void MatcherPanel::liveUpdate(const std::vector<double>& frequencies, const std::vector<double>& master, const std::vector<double>& target)
@@ -423,7 +459,11 @@ void MatcherPanel::liveUpdate(const std::vector<double>& frequencies, const std:
         largest = std::max(largest, std::abs(difference));
         sum += difference * difference;
     }
-    const double rms = master.empty() ? 0.0 : std::sqrt(sum / static_cast<double>(master.size()));
+    double rms = 0.0;
+    if (! master.empty())
+    {
+        rms = std::sqrt(sum / static_cast<double>(master.size()));
+    }
     m_plot.setCurves(frequencies, master, target, "live: largest deviation " + juce::String(largest, 2) + " dB, rms " + juce::String(rms, 2) + " dB");
 }
 
@@ -529,8 +569,16 @@ void MatcherPanel::jobFinished(bool success, const juce::String& message)
     m_job.reset();
     m_fraction = -1.0;
     repaint(m_progressArea);
-    m_status.setText(success ? "Done. \"View report\" shows the result; \"Apply to targets\" sets the found values." : "Failed: " + message,
-                     juce::dontSendNotification);
+    juce::String status;
+    if (success)
+    {
+        status = "Done. \"View report\" shows the result; \"Apply to targets\" sets the found values.";
+    }
+    else
+    {
+        status = "Failed: " + message;
+    }
+    m_status.setText(status, juce::dontSendNotification);
     updateButtons();
     rebuildLive();
     if (success && onMatchFinished)
@@ -560,9 +608,15 @@ void MatcherPanel::applyResults()
 
 void MatcherPanel::savePresets()
 {
-    const juce::String master = getMasterSlot() >= 0 && m_engine.getPlugin(getMasterSlot()) != nullptr
-                                    ? hosting::getDisplayName(m_engine.getPlugin(getMasterSlot())->getDescription())
-                                    : juce::String("band curve");
+    juce::String master;
+    if (getMasterSlot() >= 0 && m_engine.getPlugin(getMasterSlot()) != nullptr)
+    {
+        master = hosting::getDisplayName(m_engine.getPlugin(getMasterSlot())->getDescription());
+    }
+    else
+    {
+        master = juce::String("band curve");
+    }
     std::vector<int> slots;
     for (const TargetRow& row : m_targets)
     {
@@ -654,7 +708,14 @@ void MatcherPanel::paintCell(juce::Graphics& g, int rowNumber, int columnId, int
     juce::String text;
     if (columnId == kColumnMatch)
     {
-        text = row.match ? "[x]" : "[ ]";
+        if (row.match)
+        {
+            text = "[x]";
+        }
+        else
+        {
+            text = "[ ]";
+        }
     }
     else if (columnId == kColumnPlugin && plugin != nullptr)
     {
@@ -667,7 +728,14 @@ void MatcherPanel::paintCell(juce::Graphics& g, int rowNumber, int columnId, int
         {
             names.add(plugin->getParameter(index).name);
         }
-        text = names.isEmpty() ? juce::String("none: choose ... (without a mapping the user decides)") : names.joinIntoString(", ") + "  (" + row.source + ")";
+        if (names.isEmpty())
+        {
+            text = juce::String("none: choose ... (without a mapping the user decides)");
+        }
+        else
+        {
+            text = names.joinIntoString(", ") + "  (" + row.source + ")";
+        }
     }
     else if (columnId == kColumnChoose)
     {

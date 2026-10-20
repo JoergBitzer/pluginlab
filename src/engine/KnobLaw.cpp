@@ -61,6 +61,24 @@ bool fitAffine(const std::vector<LawPoint>& points, Basis basis, double& a, doub
     a = (sumX - b * sumG) / n;
     return true;
 }
+
+// The decimals that show a number of this size for reading
+int getReadingDecimals(double magnitude)
+{
+    if (magnitude >= 100.0)
+    {
+        return 0;
+    }
+    if (magnitude >= 10.0)
+    {
+        return 1;
+    }
+    if (magnitude >= 1.0)
+    {
+        return 2;
+    }
+    return 3;
+}
 }
 
 const char* getLawKindName(LawKind kind)
@@ -144,10 +162,18 @@ juce::String KnobLaw::describe(const juce::String& unit) const
 {
     auto number = [](double x) {
         const double magnitude = std::abs(x);
-        const int decimals = magnitude >= 100.0 ? 0 : (magnitude >= 10.0 ? 1 : (magnitude >= 1.0 ? 2 : 3));
-        return magnitude < 0.5 * std::pow(10.0, -decimals) ? juce::String("0") : juce::String(x, decimals);
+        const int decimals = getReadingDecimals(magnitude);
+        if (magnitude < 0.5 * std::pow(10.0, -decimals))
+        {
+            return juce::String("0");
+        }
+        return juce::String(x, decimals);
     };
-    const juce::String suffix = unit.isNotEmpty() ? " " + unit : juce::String();
+    juce::String suffix;
+    if (unit.isNotEmpty())
+    {
+        suffix = " " + unit;
+    }
     if (kind == LawKind::Table)
     {
         juce::StringArray values;

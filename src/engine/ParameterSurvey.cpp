@@ -37,6 +37,16 @@ bool isDiscrete(const SurveyParameter& parameter, const SurveySettings& settings
     return parameter.isBoolean || (parameter.numSteps >= 2 && parameter.numSteps <= settings.maximumSteps);
 }
 
+// 1 for a discrete parameter, else 0 (to count the discrete parameters of a pair)
+int getDiscreteCount(const SurveyParameter& parameter, const SurveySettings& settings)
+{
+    if (isDiscrete(parameter, settings))
+    {
+        return 1;
+    }
+    return 0;
+}
+
 float getStepValue(int step, int numSteps)
 {
     return static_cast<float>(step) / static_cast<float>(numSteps - 1);
@@ -44,7 +54,11 @@ float getStepValue(int step, int numSteps)
 
 int getSteps(const SurveyParameter& parameter)
 {
-    return parameter.isBoolean ? 2 : parameter.numSteps;
+    if (parameter.isBoolean)
+    {
+        return 2;
+    }
+    return parameter.numSteps;
 }
 
 // The values of a probe (does the parameter act at all in this context?): the ends; every step of a knob with up to four
@@ -98,6 +112,24 @@ std::vector<float> getContextValues(const SurveyParameter& parameter, const Surv
     return values;
 }
 
+// The decimals that show a number of this size for reading
+int getReadingDecimals(double magnitude)
+{
+    if (magnitude >= 100.0)
+    {
+        return 0;
+    }
+    if (magnitude >= 10.0)
+    {
+        return 1;
+    }
+    if (magnitude >= 1.0)
+    {
+        return 2;
+    }
+    return 3;
+}
+
 // A number with many digits ("21.5999985") rounded for reading; other texts as the plugin shows them
 juce::String tidyText(const juce::String& text)
 {
@@ -108,7 +140,7 @@ juce::String tidyText(const juce::String& text)
     }
     const double value = trimmed.getDoubleValue();
     const double magnitude = std::abs(value);
-    const int decimals = magnitude >= 100.0 ? 0 : (magnitude >= 10.0 ? 1 : (magnitude >= 1.0 ? 2 : 3));
+    const int decimals = getReadingDecimals(magnitude);
     if (magnitude < 0.5 * std::pow(10.0, -decimals))
     {
         return "0";
@@ -118,7 +150,15 @@ juce::String tidyText(const juce::String& text)
 
 juce::String makeValueText(const SurveyParameter& parameter, float value)
 {
-    juce::String text = parameter.getText ? tidyText(parameter.getText(value)) : juce::String(value, 3);
+    juce::String text;
+    if (parameter.getText)
+    {
+        text = tidyText(parameter.getText(value));
+    }
+    else
+    {
+        text = juce::String(value, 3);
+    }
     if (parameter.label.isNotEmpty() && ! text.endsWith(parameter.label))
     {
         text << " " << parameter.label;
@@ -248,7 +288,15 @@ private:
                 const float* data = output.getReadPointer(channel);
                 for (int sample = 0; sample < idleSamples && sample < output.getNumSamples(); ++sample)
                 {
-                    const size_t half = sample < idleSamples / 2 ? 0 : 1;
+                    size_t half;
+                    if (sample < idleSamples / 2)
+                    {
+                        half = 0;
+                    }
+                    else
+                    {
+                        half = 1;
+                    }
                     (*idleSquares)[half] += static_cast<double>(data[sample]) * data[sample];
                     ++(*idleCount)[half];
                 }
@@ -340,6 +388,16 @@ struct BandSignature
     eqmodel::DesignFamily family;
 };
 
+// "+" before a positive number or zero; a negative number brings its own sign
+const char* getSignPrefix(double value)
+{
+    if (value >= 0.0)
+    {
+        return "+";
+    }
+    return "";
+}
+
 juce::String describeStructure(const eqmodel::FitResult& fit)
 {
     if (! fit.goodDescription)
@@ -348,7 +406,11 @@ juce::String describeStructure(const eqmodel::FitResult& fit)
     }
     if (fit.model.bands.empty())
     {
-        return std::abs(fit.model.outputGainDb) > 0.01 ? "flat " + juce::String(fit.model.outputGainDb, 2) + " dB" : "flat";
+        if (std::abs(fit.model.outputGainDb) > 0.01)
+        {
+            return "flat " + juce::String(fit.model.outputGainDb, 2) + " dB";
+        }
+        return "flat";
     }
     juce::StringArray parts;
     for (const eqmodel::Band& band : fit.model.bands)
@@ -356,7 +418,7 @@ juce::String describeStructure(const eqmodel::FitResult& fit)
         juce::String part = juce::String(reference::getFilterTypeName(band.type)) + " " + formatFrequency(band.frequencyHz) + " Hz";
         if (band.type == reference::FilterType::Peak || band.type == reference::FilterType::LowShelf || band.type == reference::FilterType::HighShelf)
         {
-            part << " " << (band.gainDb >= 0.0 ? "+" : "") << juce::String(band.gainDb, 1) << " dB";
+            part << " " << getSignPrefix(band.gainDb) << juce::String(band.gainDb, 1) << " dB";
         }
         if (band.family == eqmodel::DesignFamily::Butterworth || band.family == eqmodel::DesignFamily::LinkwitzRiley)
         {
@@ -387,7 +449,16 @@ juce::String getTypeKey(const eqmodel::FitResult& fit, bool withFamily)
         if (withFamily)
         {
             const bool passFilter = band.type == reference::FilterType::LowPass || band.type == reference::FilterType::HighPass;
-            key << "/" << (passFilter ? juce::String("pass") : juce::String(eqmodel::getFamilyName(band.family)));
+            juce::String familyName;
+            if (passFilter)
+            {
+                familyName = "pass";
+            }
+            else
+            {
+                familyName = eqmodel::getFamilyName(band.family);
+            }
+            key << "/" << familyName;
         }
         keys.add(key);
     }
@@ -403,6 +474,17 @@ juce::String getTypeKey(const eqmodel::FitResult& fit, bool withFamily)
 bool hasGain(reference::FilterType type)
 {
     return type == reference::FilterType::Peak || type == reference::FilterType::LowShelf || type == reference::FilterType::HighShelf;
+}
+
+// The name of a band slot: its type, numbered when the fit has several bands
+juce::String getBandName(reference::FilterType type, size_t slot, size_t bandCount)
+{
+    const juce::String typeName = juce::String(reference::getFilterTypeName(type));
+    if (bandCount > 1)
+    {
+        return typeName + " " + juce::String(static_cast<int>(slot) + 1);
+    }
+    return typeName;
 }
 
 struct QuantityChange
@@ -467,7 +549,13 @@ bool analyseBands(const std::vector<SurveyPoint>& points, const SurveySettings& 
     // the bands in the order of their frequency
     auto sortedBands = [](const SurveyPoint& point) {
         std::vector<eqmodel::Band> bands = point.fit->model.bands;
-        std::sort(bands.begin(), bands.end(), [](const eqmodel::Band& a, const eqmodel::Band& b) { return a.type == b.type ? a.frequencyHz < b.frequencyHz : a.type < b.type; });
+        std::sort(bands.begin(), bands.end(), [](const eqmodel::Band& a, const eqmodel::Band& b) {
+            if (a.type == b.type)
+            {
+                return a.frequencyHz < b.frequencyHz;
+            }
+            return a.type < b.type;
+        });
         return bands;
     };
     bool anyBandQuantity = false;
@@ -495,7 +583,7 @@ bool analyseBands(const std::vector<SurveyPoint>& points, const SurveySettings& 
             lowG = std::min(lowG, 0.0); // a band that vanishes has the gain 0 there
             highG = std::max(highG, 0.0);
         }
-        const juce::String bandName = juce::String(reference::getFilterTypeName(type)) + (bandCount > 1 ? " " + juce::String(static_cast<int>(slot) + 1) : "");
+        const juce::String bandName = getBandName(type, slot, bandCount);
         const double octaves = std::log2(highF / lowF);
         if (octaves > settings.frequencyChangeOctaves)
         {
@@ -565,7 +653,15 @@ juce::StringArray keepDominantBands(std::vector<SurveyPoint>& points)
                 anyPass = true;
             }
         }
-        const double limit = anyPass ? 3.0 : kMinorBandShare * largest; // next to a pass filter, only shelves and peaks of a few dB count
+        double limit; // next to a pass filter, only shelves and peaks of a few dB count
+        if (anyPass)
+        {
+            limit = 3.0;
+        }
+        else
+        {
+            limit = kMinorBandShare * largest;
+        }
         for (auto band = bands.begin(); band != bands.end();)
         {
             if (hasGain(band->type) && std::abs(band->gainDb) < limit)
@@ -581,6 +677,16 @@ juce::StringArray keepDominantBands(std::vector<SurveyPoint>& points)
         }
     }
     return removed;
+}
+
+// The role of a parameter whose bands change or switch on and off: a switch when it is discrete
+ParameterRole getBandChangeRole(bool discrete)
+{
+    if (discrete)
+    {
+        return ParameterRole::Switch;
+    }
+    return ParameterRole::Other;
 }
 
 class Surveyor
@@ -701,8 +807,8 @@ public:
                 {
                     const int first = std::min(order[a], order[b]);
                     const int second = std::max(order[a], order[b]);
-                    const int discrete = (isDiscrete(m_subject.parameters[static_cast<size_t>(first)], m_settings) ? 1 : 0)
-                                         + (isDiscrete(m_subject.parameters[static_cast<size_t>(second)], m_settings) ? 1 : 0);
+                    const int discrete = getDiscreteCount(m_subject.parameters[static_cast<size_t>(first)], m_settings)
+                                         + getDiscreteCount(m_subject.parameters[static_cast<size_t>(second)], m_settings);
                     if (discrete == discreteCount)
                     {
                         pairs.emplace_back(first, second);
@@ -749,7 +855,14 @@ public:
         ContextSurvey result;
         result.contextParameters = contextParameters;
         result.contextValues = contextValues;
-        result.contextText = contextParameters.empty() ? juce::String("default setting") : describeContext(m_subject.parameters, contextParameters, contextValues);
+        if (contextParameters.empty())
+        {
+            result.contextText = juce::String("default setting");
+        }
+        else
+        {
+            result.contextText = describeContext(m_subject.parameters, contextParameters, contextValues);
+        }
         const std::vector<float> base = makeSetting(m_default, contextParameters, contextValues);
         for (const float value : getSurveyValues(parameter, m_settings))
         {
@@ -979,12 +1092,12 @@ private:
         }
         if (! sameStructure)
         {
-            setRole(result, discrete, discrete ? ParameterRole::Switch : ParameterRole::Other, "the bands change: " + structureText, effects);
+            setRole(result, discrete, getBandChangeRole(discrete), "the bands change: " + structureText, effects);
             return;
         }
         if (onOff)
         {
-            setRole(result, discrete, discrete ? ParameterRole::Switch : ParameterRole::Other, "switches a band on and off: " + describePoints(result.points), effects);
+            setRole(result, discrete, getBandChangeRole(discrete), "switches a band on and off: " + describePoints(result.points), effects);
             return;
         }
         if (changes.empty())
@@ -1004,7 +1117,14 @@ private:
 
     static void setRole(ContextSurvey& result, bool discrete, ParameterRole role, const juce::String& detail, const juce::StringArray& effects)
     {
-        result.role = discrete ? ParameterRole::Switch : role;
+        if (discrete)
+        {
+            result.role = ParameterRole::Switch;
+        }
+        else
+        {
+            result.role = role;
+        }
         juce::StringArray parts;
         if (discrete && role != ParameterRole::Switch && role != ParameterRole::Other)
         {
@@ -1038,7 +1158,13 @@ private:
             lowest = std::min(lowest, std::max(getter(point), floor));
             highest = std::max(highest, std::max(getter(point), floor));
         }
-        auto text = [floor](double value) { return value <= floor ? juce::String("below ") + juce::String(floor, 0) : juce::String(value, 1); };
+        auto text = [floor](double value) {
+            if (value <= floor)
+            {
+                return juce::String("below ") + juce::String(floor, 0);
+            }
+            return juce::String(value, 1);
+        };
         return text(lowest) + " ... " + text(highest) + " " + unit;
     }
 
@@ -1076,10 +1202,20 @@ public:
     double m_fitSeconds = 0.0;
 };
 
+// The context the summary tells of: the context a coupled parameter needs, else the default setting
+const ContextSurvey& getSummaryContext(const ParameterSurvey& survey)
+{
+    if (survey.coupled)
+    {
+        return *survey.inContext;
+    }
+    return survey.atDefault;
+}
+
 juce::String makeSummary(const ParameterSurvey& survey)
 {
     juce::String text = getRoleName(survey.role);
-    const ContextSurvey& telling = survey.coupled ? *survey.inContext : survey.atDefault;
+    const ContextSurvey& telling = getSummaryContext(survey);
     if (telling.detail.isNotEmpty() && survey.role != ParameterRole::Nothing)
     {
         text << ": " << telling.detail;
@@ -1191,9 +1327,14 @@ SurveySubject makePluginSubject(juce::AudioPluginFormatManager& formatManager, c
         SurveyParameter surveyParameter;
         surveyParameter.name = parameter->getName(100);
         surveyParameter.label = parameter->getLabel();
-        surveyParameter.numSteps = parameter->isDiscrete() || parameter->getNumSteps() < juce::AudioProcessor::getDefaultNumParameterSteps()
-                                       ? parameter->getNumSteps()
-                                       : 0;
+        if (parameter->isDiscrete() || parameter->getNumSteps() < juce::AudioProcessor::getDefaultNumParameterSteps())
+        {
+            surveyParameter.numSteps = parameter->getNumSteps();
+        }
+        else
+        {
+            surveyParameter.numSteps = 0;
+        }
         surveyParameter.isBoolean = parameter->isBoolean();
         surveyParameter.defaultValue = parameter->getValue();
         // the text the plugin shows (the instance stays alive with the subject; getText does not change the value)
@@ -1213,7 +1354,14 @@ SurveyResult surveyParameters(const SurveySubject& subject, const SurveySettings
 {
     SurveyResult result;
     result.settings = settings;
-    result.frequencies = settings.frequencies.empty() ? eqmodel::makeLogGrid(20.0, 20000.0, 12.0) : settings.frequencies;
+    if (settings.frequencies.empty())
+    {
+        result.frequencies = eqmodel::makeLogGrid(20.0, 20000.0, 12.0);
+    }
+    else
+    {
+        result.frequencies = settings.frequencies;
+    }
     Surveyor surveyor(subject, result.settings, result.frequencies);
     const int count = static_cast<int>(subject.parameters.size());
     result.defaultPoint = surveyor.getBench().measure(surveyor.getDefault());
@@ -1357,7 +1505,11 @@ juce::String getStepList(const ContextSurvey& survey)
         texts.add(point.text + ": " + describeStructure(*point.fit));
     }
     const juce::String list = texts.joinIntoString("; ");
-    return survey.detail.contains(": " + list) ? list : juce::String();
+    if (survey.detail.contains(": " + list))
+    {
+        return list;
+    }
+    return juce::String();
 }
 
 bool hasStepList(const ContextSurvey& survey)
@@ -1369,7 +1521,15 @@ bool hasStepList(const ContextSurvey& survey)
 juce::String getEffectCell(const ContextSurvey& survey)
 {
     const juce::String list = getStepList(survey);
-    const juce::String detail = list.isEmpty() ? survey.detail : survey.detail.replace(": " + list, " (steps below)");
+    juce::String detail;
+    if (list.isEmpty())
+    {
+        detail = survey.detail;
+    }
+    else
+    {
+        detail = survey.detail.replace(": " + list, " (steps below)");
+    }
     juce::StringArray parts;
     parts.addTokens(detail, ";", {});
     juce::StringArray kept;
@@ -1381,6 +1541,50 @@ juce::String getEffectCell(const ContextSurvey& survey)
         }
     }
     return kept.joinIntoString("; ");
+}
+
+// The context whose range the report shows: the other context if there is one, else the default setting
+const ContextSurvey& getShownContext(const ParameterSurvey& survey)
+{
+    if (survey.inContext)
+    {
+        return *survey.inContext;
+    }
+    return survey.atDefault;
+}
+
+// The context that tells most: the context a coupled parameter needs, else the other context where the parameter acts, else the default setting
+const ContextSurvey& getTellingContext(const ParameterSurvey& survey)
+{
+    if (survey.coupled)
+    {
+        return *survey.inContext;
+    }
+    if (survey.inContext && survey.inContext->role != ParameterRole::Nothing)
+    {
+        return *survey.inContext;
+    }
+    return survey.atDefault;
+}
+
+// A table cell, "-" when it is empty
+juce::String formatCell(const juce::String& text)
+{
+    if (text.isEmpty())
+    {
+        return juce::String("-");
+    }
+    return text;
+}
+
+// The context a coupled parameter needs to act, "-" for a parameter that acts alone
+juce::String getNeededContextText(const ParameterSurvey& survey)
+{
+    if (survey.coupled)
+    {
+        return survey.inContext->contextText;
+    }
+    return juce::String("-");
 }
 }
 
@@ -1400,14 +1604,22 @@ juce::String createSurveyReport(const SurveyResult& result, const juce::String& 
     text << "| # | Parameter | Range shown | Role | Measured effect | Acts only when | System class at the ends |\n|---|---|---|---|---|---|---|\n";
     for (const ParameterSurvey& survey : result.parameters)
     {
-        const ContextSurvey& shown = survey.inContext ? *survey.inContext : survey.atDefault;
-        const ContextSurvey& telling = survey.coupled ? *survey.inContext : (survey.inContext && survey.inContext->role != ParameterRole::Nothing ? *survey.inContext : survey.atDefault);
+        const ContextSurvey& shown = getShownContext(survey);
+        const ContextSurvey& telling = getTellingContext(survey);
         juce::String range = "-";
         if (! shown.points.empty())
         {
             range = shown.points.front().text + " ... " + shown.points.back().text;
         }
-        juce::String effect = survey.role == ParameterRole::Nothing ? juce::String("-") : getEffectCell(telling);
+        juce::String effect;
+        if (survey.role == ParameterRole::Nothing)
+        {
+            effect = juce::String("-");
+        }
+        else
+        {
+            effect = getEffectCell(telling);
+        }
         if (! survey.coupled && survey.inContext && &telling == &survey.atDefault && survey.inContext->role != ParameterRole::Nothing)
         {
             effect << " (with " << survey.inContext->contextText << ": " << getEffectCell(*survey.inContext) << ")";
@@ -1422,7 +1634,7 @@ juce::String createSurveyReport(const SurveyResult& result, const juce::String& 
             }
         }
         text << "| " << (survey.index + 1) << " | " << survey.parameter.name << " | " << range << " | " << getRoleName(survey.role) << " | "
-             << (effect.isEmpty() ? juce::String("-") : effect) << " | " << (survey.coupled ? survey.inContext->contextText : juce::String("-")) << " | " << classes << " |\n";
+             << formatCell(effect) << " | " << getNeededContextText(survey) << " | " << classes << " |\n";
     }
 
     // the steps of the switches, one row each
@@ -1431,13 +1643,39 @@ juce::String createSurveyReport(const SurveyResult& result, const juce::String& 
     {
         // the steps in the most telling context only (a type switch with a band that has gain, not also at the default)
         const bool contextHasSteps = survey.inContext && hasStepList(*survey.inContext);
-        for (const ContextSurvey* context : {contextHasSteps ? nullptr : &survey.atDefault, survey.inContext ? &*survey.inContext : nullptr})
+        const ContextSurvey* atDefault;
+        if (contextHasSteps)
+        {
+            atDefault = nullptr;
+        }
+        else
+        {
+            atDefault = &survey.atDefault;
+        }
+        const ContextSurvey* inContext;
+        if (survey.inContext)
+        {
+            inContext = &*survey.inContext;
+        }
+        else
+        {
+            inContext = nullptr;
+        }
+        for (const ContextSurvey* context : {atDefault, inContext})
         {
             if (context == nullptr || ! hasStepList(*context))
             {
                 continue;
             }
-            const juce::String where = context->contextText.isEmpty() || context->contextText == "default setting" ? juce::String("default") : context->contextText;
+            juce::String where;
+            if (context->contextText.isEmpty() || context->contextText == "default setting")
+            {
+                where = juce::String("default");
+            }
+            else
+            {
+                where = context->contextText;
+            }
             for (const SurveyPoint& point : context->points)
             {
                 steps << "| " << survey.parameter.name << " | " << where << " | " << point.text << " | " << describeStep(point) << " |\n";
@@ -1454,7 +1692,7 @@ juce::String createSurveyReport(const SurveyResult& result, const juce::String& 
     juce::String side;
     for (const ParameterSurvey& survey : result.parameters)
     {
-        const ContextSurvey& shown = survey.inContext ? *survey.inContext : survey.atDefault;
+        const ContextSurvey& shown = getShownContext(survey);
         for (const juce::String& also : shown.alsoChanges)
         {
             side << "| " << survey.parameter.name << " | " << also << " |\n";

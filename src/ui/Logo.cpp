@@ -14,6 +14,17 @@ const juce::Colour kLogoGray(0xff8a8e86);
 const juce::Colour kLogoLetters(0xffd8d8d8);
 constexpr int kWaveSteps = 96;
 constexpr float kSincHalfWidth = 3.0f;        // si(x) = sin(x) / x for x = -3 pi ... 3 pi: the main peak and two side lobes on each side
+constexpr float kSincNearZero = 1.0e-6f;      // below this |x|, si(x) is taken as its limit 1
+
+// si(x) = sin(x) / x, with its limit 1 at x = 0
+float getSi(float x)
+{
+    if (std::abs(x) < kSincNearZero)
+    {
+        return 1.0f;
+    }
+    return std::sin(x) / x;
+}
 }
 
 juce::Image makeLogo(int height)
@@ -38,7 +49,7 @@ juce::Image makeLogo(int height)
     {
         const float fraction = static_cast<float>(step) / kWaveSteps;
         const float x = juce::MathConstants<float>::pi * kSincHalfWidth * (2.0f * fraction - 1.0f);
-        const float si = std::abs(x) < 1.0e-6f ? 1.0f : std::sin(x) / x;
+        const float si = getSi(x);
         const float px = left + (right - left) * fraction;
         const float py = baseline - amplitude * si;
         if (step == 0)

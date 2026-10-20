@@ -74,8 +74,17 @@ void ReferenceControls::setControlEnabled(const juce::String& parameterId, bool 
         if (m_ids[index] == parameterId && m_controls[index]->isEnabled() != enabled)
         {
             m_controls[index]->setEnabled(enabled);
-            m_controls[index]->setAlpha(enabled ? 1.0f : kDisabledAlpha);
-            m_labels[index]->setAlpha(enabled ? 1.0f : kDisabledAlpha);
+            float alpha = 1.0f;
+            if (enabled)
+            {
+                alpha = 1.0f;
+            }
+            else
+            {
+                alpha = kDisabledAlpha;
+            }
+            m_controls[index]->setAlpha(alpha);
+            m_labels[index]->setAlpha(alpha);
         }
     }
 }
@@ -167,7 +176,17 @@ void layoutFlow(ReferenceControls& controls, std::vector<FlowGroup>& groups, juc
     }
     for (int row = 0; row < rows; ++row)
     {
-        float x = area.getX() + (row == 0 ? kFlowEnd * scale : 0.0f);
+        // the first row leaves room for "in"
+        float indent = 0.0f;
+        if (row == 0)
+        {
+            indent = kFlowEnd * scale;
+        }
+        else
+        {
+            indent = 0.0f;
+        }
+        float x = area.getX() + indent;
         const float y = area.getY() + static_cast<float>(row) * (kFlowBoxHeight + kFlowRowGap) * scale;
         for (FlowGroup& group : groups)
         {

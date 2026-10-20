@@ -45,7 +45,11 @@ template <class Spec>
 juce::String valueText(const Spec& p, float value)
 {
     const auto text = juce::String(value, p.numDecimalPlaces);
-    return p.unitName.empty() ? text : text + " " + juce::String(p.unitName);
+    if (p.unitName.empty())
+    {
+        return text;
+    }
+    return text + " " + juce::String(p.unitName);
 }
 
 template <class Spec>
@@ -55,12 +59,22 @@ juce::String helpText(const Spec& p)
          + valueText(p, p.maxValue) + ", default " + valueText(p, p.defaultValue) + "): " + juce::String(p.help);
 }
 
+// the range of a parameter: logarithmic for frequencies (whole Hz), else linear with the
+// display precision as step size
+template <class Spec>
+juce::NormalisableRange<float> makeRange(const Spec& p)
+{
+    if (p.logFrequency)
+    {
+        return makeLogFrequencyRange(p.minValue, p.maxValue);
+    }
+    return juce::NormalisableRange<float>(p.minValue, p.maxValue, std::pow(10.0f, (float) -p.numDecimalPlaces));
+}
+
 template <class Spec>
 std::unique_ptr<juce::AudioParameterFloat> makeParameter(const Spec& p)
 {
-    const auto range = p.logFrequency
-        ? makeLogFrequencyRange(p.minValue, p.maxValue)
-        : juce::NormalisableRange<float>(p.minValue, p.maxValue, std::pow(10.0f, (float) -p.numDecimalPlaces));
+    const auto range = makeRange(p);
 
     parameterHelpTexts()[juce::String(p.ID)] = juce::String(p.help);
 

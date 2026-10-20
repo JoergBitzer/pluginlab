@@ -26,6 +26,24 @@ const juce::Colour kProgressBackground(0xff2a2a2a);
 const juce::String kNullDepthRow = "null depth against ";
 constexpr double kIdenticalDb = -290.0;  // the null test's floor: bit-identical outputs
 const juce::String kNullAlignmentRow = "null test: delay, gain of the alignment";
+
+juce::String formatNullDepth(double depth)
+{
+    if (depth <= kIdenticalDb)
+    {
+        return "identical";
+    }
+    return juce::String(depth, 1) + " dB";
+}
+
+juce::String getInvertedSuffix(bool inverted)
+{
+    if (inverted)
+    {
+        return ", inverted";
+    }
+    return "";
+}
 }
 
 ExpertPanel::ExpertPanel(engine::MeasurementEngine& engine, HostSettings& settings)
@@ -106,7 +124,12 @@ void ExpertPanel::slotsChanged()
     {
         m_nullBox.addItem(juce::String(slot + 1) + ": " + m_engine.getSlotInfo(slot).name, kNoNullItem + 1 + slot);
     }
-    m_nullBox.setSelectedId(previous > 0 && previous <= kNoNullItem + m_engine.getNumSlots() ? previous : kNoNullItem, juce::dontSendNotification);
+    int selected = kNoNullItem;
+    if (previous > 0 && previous <= kNoNullItem + m_engine.getNumSlots())
+    {
+        selected = previous;
+    }
+    m_nullBox.setSelectedId(selected, juce::dontSendNotification);
     resized();
 }
 
@@ -153,7 +176,12 @@ void ExpertPanel::setUnitChosen(const juce::String& key, bool chosen)
 
 void ExpertPanel::setNullMaster(int slot)
 {
-    m_nullBox.setSelectedId(slot >= 0 ? kNoNullItem + 1 + slot : kNoNullItem, juce::dontSendNotification);
+    int selected = kNoNullItem;
+    if (slot >= 0)
+    {
+        selected = kNoNullItem + 1 + slot;
+    }
+    m_nullBox.setSelectedId(selected, juce::dontSendNotification);
 }
 
 juce::StringArray ExpertPanel::getChosenUnits() const
@@ -171,7 +199,11 @@ juce::StringArray ExpertPanel::getChosenUnits() const
 
 int ExpertPanel::getNullMaster() const
 {
-    return m_nullBox.getSelectedId() > kNoNullItem ? m_nullBox.getSelectedId() - kNoNullItem - 1 : -1;
+    if (m_nullBox.getSelectedId() > kNoNullItem)
+    {
+        return m_nullBox.getSelectedId() - kNoNullItem - 1;
+    }
+    return -1;
 }
 
 std::vector<int> ExpertPanel::getChosenSlots() const
@@ -205,7 +237,18 @@ MeasurementPreset ExpertPanel::makePreset(const juce::String& name, const juce::
     }
     // by role: a master that is a plugin is stored as "first plugin" (the slots of another session hold other plugins)
     juce::ignoreUnused(firstPlugin);
-    preset.nullMaster = master < 0 ? "none" : master == 0 ? "dry" : "first plugin";
+    if (master < 0)
+    {
+        preset.nullMaster = "none";
+    }
+    else if (master == 0)
+    {
+        preset.nullMaster = "dry";
+    }
+    else
+    {
+        preset.nullMaster = "first plugin";
+    }
     return preset;
 }
 
@@ -225,7 +268,16 @@ void ExpertPanel::applyPreset(const MeasurementPreset& preset)
             firstPlugin = slot;
         }
     }
-    setNullMaster(preset.nullMaster == "dry" ? 0 : preset.nullMaster == "first plugin" ? firstPlugin : -1);
+    int master = -1;
+    if (preset.nullMaster == "dry")
+    {
+        master = 0;
+    }
+    else if (preset.nullMaster == "first plugin")
+    {
+        master = firstPlugin;
+    }
+    setNullMaster(master);
     m_presetNote.setText(preset.note, juce::dontSendNotification);
     setStatus("Preset \"" + preset.name + "\" chosen.");
 }
@@ -251,7 +303,12 @@ void ExpertPanel::refreshPresets(const juce::String& select)
     m_presetBox.clear(juce::dontSendNotification);
     for (size_t index = 0; index < m_presets.size(); ++index)
     {
-        m_presetBox.addItem(m_presets[index].name + (m_presets[index].shipped ? "  (shipped)" : ""), static_cast<int>(index) + 1);
+        juce::String suffix;
+        if (m_presets[index].shipped)
+        {
+            suffix = "  (shipped)";
+        }
+        m_presetBox.addItem(m_presets[index].name + suffix, static_cast<int>(index) + 1);
         if (m_presets[index].name == select)
         {
             m_presetBox.setSelectedItemIndex(static_cast<int>(index), juce::dontSendNotification);
@@ -281,7 +338,16 @@ void ExpertPanel::askToSavePreset()
         {
             const bool saved = saveMeasurementPreset(self->m_settings, self->makePreset(name, note));
             self->refreshPresets(name);
-            self->setStatus(saved ? "Preset \"" + name + "\" saved." : "The preset could not be saved.");
+            juce::String status;
+            if (saved)
+            {
+                status = "Preset \"" + name + "\" saved.";
+            }
+            else
+            {
+                status = "The preset could not be saved.";
+            }
+            self->setStatus(status);
         }
     }), false);
 }
@@ -410,10 +476,10 @@ void ExpertPanel::measurementFinished(bool success, const juce::String& message)
         {
             const double depth = entry.getProperty("nullDepthDb", 0.0);
             m_nulls.push_back({entry.getProperty("name", "").toString(),
-                               (depth <= kIdenticalDb ? juce::String("identical") : juce::String(depth, 1) + " dB") + "|"
+                               formatNullDepth(depth) + "|"
                                    + juce::String(static_cast<double>(entry.getProperty("delaySamples", 0.0)), 2) + " samples, "
                                    + juce::String(static_cast<double>(entry.getProperty("gainDb", 0.0)), 2) + " dB"
-                                   + (static_cast<bool>(entry.getProperty("inverted", false)) ? ", inverted" : "")});
+                                   + getInvertedSuffix(static_cast<bool>(entry.getProperty("inverted", false)))});
         }
     }
     rebuildTable();
@@ -482,7 +548,11 @@ juce::String ExpertPanel::getCellText(int row, int column) const
         {
             if (entry.name == slotName)
             {
-                return quantity == kNullAlignmentRow ? entry.text.fromFirstOccurrenceOf("|", false, false) : entry.text.upToFirstOccurrenceOf("|", false, false);
+                if (quantity == kNullAlignmentRow)
+                {
+                    return entry.text.fromFirstOccurrenceOf("|", false, false);
+                }
+                return entry.text.upToFirstOccurrenceOf("|", false, false);
             }
         }
         return {};

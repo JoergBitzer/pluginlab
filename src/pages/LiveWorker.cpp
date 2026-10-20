@@ -188,7 +188,14 @@ void RemoteLiveResponse::setSlots(const std::vector<std::optional<juce::PluginDe
     juce::Array<juce::var> list;
     for (const std::optional<juce::PluginDescription>& slot : slots)
     {
-        list.add(slot ? juce::var(slot->createXml()->toString()) : juce::var(juce::String()));
+        if (slot)
+        {
+            list.add(juce::var(slot->createXml()->toString()));
+        }
+        else
+        {
+            list.add(juce::var(juce::String()));
+        }
     }
     message.getDynamicObject()->setProperty("slots", list);
     m_coordinator->sendMessageToWorker(toBlock(message));
@@ -225,7 +232,11 @@ engine::LiveSlotResponse RemoteLiveResponse::getResponse(int slot) const
     }
     const juce::ScopedLock lock(m_coordinator->getResponses()->lock);
     const std::vector<engine::LiveSlotResponse>& slots = m_coordinator->getResponses()->slots;
-    return slot >= 0 && slot < static_cast<int>(slots.size()) ? slots[static_cast<size_t>(slot)] : engine::LiveSlotResponse();
+    if (slot >= 0 && slot < static_cast<int>(slots.size()))
+    {
+        return slots[static_cast<size_t>(slot)];
+    }
+    return engine::LiveSlotResponse();
 }
 
 bool RemoteLiveResponse::isRunning() const

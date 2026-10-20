@@ -163,9 +163,9 @@ public:
     }
 
 private:
-    void writePicture(juce::Component& component, const juce::String& name)
+    void writePicture(juce::Component& component, const juce::String& fileName)
     {
-        const juce::File picture = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile(name);
+        const juce::File picture = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile(fileName);
         juce::FileOutputStream stream(picture);
         if (stream.openedOk())
         {

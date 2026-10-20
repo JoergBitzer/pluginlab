@@ -79,7 +79,14 @@ public:
         m_classifyTarget = std::make_unique<LivePluginTarget>(formatManager, *description, sampleRate);
         if (! m_renderTarget->isValid() || ! m_classifyTarget->isValid())
         {
-            m_response.error = m_renderTarget->isValid() ? m_classifyTarget->getError() : m_renderTarget->getError();
+            if (m_renderTarget->isValid())
+            {
+                m_response.error = m_classifyTarget->getError();
+            }
+            else
+            {
+                m_response.error = m_renderTarget->getError();
+            }
             return;
         }
         m_renderThread = std::make_unique<LoopThread>("LiveResponse " + description->name, [this](LoopThread& thread) { renderLoop(thread); });
@@ -189,7 +196,14 @@ private:
             m_response.classified = true;
             m_response.lti = result.systemClass == measure::SystemClass::Lti;
             m_response.systemClass = measure::getSystemClassName(result.systemClass);
-            m_response.reason = m_response.lti ? juce::String() : result.reason;
+            if (m_response.lti)
+            {
+                m_response.reason = juce::String();
+            }
+            else
+            {
+                m_response.reason = result.reason;
+            }
             m_response.classOfCurrentSetting = m_renderedSetting == setting;
             ++m_response.classifications;
         }
@@ -305,7 +319,14 @@ void LiveResponseMonitor::setSlots(const std::vector<std::optional<juce::PluginD
     std::vector<juce::String> identifiers(slots.size());
     for (size_t index = 0; index < slots.size(); ++index)
     {
-        identifiers[index] = slots[index] ? slots[index]->createIdentifierString() : juce::String("dry");
+        if (slots[index])
+        {
+            identifiers[index] = slots[index]->createIdentifierString();
+        }
+        else
+        {
+            identifiers[index] = juce::String("dry");
+        }
         if (index < m_slots.size() && m_identifiers[index] == identifiers[index])
         {
             workers[index] = std::move(m_slots[index]); // the same plugin: its instances stay
@@ -361,7 +382,14 @@ LiveDeviation getLiveDeviation(const std::vector<double>& masterDb, const std::v
         sum += difference * difference;
         ++count;
     }
-    deviation.rmsDb = count > 0 ? std::sqrt(sum / count) : 0.0;
+    if (count > 0)
+    {
+        deviation.rmsDb = std::sqrt(sum / count);
+    }
+    else
+    {
+        deviation.rmsDb = 0.0;
+    }
     return deviation;
 }
 }

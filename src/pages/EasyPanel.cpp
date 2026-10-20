@@ -126,7 +126,11 @@ void EasyPanel::slotsChanged()
             m_masterBox.addItem(hosting::getDisplayName(plugin->getDescription()), static_cast<int>(m_pluginSlots.size()));
         }
     }
-    int selected = m_pluginSlots.empty() ? 0 : 1;
+    int selected = 0;
+    if (! m_pluginSlots.empty())
+    {
+        selected = 1;
+    }
     for (size_t index = 0; index < m_pluginSlots.size(); ++index)
     {
         if (m_pluginSlots[index] == previous)
@@ -190,10 +194,24 @@ void EasyPanel::rebuildRows()
         row.slot = slot;
         row.master = slot == master;
         hosting::HostedPlugin* plugin = m_engine.getPlugin(slot);
-        row.name = plugin != nullptr ? hosting::getDisplayName(plugin->getDescription()) : juce::String("without EQ (the dry signal)");
+        if (plugin != nullptr)
+        {
+            row.name = hosting::getDisplayName(plugin->getDescription());
+        }
+        else
+        {
+            row.name = juce::String("without EQ (the dry signal)");
+        }
         if (plugin != nullptr && ! row.master)
         {
-            row.released = getMappedParameters(m_settings, plugin->getDescription()).empty() ? "no mapping: every continuous knob is moved" : "";
+            if (getMappedParameters(m_settings, plugin->getDescription()).empty())
+            {
+                row.released = "no mapping: every continuous knob is moved";
+            }
+            else
+            {
+                row.released = "";
+            }
         }
         for (const Row& before : old)
         {
@@ -230,8 +248,21 @@ void EasyPanel::rebuildRows()
     {
         compared.add(hosting::getDisplayName(m_engine.getPlugin(slot)->getDescription()));
     }
-    const int others = static_cast<int>(m_pluginSlots.size()) - (master >= 0 ? 1 : 0);
-    juce::String text = compared.isEmpty() ? juce::String("nothing yet: load the EQs to compare on the page Plugins") : compared.joinIntoString(", ");
+    int masterCount = 0;
+    if (master >= 0)
+    {
+        masterCount = 1;
+    }
+    const int others = static_cast<int>(m_pluginSlots.size()) - masterCount;
+    juce::String text;
+    if (compared.isEmpty())
+    {
+        text = juce::String("nothing yet: load the EQs to compare on the page Plugins");
+    }
+    else
+    {
+        text = compared.joinIntoString(", ");
+    }
     if (others > kMaximumCompared)
     {
         text += "  (only the first three of the " + juce::String(others) + " loaded)";
@@ -273,7 +304,16 @@ void EasyPanel::updateRowTexts()
         }
         else if (row.outcome->refused)
         {
-            close = "cannot be matched: " + (row.outcome->reason.isNotEmpty() ? row.outcome->reason : juce::String("it does not behave like an EQ"));
+            juce::String reason;
+            if (row.outcome->reason.isNotEmpty())
+            {
+                reason = row.outcome->reason;
+            }
+            else
+            {
+                reason = juce::String("it does not behave like an EQ");
+            }
+            close = "cannot be matched: " + reason;
         }
         else
         {
@@ -289,7 +329,16 @@ void EasyPanel::updateRowTexts()
             }
         }
         row.closeLabel->setText(close, juce::dontSendNotification);
-        row.closeLabel->setTooltip(row.outcome && row.outcome->evidence.isNotEmpty() ? row.outcome->evidence : close);
+        juce::String tooltip;
+        if (row.outcome && row.outcome->evidence.isNotEmpty())
+        {
+            tooltip = row.outcome->evidence;
+        }
+        else
+        {
+            tooltip = close;
+        }
+        row.closeLabel->setTooltip(tooltip);
     }
 }
 
@@ -416,8 +465,13 @@ juce::String EasyPanel::describe() const
     juce::StringArray lines;
     for (const Row& row : m_rows)
     {
+        juce::String listening;
+        if (m_engine.getActiveSlot() == row.slot)
+        {
+            listening = " [listening]";
+        }
         lines.add(row.listen->getButtonText() + " " + row.nameLabel->getText() + ": " + row.closeLabel->getText() + "; level "
-                  + juce::String(row.trim->getValue(), 1) + " dB" + (m_engine.getActiveSlot() == row.slot ? " [listening]" : ""));
+                  + juce::String(row.trim->getValue(), 1) + " dB" + listening);
     }
     return lines.joinIntoString("\n");
 }
@@ -432,10 +486,28 @@ void EasyPanel::timerCallback()
     for (Row& row : m_rows)
     {
         const bool active = m_engine.getActiveSlot() == row.slot;
-        row.listen->setColour(juce::TextButton::buttonColourId, active ? kActiveColour : getLookAndFeel().findColour(juce::TextButton::buttonColourId));
+        juce::Colour colour;
+        if (active)
+        {
+            colour = kActiveColour;
+        }
+        else
+        {
+            colour = getLookAndFeel().findColour(juce::TextButton::buttonColourId);
+        }
+        row.listen->setColour(juce::TextButton::buttonColourId, colour);
     }
     const bool playing = isPlaying && isPlaying();
-    m_playButton.setButtonText(playing ? "Stop" : "Play");
+    juce::String playText;
+    if (playing)
+    {
+        playText = "Stop";
+    }
+    else
+    {
+        playText = "Play";
+    }
+    m_playButton.setButtonText(playText);
     if (m_job != nullptr)
     {
         repaint(m_progressArea); // the elapsed time

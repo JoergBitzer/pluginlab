@@ -104,7 +104,31 @@ bool isRelative(MappedQuantity quantity)
 // the deviation of a point: relative (frequency, Q) or absolute (gain, order)
 double getDeviation(MappedQuantity quantity, double shown, double measured)
 {
-    return isRelative(quantity) ? measured / shown - 1.0 : measured - shown;
+    if (isRelative(quantity))
+    {
+        return measured / shown - 1.0;
+    }
+    return measured - shown;
+}
+
+// "+" before a positive number or zero; a negative number brings its own sign
+const char* getSignPrefix(double value)
+{
+    if (value >= 0.0)
+    {
+        return "+";
+    }
+    return "";
+}
+
+// "+ " or "- " before the size of an offset
+const char* getOffsetOperator(double offset)
+{
+    if (offset >= 0.0)
+    {
+        return "+ ";
+    }
+    return "- ";
 }
 
 // deviations, their pattern and whether one straight line or one factor describes them
@@ -162,8 +186,14 @@ void analyseSeries(CalibrationSeries& series, MappedQuantity quantity, const Cal
                 return;
             }
         }
-        series.pattern = series.constant ? "x " + juce::String(series.factor, 3)
-                                         : "varies: x " + juce::String(lowest, 3) + " ... x " + juce::String(highest, 3);
+        if (series.constant)
+        {
+            series.pattern = "x " + juce::String(series.factor, 3);
+        }
+        else
+        {
+            series.pattern = "varies: x " + juce::String(lowest, 3) + " ... x " + juce::String(highest, 3);
+        }
         return;
     }
     if (quantity == MappedQuantity::Gain)
@@ -182,7 +212,14 @@ void analyseSeries(CalibrationSeries& series, MappedQuantity quantity, const Cal
             sxy += point->shown * *point->measured;
         }
         const double denominator = n * sxx - sx * sx;
-        series.factor = std::abs(denominator) > 1.0e-12 ? (n * sxy - sx * sy) / denominator : 1.0;
+        if (std::abs(denominator) > 1.0e-12)
+        {
+            series.factor = (n * sxy - sx * sy) / denominator;
+        }
+        else
+        {
+            series.factor = 1.0;
+        }
         series.offset = (sy - series.factor * sx) / n;
         series.constant = std::all_of(measured.begin(), measured.end(), [&](const CalibrationPoint* point) {
             return std::abs(*point->measured - (series.factor * point->shown + series.offset)) <= getTolerance(quantity, *point, settings);
@@ -208,7 +245,7 @@ void analyseSeries(CalibrationSeries& series, MappedQuantity quantity, const Cal
         }
         else if (std::abs(series.factor - 1.0) < kUnitSlopeTolerance)
         {
-            series.pattern = "offset " + juce::String(series.offset >= 0.0 ? "+" : "") + juce::String(series.offset, 2) + " dB";
+            series.pattern = "offset " + juce::String(getSignPrefix(series.offset)) + juce::String(series.offset, 2) + " dB";
         }
         else if (std::abs(series.offset) < settings.gainToleranceDb)
         {
@@ -216,7 +253,7 @@ void analyseSeries(CalibrationSeries& series, MappedQuantity quantity, const Cal
         }
         else
         {
-            series.pattern = juce::String(series.factor, 3) + " x shown " + (series.offset >= 0.0 ? "+ " : "- ") + juce::String(std::abs(series.offset), 2) + " dB";
+            series.pattern = juce::String(series.factor, 3) + " x shown " + getOffsetOperator(series.offset) + juce::String(std::abs(series.offset), 2) + " dB";
         }
         return;
     }
@@ -233,7 +270,23 @@ void analyseSeries(CalibrationSeries& series, MappedQuantity quantity, const Cal
         series.pattern = "as shown";
         return;
     }
-    series.pattern = series.constant ? juce::String(differences.front() > 0 ? "+" : "") + juce::String(differences.front()) + " orders" : juce::String("varies");
+    if (series.constant)
+    {
+        const char* sign;
+        if (differences.front() > 0)
+        {
+            sign = "+";
+        }
+        else
+        {
+            sign = "";
+        }
+        series.pattern = juce::String(sign) + juce::String(differences.front()) + " orders";
+    }
+    else
+    {
+        series.pattern = juce::String("varies");
+    }
 }
 
 // what the series of all rates say together
@@ -256,7 +309,14 @@ juce::String concludeOverRates(const ParameterCalibration& parameter, const Cali
     juce::StringArray agreeing;
     for (const CalibrationSeries* series : measured)
     {
-        (series->deviates ? deviating : agreeing).add(formatRate(series->sampleRate));
+        if (series->deviates)
+        {
+            deviating.add(formatRate(series->sampleRate));
+        }
+        else
+        {
+            agreeing.add(formatRate(series->sampleRate));
+        }
     }
     if (parameter.quantity == MappedQuantity::Frequency && allConstant && measured.size() > 1)
     {
@@ -288,7 +348,15 @@ juce::String concludeOverRates(const ParameterCalibration& parameter, const Cali
     {
         // the same pattern, or factors (and offsets) within the tolerance of each other
         const CalibrationSeries& first = *measured.front();
-        const double relativeTolerance = parameter.quantity == MappedQuantity::Q ? settings.qTolerance : settings.frequencyTolerance;
+        double relativeTolerance;
+        if (parameter.quantity == MappedQuantity::Q)
+        {
+            relativeTolerance = settings.qTolerance;
+        }
+        else
+        {
+            relativeTolerance = settings.frequencyTolerance;
+        }
         const bool same = std::all_of(measured.begin(), measured.end(), [&](const CalibrationSeries* series) {
             if (series->pattern == first.pattern)
             {
@@ -310,6 +378,26 @@ juce::String concludeOverRates(const ParameterCalibration& parameter, const Cali
         return "depends on the sample rate: deviates at " + deviating.joinIntoString(", ") + ", as shown at " + agreeing.joinIntoString(", ");
     }
     return "deviates at every rate, in different ways";
+}
+
+// The band number as the report counts (1 ...), "-" for a parameter of no band
+juce::String formatBandNumber(int band)
+{
+    if (band >= 0)
+    {
+        return juce::String(band + 1);
+    }
+    return juce::String("-");
+}
+
+// A cell in bold when it is outside the tolerance
+juce::String markIfDeviates(const juce::String& cell, bool deviates)
+{
+    if (deviates)
+    {
+        return "**" + cell + "**";
+    }
+    return cell;
 }
 }
 
@@ -416,7 +504,14 @@ CalibrationResult calibrate(const SurveySubject& subject, const Mapping& mapping
             {
                 CalibrationPoint point;
                 point.value = value;
-                point.text = surveyed.getText ? surveyed.getText(value) : juce::String(value);
+                if (surveyed.getText)
+                {
+                    point.text = surveyed.getText(value);
+                }
+                else
+                {
+                    point.text = juce::String(value);
+                }
                 const std::optional<double> shown = parseDisplayedNumber(point.text);
                 if (! shown)
                 {
@@ -562,10 +657,10 @@ juce::String createCalibrationReport(const CalibrationResult& result)
     for (const ParameterCalibration* parameter : deviating)
     {
         text << "| " << (parameter->index + 1) << " | " << parameter->name << " (" << getMappedQuantityName(parameter->quantity) << ") | "
-             << (parameter->band >= 0 ? juce::String(parameter->band + 1) : juce::String("-")) << " |";
+             << formatBandNumber(parameter->band) << " |";
         for (const CalibrationSeries& series : parameter->rates)
         {
-            text << " " << (series.deviates ? "**" + series.pattern + "**" : series.pattern) << " |";
+            text << " " << markIfDeviates(series.pattern, series.deviates) << " |";
         }
         text << " " << parameter->conclusion << " |\n";
     }
@@ -591,7 +686,15 @@ juce::String createCalibrationReport(const CalibrationResult& result)
             text << "---|";
         }
         text << "\n";
-        const size_t count = parameter->rates.empty() ? 0 : parameter->rates.front().points.size();
+        size_t count;
+        if (parameter->rates.empty())
+        {
+            count = 0;
+        }
+        else
+        {
+            count = parameter->rates.front().points.size();
+        }
         for (size_t row = 0; row < count; ++row)
         {
             const CalibrationPoint& shownPoint = parameter->rates.front().points[row];
@@ -617,9 +720,9 @@ juce::String createCalibrationReport(const CalibrationResult& result)
                 else
                 {
                     const double difference = *point.measured - point.shown;
-                    cell << " (" << (difference >= 0.0 ? "+" : "") << juce::String(difference, 2) << ")";
+                    cell << " (" << getSignPrefix(difference) << juce::String(difference, 2) << ")";
                 }
-                text << " " << (point.deviates ? "**" + cell + "**" : cell) << " |";
+                text << " " << markIfDeviates(cell, point.deviates) << " |";
             }
             text << "\n";
         }

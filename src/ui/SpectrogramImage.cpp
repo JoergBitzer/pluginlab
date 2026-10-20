@@ -31,7 +31,11 @@ juce::Colour getPlasmaColour(double value, double floorDb, double ceilingDb)
 
 juce::String getFrequencyLabel(double hertz)
 {
-    return hertz >= 1000.0 ? juce::String(juce::roundToInt(hertz / 1000.0)) + "k" : juce::String(juce::roundToInt(hertz));
+    if (hertz >= 1000.0)
+    {
+        return juce::String(juce::roundToInt(hertz / 1000.0)) + "k";
+    }
+    return juce::String(juce::roundToInt(hertz));
 }
 
 // the level of a pixel row (lower edge low, upper edge high, in Hz) in one frame: the maximum of the bins in it, else the interpolation between
@@ -139,13 +143,22 @@ juce::Image renderSpectrogramImage(const measure::Spectrogram& spectrogram, cons
             break;
         }
     }
+    int decimals = 0;
+    if (step < 1.0)
+    {
+        decimals = 1;
+    }
+    else
+    {
+        decimals = 0;
+    }
     for (double t = 0.0; t <= seconds + 1.0e-9; t += step)
     {
         const float x = static_cast<float>(plot.getX()) + static_cast<float>(columns * t / seconds);
         g.setColour(kAxis);
         g.drawLine(x, static_cast<float>(plot.getBottom()), x, static_cast<float>(plot.getBottom() + kTick));
         g.setColour(kText);
-        g.drawText(juce::String(t, step < 1.0 ? 1 : 0), juce::roundToInt(x) - 30, plot.getBottom() + kTick, 60, juce::roundToInt(kFontHeight),
+        g.drawText(juce::String(t, decimals), juce::roundToInt(x) - 30, plot.getBottom() + kTick, 60, juce::roundToInt(kFontHeight),
                    juce::Justification::centred, false);
     }
     g.drawText("time in s", plot.getX(), options.height - juce::roundToInt(kFontHeight) - 4, plot.getWidth(), juce::roundToInt(kFontHeight),

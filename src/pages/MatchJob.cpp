@@ -262,7 +262,14 @@ public:
             if (process.isRunning())
             {
                 process.kill();
-                message = threadShouldExit() ? "stopped" : "stopped (time limit)";
+                if (threadShouldExit())
+                {
+                    message = "stopped";
+                }
+                else
+                {
+                    message = "stopped (time limit)";
+                }
             }
             success = m_report.existsAsFile() && m_report.getSize() > 0;
             if (! success && message.isEmpty())

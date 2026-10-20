@@ -373,9 +373,25 @@ std::vector<Band> findCandidates(const std::vector<double>& frequencies, const s
             passes.push_back(pass);
             // the order from the slope: a Butterworth filter is 10 lg(1 + 2^(2n)) ~ 6.02 n dB down one octave beyond its -3 dB point; that
             // order and its neighbours (1 ... 8, the orders the model has)
-            const double octaveBeyond = lowEnd ? pass.frequencyHz / 2.0 : pass.frequencyHz * 2.0;
+            double octaveBeyond = 0.0;
+            if (lowEnd)
+            {
+                octaveBeyond = pass.frequencyHz / 2.0;
+            }
+            else
+            {
+                octaveBeyond = pass.frequencyHz * 2.0;
+            }
             const bool insideGrid = octaveBeyond >= frequencies.front() && octaveBeyond <= frequencies.back();
-            const int estimate = insideGrid ? juce::jlimit(1, kMaximumPassOrder, static_cast<int>(std::round(-getValueAt(frequencies, difference, octaveBeyond) / 6.02))) : 2;
+            int estimate = 0;
+            if (insideGrid)
+            {
+                estimate = juce::jlimit(1, kMaximumPassOrder, static_cast<int>(std::round(-getValueAt(frequencies, difference, octaveBeyond) / 6.02)));
+            }
+            else
+            {
+                estimate = 2;
+            }
             for (int order = std::max(1, estimate - 1); order <= std::min(kMaximumPassOrder, estimate + 1); ++order)
             {
                 Band butterworth = pass;

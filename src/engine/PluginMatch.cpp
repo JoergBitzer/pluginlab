@@ -33,7 +33,11 @@ double getWorstFrequency(const std::vector<double>& residual, const std::vector<
             worst = index;
         }
     }
-    return frequencies.empty() ? 0.0 : frequencies[std::min(worst, frequencies.size() - 1)];
+    if (frequencies.empty())
+    {
+        return 0.0;
+    }
+    return frequencies[std::min(worst, frequencies.size() - 1)];
 }
 
 bool isGainType(reference::FilterType type)
@@ -62,7 +66,11 @@ juce::String getFamilyGroup(const eqmodel::Band& band)
     using Family = eqmodel::DesignFamily;
     if (band.family == Family::StateVariable || band.family == Family::LinearPhase || band.family == Family::Rbj)
     {
-        return isGainType(band.type) ? "RBJ" : "pass";
+        if (isGainType(band.type))
+        {
+            return "RBJ";
+        }
+        return "pass";
     }
     if (band.family == Family::Butterworth || band.family == Family::LinkwitzRiley)
     {
@@ -71,12 +79,66 @@ juce::String getFamilyGroup(const eqmodel::Band& band)
     return eqmodel::getFamilyName(band.family);
 }
 
+// the sign written in front of a gain: "+" for a boost or no change, nothing for a cut (its minus comes with the number)
+juce::String getGainSign(double gainDb)
+{
+    if (gainDb >= 0.0)
+    {
+        return "+";
+    }
+    return "";
+}
+
+// a released value as text: the plugin's own text if it gives one, else the number
+juce::String getReleasedValueText(const ReleasedValue& value)
+{
+    if (value.text.isNotEmpty())
+    {
+        return value.text;
+    }
+    return juce::String(value.value, 3);
+}
+
+// the note behind a released value at the end of its range, empty otherwise
+juce::String getBoundNote(const ReleasedValue& value)
+{
+    if (value.atBound)
+    {
+        return " (at the end of its range)";
+    }
+    return "";
+}
+
+// the note behind a target that started from the band model, empty otherwise
+juce::String getModelStartNote(const TargetMatchResult& item)
+{
+    if (item.startedFromModel)
+    {
+        return " (model start)";
+    }
+    return "";
+}
+
+// the null depth column: "-" if not measured, "identical" for the same output sample for sample, else the depth in dB
+juce::String getNullDepthText(const TargetMatchResult& item)
+{
+    if (! item.nullMeasured)
+    {
+        return "-";
+    }
+    if (item.nullDepthDb <= kIdenticalNullDb)
+    {
+        return "identical";
+    }
+    return juce::String(item.nullDepthDb, 1) + " dB";
+}
+
 juce::String describeBand(const eqmodel::Band& band)
 {
     juce::String text = juce::String(eqmodel::getFamilyName(band.family)) + " " + reference::getFilterTypeName(band.type) + " " + formatFrequency(band.frequencyHz) + " Hz";
     if (isGainType(band.type))
     {
-        text << " " << (band.gainDb >= 0.0 ? "+" : "") << juce::String(band.gainDb, 1) << " dB";
+        text << " " << getGainSign(band.gainDb) << juce::String(band.gainDb, 1) << " dB";
     }
     return text;
 }
@@ -91,7 +153,7 @@ std::vector<MatchAttribution> attribute(juce::AudioPluginFormatManager& formatMa
     {
         if (value.atBound)
         {
-            causes.push_back({MatchCause::KnobRange, value.name + " at the end of its range (" + (value.text.isNotEmpty() ? value.text : juce::String(value.value, 3)) + ")"});
+            causes.push_back({MatchCause::KnobRange, value.name + " at the end of its range (" + getReleasedValueText(value) + ")"});
         }
     }
     // the target's bands at the found setting: the band fit of a careful measurement
@@ -232,14 +294,18 @@ juce::String MatchMaster::describe() const
                                 + formatFrequency(band.frequencyHz) + " Hz";
             if (band.type == reference::FilterType::Peak || band.type == reference::FilterType::LowShelf || band.type == reference::FilterType::HighShelf)
             {
-                text << " " << (band.gainDb >= 0.0 ? "+" : "") << juce::String(band.gainDb, 1) << " dB";
+                text << " " << getGainSign(band.gainDb) << juce::String(band.gainDb, 1) << " dB";
             }
             text << " Q " << juce::String(band.q, 2);
             bands.add(text);
         }
         return "band-model curve: " + bands.joinIntoString(", ");
     }
-    return plugin ? plugin->name + " " + plugin->version + " at its setting" : juce::String("none");
+    if (plugin)
+    {
+        return plugin->name + " " + plugin->version + " at its setting";
+    }
+    return juce::String("none");
 }
 
 PluginMatchSettings::PluginMatchSettings()
@@ -311,7 +377,15 @@ PluginMatchResult matchPlugins(juce::AudioPluginFormatManager& formatManager, co
             }
         };
         report(0.0, "checks");
-        std::vector<float> start = target.start.empty() ? getDefaultSetting(formatManager, target.plugin, sampleRate) : target.start;
+        std::vector<float> start;
+        if (target.start.empty())
+        {
+            start = getDefaultSetting(formatManager, target.plugin, sampleRate);
+        }
+        else
+        {
+            start = target.start;
+        }
         if (target.modelStart && target.mapping)
         {
             if (! masterBands)
@@ -449,11 +523,19 @@ juce::String createPluginMatchReport(const PluginMatchResult& result, const juce
         juce::StringArray values;
         for (const ReleasedValue& value : item.values)
         {
-            values.add(value.name + " = " + (value.text.isNotEmpty() ? value.text : juce::String(value.value, 3)) + (value.atBound ? " (at the end of its range)" : ""));
+            values.add(value.name + " = " + getReleasedValueText(value) + getBoundNote(value));
         }
-        const juce::String verdict = item.optimizer.withinTolerance ? juce::String("matched") : "**not within the tolerance** (" + juce::String(match::getStopReasonName(item.optimizer.reason)) + ")";
-        text << "| " << item.name << (item.startedFromModel ? " (model start)" : "") << " | " << verdict << " | " << juce::String(item.optimizer.largest, 3) << " / "
-             << juce::String(item.optimizer.rms, 3) << " dB | " << (! item.nullMeasured ? juce::String("-") : item.nullDepthDb <= kIdenticalNullDb ? juce::String("identical") : juce::String(item.nullDepthDb, 1) + " dB") << " | "
+        juce::String verdict;
+        if (item.optimizer.withinTolerance)
+        {
+            verdict = "matched";
+        }
+        else
+        {
+            verdict = "**not within the tolerance** (" + juce::String(match::getStopReasonName(item.optimizer.reason)) + ")";
+        }
+        text << "| " << item.name << getModelStartNote(item) << " | " << verdict << " | " << juce::String(item.optimizer.largest, 3) << " / "
+             << juce::String(item.optimizer.rms, 3) << " dB | " << getNullDepthText(item) << " | "
              << values.joinIntoString(", ") << " | " << item.optimizer.evaluations << ", "
              << juce::String(item.seconds, 1) << " s |\n";
     }
