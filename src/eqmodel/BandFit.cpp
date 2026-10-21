@@ -497,6 +497,45 @@ std::vector<double> makeLogGrid(double lowestHz, double highestHz, double perOct
     return grid;
 }
 
+namespace
+{
+// The magnitude of an RBJ shelf has a twin: a low shelf of +g dB is a high shelf of -g dB (same frequency and Q) with g dB more output
+// gain, exactly (from the analog prototypes: H_LS(s; A) = A^2 H_HS(s; 1/A)). The fit can end in either form, and which one depends on the
+// rounding of the platform (found by the macOS CI, 2026-10-20). The form with the smaller output gain is taken: a slight treble loss is
+// then a high shelf, not a low shelf with the level turned down.
+bool hasShelfTwin(const Band& band)
+{
+    const bool rbjMagnitude = band.family == DesignFamily::Rbj || band.family == DesignFamily::StateVariable || band.family == DesignFamily::LinearPhase;
+    const bool shelf = band.type == ref::FilterType::LowShelf || band.type == ref::FilterType::HighShelf;
+    return rbjMagnitude && shelf;
+}
+
+void makeShelvesCanonical(EqModel& model)
+{
+    for (Band& band : model.bands)
+    {
+        if (! hasShelfTwin(band))
+        {
+            continue;
+        }
+        const double twinOutputGainDb = model.outputGainDb + band.gainDb;
+        if (std::abs(twinOutputGainDb) < std::abs(model.outputGainDb))
+        {
+            if (band.type == ref::FilterType::LowShelf)
+            {
+                band.type = ref::FilterType::HighShelf;
+            }
+            else
+            {
+                band.type = ref::FilterType::LowShelf;
+            }
+            band.gainDb = -band.gainDb;
+            model.outputGainDb = twinOutputGainDb;
+        }
+    }
+}
+}
+
 FitResult fitEqModel(const std::vector<double>& frequencies, const std::vector<std::complex<double>>& response, const FitSettings& settings)
 {
     FitResult result;
@@ -601,6 +640,7 @@ FitResult fitEqModel(const std::vector<double>& frequencies, const std::vector<s
         // a few iterations with the real FIR: its magnitude deviates from RBJ by up to 0.05 dB
         cost = refine(model, frequencies, measuredDb, fs, true, kExactIterations);
     }
+    makeShelvesCanonical(model);
     // the final residual with the true designs (linear phase: the FIR)
     std::vector<double> modelDb;
     for (const double f : frequencies)

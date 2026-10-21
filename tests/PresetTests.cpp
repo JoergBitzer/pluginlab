@@ -3,6 +3,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "TestEnvironment.h"
 #include "BenchmarkProcessor.h"
 #include "ExpertPanel.h"
 #include "HostSettings.h"
@@ -36,7 +37,7 @@ public:
         const juce::File folder = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("pluginlab_preset_test");
         folder.deleteRecursively();
         folder.createDirectory();
-        setenv("PLUGINLAB_SETTINGS_FOLDER", folder.getFullPathName().toRawUTF8(), 1);
+        testenvironment::set("PLUGINLAB_SETTINGS_FOLDER", folder.getFullPathName());
         pluginlab::host::HostSettings settings;
 
         beginTest("the shipped teaching presets are written when missing; a preset survives its JSON");

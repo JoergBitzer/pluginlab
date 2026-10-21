@@ -6,6 +6,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "TestEnvironment.h"
 #include "LiveWorker.h"
 #include "MatchJob.h"
 #include "PageServices.h"
@@ -41,7 +42,7 @@ public:
         const juce::File folder = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("pluginlab_crash_test");
         folder.deleteRecursively();
         folder.createDirectory();
-        setenv("PLUGINLAB_SETTINGS_FOLDER", folder.getFullPathName().toRawUTF8(), 1);
+        testenvironment::set("PLUGINLAB_SETTINGS_FOLDER", folder.getFullPathName());
         pluginlab::host::setHelperExecutable(juce::File(PLUGINLAB_HOST_EXECUTABLE));
         beginTest("the test plugins are scanned"); // (expect() before the first beginTest() crashes the test runner)
         m_formatManager = std::make_unique<juce::AudioPluginFormatManager>();

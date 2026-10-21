@@ -4,6 +4,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "TestEnvironment.h"
 #include "EasyPanel.h"
 #include "HostSettings.h"
 #include "PageServices.h"
@@ -50,7 +51,7 @@ public:
         const juce::File folder = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("pluginlab_easy_test");
         folder.deleteRecursively();
         folder.createDirectory();
-        setenv("PLUGINLAB_SETTINGS_FOLDER", folder.getFullPathName().toRawUTF8(), 1);
+        testenvironment::set("PLUGINLAB_SETTINGS_FOLDER", folder.getFullPathName());
         pluginlab::host::HostSettings settings;
         const juce::File mappings = settings.getMappingFolder();
         mappings.createDirectory();

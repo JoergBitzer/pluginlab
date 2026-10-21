@@ -175,7 +175,7 @@ public:
     const juce::String getProgramName(int index) override
     {
         juce::ignoreUnused(index);
-        return {};
+        return "Default"; // a name: the VST3 validator of pluginval 2.x rejects an empty one
     }
     void changeProgramName(int index, const juce::String& name) override
     {

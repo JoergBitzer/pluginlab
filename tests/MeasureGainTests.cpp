@@ -170,7 +170,7 @@ private:
         m_lines.add("| RBJ low-pass 1 kHz Q 0.71 | " + juce::String(toDb(std::abs(lowPassExact)), 5) + " dB, " + juce::String(std::arg(lowPassExact) * 180.0 / kPi, 4)
                     + " degrees | " + juce::String(lowPassed.channels[0].gainDb, 5) + " dB, " + juce::String(lowPassed.channels[0].phaseDegrees, 4) + " degrees |");
 
-        constexpr double kDelaySamples = 10.5;
+        static constexpr double kDelaySamples = 10.5; // static: used in a lambda without a capture (MSVC)
         const std::complex<double> delayExact = ref::makeThiranDelay(kDelaySamples, 3, 48000.0).getResponse(measure::kStandardFrequencyHz);
         const measure::GainResult delayed = measureProcessor([](double sampleRate)
                                                              { return std::make_unique<ref::DirectFormFilter>(ref::makeThiranDelay(kDelaySamples, 3, sampleRate)); });

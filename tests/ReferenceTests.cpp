@@ -472,7 +472,7 @@ private:
     void testLinearPhaseFir()
     {
         beginTest("linear-phase FIR: symmetric taps (exactly linear phase, latency (N-1)/2), the target magnitude within 0.05 dB, processing equals H(e^jw)");
-        constexpr double kSampleRate = 48000.0;
+        static constexpr double kSampleRate = 48000.0; // static: used in a lambda without a capture (MSVC)
         constexpr int kTaps = 2047;
         const ref::BiquadCoefficients peak = ref::designRbj(ref::FilterType::Peak, kSampleRate, 1000.0, 6.0, 1.0);
         const auto target = [&peak](double f)

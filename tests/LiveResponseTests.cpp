@@ -115,6 +115,7 @@ public:
             beginTest("a knob turned for one second: at most 5 curves per second, the last one is the last setting");
             {
                 const int before = monitor.getResponse(1).generation;
+                const double turnStarted = juce::Time::getMillisecondCounterHiRes();
                 std::vector<float> values;
                 for (int step = 0; step < kKnobSteps; ++step)
                 {
@@ -122,11 +123,15 @@ public:
                     monitor.setSetting(1, withValues(eqDefaults, values));
                     juce::Thread::sleep(kKnobStepMs);
                 }
+                // the sleeps of a loaded machine (a CI runner) can make the "one second" longer: the limit is per second of the real time
+                const double turnSeconds = (juce::Time::getMillisecondCounterHiRes() - turnStarted) / 1000.0;
                 juce::Thread::sleep(400); // the last one rendered
                 const engine::LiveSlotResponse response = monitor.getResponse(1);
                 const int curves = response.generation - before;
-                logMessage(juce::String(curves) + " curves for " + juce::String(kKnobSteps) + " settings in 1 s");
-                expect(curves >= 2 && curves <= 7, "curves: " + juce::String(curves));
+                const int allowed = static_cast<int>(std::ceil(turnSeconds * monitor.getOptions().updatesPerSecond)) + 2;
+                logMessage(juce::String(curves) + " curves for " + juce::String(kKnobSteps) + " settings in " + juce::String(turnSeconds, 2) + " s (at most "
+                           + juce::String(allowed) + ")");
+                expect(curves >= 2 && curves <= allowed, "curves: " + juce::String(curves));
                 expectLessThan(worstDifference(response.magnitudeDb, getTestEqCurve(values, monitor.getFrequencies())), kExactDb);
             }
 

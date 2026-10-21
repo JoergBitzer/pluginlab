@@ -92,6 +92,17 @@ int PluginValidator::getNumberOfPluginvalRuns() const
     return m_numberOfRuns;
 }
 
+namespace
+{
+// the program of a downloaded pluginval in a folder: Linux and macOS (the plain program or the app bundle), Windows
+void addPluginvalCandidates(juce::Array<juce::File>& candidates, const juce::File& folder)
+{
+    candidates.add(folder.getChildFile(kPluginvalName));
+    candidates.add(folder.getChildFile("pluginval.app/Contents/MacOS/pluginval"));
+    candidates.add(folder.getChildFile("pluginval.exe"));
+}
+}
+
 juce::File PluginValidator::findPluginval()
 {
     const juce::String fromEnvironment = juce::SystemStats::getEnvironmentVariable(kEnvironmentVariable, {});
@@ -121,15 +132,34 @@ juce::File PluginValidator::findPluginval()
         return inPath; // started: it is in the PATH (the name alone is enough to start it)
     }
 
-    // where tools/run_pluginval.sh and .ps1 download it
-    juce::Array<juce::File> downloadLocations;
-    const juce::File cacheFolder = juce::File::getSpecialLocation(juce::File::userHomeDirectory).getChildFile(".cache").getChildFile(kPluginvalName);
-    downloadLocations.add(cacheFolder.getChildFile(kPluginvalName));
-    downloadLocations.add(cacheFolder.getChildFile("pluginval.app/Contents/MacOS/pluginval"));
+    // where tools/run_pluginval.sh and .ps1 download it: a folder per pinned version (<cache>/pluginval/<tag>/, since pluginval 2.0.0), the
+    // newest tag first; then the old place without a tag (pluginval 1.0.4, which has a use-after-free: only the last resort)
+    juce::Array<juce::File> downloadFolders;
+    const juce::String cacheHome = juce::SystemStats::getEnvironmentVariable("XDG_CACHE_HOME", {});
+    juce::File cacheFolder = juce::File::getSpecialLocation(juce::File::userHomeDirectory).getChildFile(".cache").getChildFile(kPluginvalName);
+    if (cacheHome.isNotEmpty())
+    {
+        cacheFolder = juce::File(cacheHome).getChildFile(kPluginvalName);
+    }
+    downloadFolders.add(cacheFolder);
     const juce::String localAppData = juce::SystemStats::getEnvironmentVariable("LOCALAPPDATA", {});
     if (localAppData.isNotEmpty())
     {
-        downloadLocations.add(juce::File(localAppData).getChildFile(kPluginvalName).getChildFile("pluginval.exe"));
+        downloadFolders.add(juce::File(localAppData).getChildFile(kPluginvalName));
+    }
+    juce::Array<juce::File> downloadLocations;
+    for (const juce::File& folder : downloadFolders)
+    {
+        juce::Array<juce::File> versions = folder.findChildFiles(juce::File::findDirectories, false, "v*");
+        versions.sort();
+        for (int index = versions.size() - 1; index >= 0; --index)
+        {
+            addPluginvalCandidates(downloadLocations, versions[index]);
+        }
+    }
+    for (const juce::File& folder : downloadFolders)
+    {
+        addPluginvalCandidates(downloadLocations, folder);
     }
     for (const juce::File& location : downloadLocations)
     {

@@ -506,7 +506,7 @@ void TestPluginProcessor::setCurrentProgram(int index)
 const juce::String TestPluginProcessor::getProgramName(int index)
 {
     juce::ignoreUnused(index);
-    return {};
+    return "Default"; // a name: the VST3 validator of pluginval 2.x rejects an empty one
 }
 
 void TestPluginProcessor::changeProgramName(int index, const juce::String& newName)

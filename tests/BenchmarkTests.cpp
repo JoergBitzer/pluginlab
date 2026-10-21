@@ -5,6 +5,7 @@
 
 #include <cstdlib>
 
+#include "TestEnvironment.h"
 #include "BenchmarkProcessor.h"
 #include "ComparePanel.h"
 #include "pluginlab/ui/ParameterTableComponent.h"
@@ -113,7 +114,7 @@ public:
             // the pages read the settings folder: one of the test's own
             const juce::File settingsFolder = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("pluginlab_benchmark_test_settings");
             settingsFolder.createDirectory();
-            setenv("PLUGINLAB_SETTINGS_FOLDER", settingsFolder.getFullPathName().toRawUTF8(), 1);
+            testenvironment::set("PLUGINLAB_SETTINGS_FOLDER", settingsFolder.getFullPathName());
             BenchmarkProcessor processor;
             processor.prepareToPlay(kSampleRate, kBlockSize);
             const int slot = addSlot(processor, gain.descriptions[0]);
