@@ -189,6 +189,15 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
   9 s) is time-invariant, settles, recovers, latency 0.
 - Still open: the compared noise (256 ms) is shorter than a long 100 % wet delay; at such a setting the comparisons see (almost) silence.
 
+### W11.1b part 3: the Reference Delay plugin (0.74.0, done)
+- **PluginLab Reference Delay** (plugins/reference/ReferenceDelay): `reference::FeedbackDelay` as a plugin; time in ms or a note value of the
+  host's tempo (Sync), feedback, mix, loop filter on/off with low and high cut, interpolation, loop order (exact or the author's original).
+  A parameter change keeps the echoes (`FeedbackDelay::setSettings`); getTailLengthSeconds until the echoes are 120 dB down.
+- Test: the plugin through `renderImpulse` and `analyseEchoes` at its defaults and synced to a quarter note at 97 BPM: the echoes of the
+  reference processor within 0.1 sample and 0.05 dB.
+- Not yet (later steps of 8): ping-pong and cross feedback (W11.1c), the LFO on the time (W11.1d), the saturation in the loop (W11.1e), the
+  switch algorithms fade and tape (W11.1h).
+
 ## 9. Questions for the author
 1. **Which delays** form the test set (free ones: e.g. a clean digital delay, a tape echo model, a BBD model, a ping-pong)?
    Answer: all. You will find a full delay class with digital and tape in ~/AudioDev. I have no modell for BBD. I will look for some free examples of delays as well. We will collect a list for some free delay plugins

@@ -9,6 +9,7 @@ host, the fingerprint and the measurements, and teaching objects ("this is what 
 | **PluginLab Reference EQ** | one band: algorithm x type | H(e^jw) of the design (the GUI draws it at 48 kHz) |
 | **PluginLab Reference Nonlinear** | drive -> curve -> output -> hum -> noise -> quantizer | harmonics of a sine (closed form or numerical), SNR 6.02 N + 1.76 dB, noise and hum levels |
 | **PluginLab Reference Utility** | gain/polarity -> delay -> channel matrix -> tremolo -> DC | all exact |
+| **PluginLab Reference Delay** (W11.1, 0.74.0) | delay line -> loop (feedback, low and high cut) -> mix | every echo: time, gain, the loop filter (`reference::FeedbackDelay`) |
 
 All three: latency 0 (no rebuffering; the Reference EQ with the linear-phase algorithm: the FIR's latency), no parameter smoothing (a change acts at the next block: the reference is the exact algorithm, a
 click is part of the truth), mono or stereo (in = out). A new setting rebuilds the stage it belongs to (noise, hum, dither and tremolo
@@ -70,6 +71,21 @@ combination that is not offered passes the audio unchanged, and the GUI says so.
 | Crosstalk | -120 ... 0 dB | each channel into the other; -120 dB = off |
 | DC offset | -0.5 ... 0.5 | |
 | Tremolo rate, depth | 0.1 ... 20 Hz, 0 ... 1 | gain between 1 - depth and 1; depth 0 = off |
+
+### PluginLab Reference Delay
+The author's `jade::BasicDelayEffect` ported with the corrections of `docs/design/W11-delay-plan.md` 7. Unlike the other three, a change
+of a parameter keeps the echoes in the line (a jump: the author's "digital" switch); the line is allocated in prepareToPlay.
+
+| Control | Range | Meaning |
+|---|---|---|
+| Time | 1 ... 2000 ms | the delay (fractional samples: the interpolation); greyed out when synced |
+| Sync | Off (ms), 1/4, 1/8, 1/8 dotted, 1/8 triplet, 1/16 | a note value of the host's tempo (120 BPM without one) |
+| Interpolation | Lagrange (FIR), Thiran (all-pass) | Lagrange of order 3 (the author's tape glide: darkens every repeat a little), Thiran of order 1 (|H| = 1) |
+| Feedback | -95 ... 95 % | gain of one trip; negative inverts every repeat |
+| Loop filter | Off, On | the low and high cut in the loop |
+| Low cut, High cut | 20 ... 2000 Hz, 500 ... 20000 Hz | first-order Butterworth high- and low-pass in the loop |
+| Loop order | Exact, Author's original | the original adds the previous sample's output: echoes at D, 2D + 1, 3D + 2, ... |
+| Mix | 0 ... 100 % | (1 - mix) dry + mix wet |
 
 ## Build, test, install
 They are built with pluginlab (`plugins/reference/CMakeLists.txt`) and copied into `<build>/reference_plugins` (used by

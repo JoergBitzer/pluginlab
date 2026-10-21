@@ -4,6 +4,13 @@
 
 #include <juce_core/juce_core.h>
 
+#include <juce_audio_processors/juce_audio_processors.h>
+
+#include "TestPluginPaths.h"
+#include "pluginlab/engine/ImpulseRender.h"
+#include "pluginlab/engine/PluginDevice.h"
+#include "pluginlab/hosting/FormatManager.h"
+#include "pluginlab/hosting/PluginScanner.h"
 #include "pluginlab/measure/EchoResponse.h"
 #include "pluginlab/reference/FeedbackDelay.h"
 
@@ -194,9 +201,67 @@ public:
             expectGreaterThan(compared, 1000, "the loop filter over most of the band");
             expectLessThan(worst, kLoopTolerance);
         }
+
+        testReferenceDelayPlugin();
     }
 
 private:
+    // W11.1b: the Reference Delay plugin through the measurement rig (renderImpulse with the play head's tempo): its echoes as the processor's
+    void testReferenceDelayPlugin()
+    {
+        constexpr size_t kSync = 1;
+        constexpr float kSyncQuarter = 0.2f; // "1/4" of six choices
+        constexpr double kOddTempo = 97.0;
+        juce::AudioPluginFormatManager formatManager;
+        pluginlab::hosting::addHeadlessFormats(formatManager);
+        const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, testpaths::getReferencePlugin("Delay"));
+        expect(! scan.descriptions.isEmpty(), "the Reference Delay plugin");
+        if (scan.descriptions.isEmpty())
+        {
+            return;
+        }
+        const juce::PluginDescription description = scan.descriptions[0];
+        std::vector<float> setting = pluginlab::engine::getDefaultSetting(formatManager, description, kSampleRate);
+
+        struct Case
+        {
+            juce::String name;
+            double tempo;
+            float sync;
+            double delaySamples;
+        };
+        for (const Case& item : {Case{"the defaults (250 ms, feedback 40 %, mix 50 %)", 120.0, 0.0f, 12000.0},
+                                 Case{"synced to a quarter note at 97 BPM", kOddTempo, kSyncQuarter, 60.0 / kOddTempo * kSampleRate}})
+        {
+            beginTest("the Reference Delay plugin, " + item.name + ": the echoes of its reference processor");
+            setting[kSync] = item.sync;
+            pluginlab::engine::ImpulseRenderOptions options;
+            options.tempoBpm = item.tempo;
+            const pluginlab::engine::ImpulseRender render = pluginlab::engine::renderImpulse(formatManager, description, setting, options);
+            expect(render.error.isEmpty() && render.decayed, render.error);
+            if (render.output.empty())
+            {
+                continue;
+            }
+            const double height = std::pow(10.0, options.levelDbfs / 20.0);
+            std::vector<double> response;
+            for (const float value : render.output.front())
+            {
+                response.push_back(value / height);
+            }
+            ref::FeedbackDelaySettings settings;
+            settings.delaySamples = item.delaySamples;
+            settings.feedback = 0.4;
+            settings.mix = 0.5;
+            const ref::FeedbackDelay expected(kSampleRate, settings);
+            const measure::EchoAnalysis analysis = measure::analyseEchoes(response, {});
+            expect(analysis.hasDirect, "the dry path");
+            expectWithinAbsoluteError(analysis.direct.gainDb, toDb(0.5), kGainTolerance);
+            expectEchoes(analysis, expected, 6); // the later echoes of a fractional delay are spread by the interpolator, their peaks below -60 dB
+            expectWithinAbsoluteError(analysis.feedbackDb, toDb(0.4), kGainTolerance);
+        }
+    }
+
     // the first `count` echoes at k D (the author's order: k - 1 more) with gain mix g^(k-1) and its polarity
     void expectEchoes(const measure::EchoAnalysis& analysis, const ref::FeedbackDelay& delay, int count)
     {

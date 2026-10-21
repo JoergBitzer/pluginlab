@@ -24,9 +24,24 @@ BiquadCoefficients makeLoopFilter(Pass pass, double cornerHz, double sampleRate)
 }
 }
 
-FeedbackDelay::FeedbackDelay(double sampleRate, const FeedbackDelaySettings& settings)
+FeedbackDelay::FeedbackDelay(double sampleRate, const FeedbackDelaySettings& settings, double maximumDelaySamples)
     : m_sampleRate(sampleRate), m_settings(settings)
 {
+    const double longest = std::max(settings.delaySamples, maximumDelaySamples);
+    m_size = static_cast<size_t>(std::floor(longest)) + kLineMargin;
+    configure();
+}
+
+void FeedbackDelay::setSettings(const FeedbackDelaySettings& settings)
+{
+    m_settings = settings;
+    m_settings.delaySamples = std::min(settings.delaySamples, static_cast<double>(m_size - kLineMargin));
+    configure();
+}
+
+void FeedbackDelay::configure()
+{
+    const FeedbackDelaySettings& settings = m_settings;
     jassert(settings.delaySamples >= 3.0 && std::abs(settings.feedback) < 1.0);
     if (settings.interpolation == DelayInterpolation::Lagrange)
     {
@@ -52,9 +67,8 @@ FeedbackDelay::FeedbackDelay(double sampleRate, const FeedbackDelaySettings& set
         const double delay = settings.delaySamples - m_integerDelay;
         m_allPassCoefficient = (1.0 - delay) / (1.0 + delay);
     }
-    m_lowCut = makeLoopFilter(Pass::High, settings.lowCutHz, sampleRate);
-    m_highCut = makeLoopFilter(Pass::Low, settings.highCutHz, sampleRate);
-    m_size = static_cast<size_t>(m_integerDelay + kLineMargin);
+    m_lowCut = makeLoopFilter(Pass::High, settings.lowCutHz, m_sampleRate);
+    m_highCut = makeLoopFilter(Pass::Low, settings.highCutHz, m_sampleRate);
 }
 
 const FeedbackDelaySettings& FeedbackDelay::getSettings() const

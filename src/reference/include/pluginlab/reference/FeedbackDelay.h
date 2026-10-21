@@ -45,8 +45,12 @@ struct FeedbackDelaySettings
 class FeedbackDelay : public Processor
 {
 public:
-    FeedbackDelay(double sampleRate, const FeedbackDelaySettings& settings);
+    // maximumDelaySamples: the longest delay setSettings may set later (0: the delay of these settings)
+    FeedbackDelay(double sampleRate, const FeedbackDelaySettings& settings, double maximumDelaySamples = 0.0);
 
+    // New settings; the delay line and the filters' states are kept (the echoes in the line go on with the new time, feedback and filters:
+    // a jump, the "digital" switch of the author's class). The delay is limited to the maximum given at construction.
+    void setSettings(const FeedbackDelaySettings& settings);
     const FeedbackDelaySettings& getSettings() const;
 
     // One trip through the delay line and the loop filters (without the feedback gain): F(f) I(f) e^(-j w Dint)
@@ -63,6 +67,7 @@ public:
     void process(juce::AudioBuffer<float>& buffer) override;
 
 private:
+    void configure();
     double readDelayed(size_t channel);
     double filter(size_t channel, double value);
     void prepareChannels(int channels);
