@@ -14,11 +14,11 @@ target_compile_definitions(PluginLabSignals
 # the version is not a compile definition: a new version would recompile every file of the target (with its JUCE modules); the programs
 # read it from pluginlab/PluginLabVersion.h (one generated file in pluginlab_core)
 
+# no link-time optimization: a development tool, not shipped (LTO only makes its links slow)
 target_link_libraries(PluginLabSignals
     PRIVATE
         pluginlab_signals
         pluginlab_core          # the version (pluginlab/PluginLabVersion.h)
     PUBLIC
         juce::juce_recommended_config_flags
-        juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)

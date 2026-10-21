@@ -82,6 +82,8 @@ for i in $(seq 1 "$runs"); do
     else
         echo "run $i/$runs: FAILED (exit code $rc, $assertions JUCE assertions), log: $log"
         grep -E "FAILED|JUCE Assertion|\*\*\*" "$log" | head -5 | sed 's/^/    /'
+        # the test that was running (a timeout names no test of its own)
+        grep -E "Starting test" "$log" | tail -1 | sed 's/^/    last test: /'
         failed=$((failed + 1))
     fi
 done

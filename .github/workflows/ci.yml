@@ -64,6 +64,14 @@ jobs:
             libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev libxrandr-dev libxrender-dev \
             libglu1-mesa-dev mesa-common-dev xvfb openbox
 
+      # ccache on Linux and macOS (the Visual Studio generator of Windows has no compiler launcher): the cache is kept between the runs
+      - name: ccache (Linux, macOS)
+        if: runner.os != 'Windows'
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.name }}-release
+          max-size: 2G
+
       - name: Configure
         shell: bash
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -96,14 +104,15 @@ jobs:
           killall -9 AudioComponentRegistrar || true
           auval -v aufx Jdbm IHAJ
 
-      # PluginLabTests (juce::UnitTest), the end-to-end tests of the host; on Linux in a virtual display
+      # PluginLabTests (juce::UnitTest), the end-to-end tests of the host; on Linux in a virtual display with a window manager (openbox:
+      # hosted VST2 editors die with an X "BadAtom" error without one, and the native window capture of the GUI tests needs one)
       - name: Test
         shell: bash
         env:
           PLUGINLAB_REQUIRE_PLUGINVAL: "1"
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a ctest --test-dir build -C Release --output-on-failure --parallel 3
+            CONFIG=Release CTEST_PARALLEL_LEVEL=3 tools/ctest_offscreen.sh
           else
             ctest --test-dir build -C Release --output-on-failure --parallel 3
           fi

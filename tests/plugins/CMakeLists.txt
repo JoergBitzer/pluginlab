@@ -3,6 +3,9 @@
 #   PluginLab Test Crash : crashes when it is created (a plugin that cannot be scanned)
 #   PluginLab Test Crash Process : scans and loads, but crashes when it processes audio (found only by validation)
 # NotAPlugin.vst3 is a text file with the name of a plugin (a file that contains no plugin).
+# a version of their own: with the project's version every new version would recompile the JUCE copy of each of the 24 test plugins
+# (JucePlugin_Version is a compile definition)
+set(PLUGINLAB_TEST_PLUGIN_VERSION "1.0.0")
 set(PLUGINLAB_TEST_PLUGIN_DIR "${CMAKE_BINARY_DIR}/test_plugins" CACHE INTERNAL "Folder with the test plugins")
 file(MAKE_DIRECTORY "${PLUGINLAB_TEST_PLUGIN_DIR}")
 file(WRITE "${PLUGINLAB_TEST_PLUGIN_DIR}/NotAPlugin.vst3" "This file is not a plugin.\n")
@@ -23,6 +26,7 @@ function(pluginlab_add_test_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE CRASHES 
     endif()
 
     juce_add_plugin(${TARGET_NAME}
+        VERSION "${PLUGINLAB_TEST_PLUGIN_VERSION}"
         COMPANY_NAME "Jade_Hochschule"
         IS_SYNTH FALSE
         NEEDS_MIDI_INPUT FALSE
@@ -116,6 +120,7 @@ function(pluginlab_add_test_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE FS_BU
         set(LIMITED ${ARGV8})
     endif()
     juce_add_plugin(${TARGET_NAME}
+        VERSION "${PLUGINLAB_TEST_PLUGIN_VERSION}"
         COMPANY_NAME "Jade_Hochschule"
         IS_SYNTH FALSE
         NEEDS_MIDI_INPUT FALSE
@@ -168,6 +173,7 @@ pluginlab_add_test_eq_plugin(PluginLabTestEqLimited "PluginLab Test EQ Limited" 
 # Two RBJ peaks for the interactions (W8.7): in series (they add in dB) and in parallel (they do not add where they overlap)
 function(pluginlab_add_two_band_eq_plugin TARGET_NAME DISPLAY_NAME PLUGIN_CODE PARALLEL)
     juce_add_plugin(${TARGET_NAME}
+        VERSION "${PLUGINLAB_TEST_PLUGIN_VERSION}"
         COMPANY_NAME "Jade_Hochschule"
         IS_SYNTH FALSE
         NEEDS_MIDI_INPUT FALSE

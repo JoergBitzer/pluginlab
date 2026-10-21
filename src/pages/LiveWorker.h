@@ -31,7 +31,8 @@ public:
     void setSetting(int slot, const std::vector<float>& setting);
     engine::LiveSlotResponse getResponse(int slot) const;
 
-    // false after the worker ended twice (a plugin that crashes every time); the problem in words
+    // the worker runs (false before the first slot with a plugin, and after the worker ended twice: a plugin that crashes every time); the
+    // problem in words
     bool isRunning() const;
     juce::String getProblem() const;
     int getLaunches() const;
@@ -39,6 +40,7 @@ public:
 private:
     class Coordinator;
     void launch();
+    engine::LiveSlotResponse makeDryResponse() const;
     void connectionLost();
 
     double m_sampleRate;

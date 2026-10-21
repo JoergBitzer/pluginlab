@@ -1,5 +1,7 @@
 #include "LiveWorker.h"
 
+#include <algorithm>
+
 #include "PageServices.h"
 #include "pluginlab/hosting/FormatManager.h"
 
@@ -86,7 +88,19 @@ RemoteLiveResponse::RemoteLiveResponse(double sampleRate, const engine::LiveResp
     : m_sampleRate(sampleRate), m_options(options), m_frequencies(engine::getLiveResponseFrequencies(sampleRate, options)),
       m_alive(std::make_shared<std::atomic<bool>>(true))
 {
-    launch();
+    // the worker is started with the first slot that has a plugin (setSlots): a page with only the dry slot (a plugin editor just opened in a
+    // DAW, pluginval) starts no process
+}
+
+engine::LiveSlotResponse RemoteLiveResponse::makeDryResponse() const
+{
+    // the dry slot: flat and LTI at once (as the monitor's dry slot)
+    engine::LiveSlotResponse dry;
+    dry.generation = 1;
+    dry.magnitudeDb.assign(m_frequencies.size(), 0.0);
+    dry.classified = true;
+    dry.classOfCurrentSetting = true;
+    return dry;
 }
 
 RemoteLiveResponse::~RemoteLiveResponse()
@@ -162,6 +176,11 @@ void RemoteLiveResponse::setSlots(const std::vector<std::optional<juce::PluginDe
     m_sent.assign(slots.size(), {});
     if (m_coordinator == nullptr)
     {
+        const bool anyPlugin = std::any_of(slots.begin(), slots.end(), [](const std::optional<juce::PluginDescription>& slot) { return slot.has_value(); });
+        if (anyPlugin && m_launches == 0)
+        {
+            launch(); // it sends these slots itself
+        }
         return;
     }
     {
@@ -171,12 +190,7 @@ void RemoteLiveResponse::setSlots(const std::vector<std::optional<juce::PluginDe
         {
             if (! slots[index])
             {
-                // the dry slot: flat and LTI at once (as the monitor's dry slot)
-                engine::LiveSlotResponse& dry = m_coordinator->getResponses()->slots[index];
-                dry.generation = 1;
-                dry.magnitudeDb.assign(m_frequencies.size(), 0.0);
-                dry.classified = true;
-                dry.classOfCurrentSetting = true;
+                m_coordinator->getResponses()->slots[index] = makeDryResponse();
             }
             else if (! m_running)
             {
@@ -228,6 +242,11 @@ engine::LiveSlotResponse RemoteLiveResponse::getResponse(int slot) const
 {
     if (m_coordinator == nullptr)
     {
+        // no worker yet (only the dry slot so far)
+        if (slot >= 0 && slot < getNumSlots() && ! m_slots[static_cast<size_t>(slot)])
+        {
+            return makeDryResponse();
+        }
         return {};
     }
     const juce::ScopedLock lock(m_coordinator->getResponses()->lock);

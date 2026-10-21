@@ -58,8 +58,11 @@ public:
         beginTest("the live worker: the curve of the Test EQ, rendered in a process of its own");
         {
             pluginlab::host::RemoteLiveResponse live(kSampleRate);
-            expect(live.isRunning(), live.getProblem());
+            live.setSlots({std::nullopt});
+            expect(! live.isRunning(), "no worker for the dry slot alone");
+            expectEquals(live.getResponse(0).generation, 1, "the dry slot is flat without a worker");
             live.setSlots({std::nullopt, eq});
+            expect(live.isRunning(), live.getProblem());
             std::vector<float> setting = pluginlab::engine::getDefaultSetting(*m_formatManager, *eq, kSampleRate);
             setting[0] = 0.75f;
             setting[1] = 0.4f;

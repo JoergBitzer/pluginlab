@@ -62,6 +62,8 @@ for ($i = 1; $i -le $Runs; $i++) {
     } else {
         Write-Host "run $i/$Runs`: FAILED (exit code $($p.ExitCode)), log: $log"
         Select-String -Path $log -Pattern "FAILED|\*\*\*" | Select-Object -First 5 | ForEach-Object { Write-Host "    $($_.Line)" }
+        # the test that was running (a timeout names no test of its own)
+        Select-String -Path $log -Pattern "Starting test" | Select-Object -Last 1 | ForEach-Object { Write-Host "    last test: $($_.Line)" }
         $failed++
     }
 }

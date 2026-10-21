@@ -5,13 +5,28 @@ cmake_minimum_required(VERSION 3.22)
 
 # The version of the whole project: a new feature raises the second number and sets the third to zero,
 # a fix or other change raises the third (see CLAUDE.md).
-project(pluginlab VERSION 0.70.3)
+project(pluginlab VERSION 0.70.4)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON) # JUCE code is linked into a static library and into plugins
 
 option(PLUGINLAB_BUILD_TESTS "Build the tests (PluginLabTests) and register them with CTest" ON)
+
+# ccache (if installed): a file compiled before with the same flags is taken from the cache - about 35 targets compile their own copy of JUCE,
+# so a clean build, a branch switch or a CI run with a warm cache gets much faster. Only with the Makefile and Ninja generators (not the
+# Visual Studio generator of the Windows CI).
+option(PLUGINLAB_USE_CCACHE "Compile through ccache when it is installed" ON)
+if(PLUGINLAB_USE_CCACHE)
+    find_program(PLUGINLAB_CCACHE ccache)
+    if(PLUGINLAB_CCACHE)
+        set(CMAKE_C_COMPILER_LAUNCHER "${PLUGINLAB_CCACHE}")
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${PLUGINLAB_CCACHE}")
+        set(CMAKE_OBJC_COMPILER_LAUNCHER "${PLUGINLAB_CCACHE}")
+        set(CMAKE_OBJCXX_COMPILER_LAUNCHER "${PLUGINLAB_CCACHE}")
+        message(STATUS "ccache: ${PLUGINLAB_CCACHE}")
+    endif()
+endif()
 
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
     message(FATAL_ERROR "JUCE not found: run 'git submodule update --init'")
