@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
+#include <mutex>
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -17,6 +19,21 @@ namespace pluginlab::engine::detail
 {
 constexpr double kReferenceRate = 48000.0;
 constexpr int kReferenceBlock = 512;
+constexpr double kTailChunkSeconds = 0.05;      // the waits until silent go on in chunks of this length
+constexpr double kTailProbeRate = 48000.0;      // the impulse response that sets the hold
+constexpr double kTailHoldMarginSeconds = 0.05; // the hold: the longest silent gap in that response plus this
+
+// How long the waits of one plugin hold the silence before they stop, and their limit (shared by the instances of a bench)
+struct TailWait
+{
+    TailWait(double limit, double hold)
+        : limitSeconds(limit), holdSeconds(hold)
+    {
+    }
+
+    std::atomic<double> limitSeconds;
+    std::atomic<double> holdSeconds;
+};
 constexpr int kReferenceSeed = 7;
 constexpr int kSecondSeed = 11;      // the second channel of the noise with L != R
 constexpr double kMillisecondsPerSecond = 1000.0;
@@ -232,9 +249,87 @@ public:
         process(makeSilence(static_cast<int>(m_sampleRate * seconds)));
     }
 
+    // settleSeconds of silence, then on until the output has decayed (the poke's noise or an earlier signal must not ring into what follows:
+    // a reverb, a delay, a compressor's release). The hold and the limit come from the bench (TailWait): the hold from the plugin's impulse
+    // response, the limit drops to settleSeconds once a plugin's output did not decay (noise of its own).
     void settle()
     {
-        process(makeSilence(static_cast<int>(m_sampleRate * m_settings.settleSeconds)));
+        double limit = m_settings.tailMaximumSeconds;
+        double hold = m_settings.tailHoldSeconds;
+        if (m_tailWait != nullptr)
+        {
+            limit = m_tailWait->limitSeconds.load();
+            hold = m_tailWait->holdSeconds.load();
+        }
+        bool decayed = true;
+        settleUntilSilent(m_settings.settleSeconds, decayed, limit, hold);
+        if (! decayed && m_tailWait != nullptr)
+        {
+            m_tailWait->limitSeconds.store(m_settings.settleSeconds);
+        }
+    }
+
+    void setTailWait(std::shared_ptr<TailWait> wait)
+    {
+        m_tailWait = std::move(wait);
+    }
+
+    // Silence for at least minimumSeconds, then on until the output has decayed: every sample below tailSilenceDbfs for holdSeconds (counted
+    // from the start, so that a plugin that is silent at once stops after minimumSeconds; the tail of a reverb or a delay, the release of a
+    // compressor), at most maximumSeconds. The silence after minimumSeconds goes in chunks of a fixed length (the same samples for every block
+    // size: a free-running LFO stays in step). Returns the seconds of silence processed; decayed tells whether the output got that quiet.
+    // maximumSeconds and holdSeconds < 0: the settings' tailMaximumSeconds and tailHoldSeconds.
+    double settleUntilSilent(double minimumSeconds, bool& decayed, double maximumSeconds = -1.0, double holdSeconds = -1.0)
+    {
+        if (maximumSeconds < 0.0)
+        {
+            maximumSeconds = m_settings.tailMaximumSeconds;
+        }
+        if (holdSeconds < 0.0)
+        {
+            holdSeconds = m_settings.tailHoldSeconds;
+        }
+        const float silence = static_cast<float>(std::pow(10.0, m_settings.tailSilenceDbfs / 20.0));
+        const int holdSamples = static_cast<int>(m_sampleRate * holdSeconds);
+        const int minimumSamples = static_cast<int>(m_sampleRate * minimumSeconds);
+        const int maximumSamples = std::max(minimumSamples, static_cast<int>(m_sampleRate * maximumSeconds));
+        const int chunk = std::max(1, static_cast<int>(m_sampleRate * kTailChunkSeconds));
+        int quietSamples = 0;
+        int processed = 0;
+        decayed = false;
+        int length = minimumSamples;
+        while (true)
+        {
+            const Signal output = process(makeSilence(length));
+            processed += length;
+            for (size_t sample = 0; sample < static_cast<size_t>(length); ++sample)
+            {
+                float largest = 0.0f;
+                for (const std::vector<float>& channel : output)
+                {
+                    largest = std::max(largest, std::abs(channel[sample]));
+                }
+                if (largest < silence)
+                {
+                    ++quietSamples;
+                }
+                else
+                {
+                    quietSamples = 0;
+                }
+            }
+            if (quietSamples >= holdSamples)
+            {
+                decayed = true;
+                break;
+            }
+            if (processed >= maximumSamples)
+            {
+                break;
+            }
+            length = chunk;
+        }
+        return processed / m_sampleRate;
     }
 
 private:
@@ -271,6 +366,7 @@ private:
     double m_pacingStartMs = 0.0;
     juce::int64 m_pacedSamples = 0;
     juce::String m_error;
+    std::shared_ptr<TailWait> m_tailWait;
 };
 
 // How a render runs: as fast as possible (all measurements), with the offline flag, or at real-time pace with the message loop running
@@ -292,7 +388,9 @@ public:
 
     std::unique_ptr<Rig> make(double sampleRate, int blockSize) const
     {
-        return std::make_unique<Rig>(m_formatManager, m_description, sampleRate, blockSize, m_settings);
+        std::unique_ptr<Rig> rig = std::make_unique<Rig>(m_formatManager, m_description, sampleRate, blockSize, m_settings);
+        rig->setTailWait(getTailWait());
+        return rig;
     }
 
     // The careful way that all measurements use (most conservative first, LESSONS_LEARNED §2): a fresh instance, prepared; every parameter is
@@ -335,9 +433,61 @@ public:
         return rig->process(input);
     }
 
+
 private:
     juce::AudioPluginFormatManager& m_formatManager;
     juce::PluginDescription m_description;
     const FingerprintSettings& m_settings;
+    // The waits of this plugin: the hold from its impulse response at the defaults (measured once, on the first instance): the longest silent
+    // gap inside the response (a delay's echo spacing) plus a margin, tailHoldSeconds if it did not decay within twice that
+    std::shared_ptr<TailWait> getTailWait() const
+    {
+        std::call_once(m_tailOnce, [this]
+        {
+            m_tailWait->holdSeconds.store(measureHold());
+        });
+        return m_tailWait;
+    }
+
+    double measureHold() const
+    {
+        Rig rig(m_formatManager, m_description, kTailProbeRate, kReferenceBlock, m_settings);
+        if (! rig.isValid())
+        {
+            return m_settings.tailHoldSeconds;
+        }
+        rig.prepare();
+        const int length = static_cast<int>(2.0 * m_settings.tailHoldSeconds * kTailProbeRate);
+        Signal impulse = makeSilence(length);
+        for (std::vector<float>& channel : impulse)
+        {
+            channel.front() = 1.0f;
+        }
+        const Signal output = rig.process(impulse);
+        const float silence = static_cast<float>(std::pow(10.0, m_settings.tailSilenceDbfs / 20.0));
+        int lastLoud = -1;
+        int longestGap = 0;
+        for (int sample = 0; sample < length; ++sample)
+        {
+            float largest = 0.0f;
+            for (const std::vector<float>& channel : output)
+            {
+                largest = std::max(largest, std::abs(channel[static_cast<size_t>(sample)]));
+            }
+            if (largest >= silence)
+            {
+                longestGap = std::max(longestGap, sample - lastLoud - 1);
+                lastLoud = sample;
+            }
+        }
+        if (! rig.sawNonFinite() && lastLoud < length - static_cast<int>(m_settings.tailHoldSeconds * kTailProbeRate))
+        {
+            return std::min(m_settings.tailHoldSeconds, longestGap / kTailProbeRate + kTailHoldMarginSeconds);
+        }
+        return m_settings.tailHoldSeconds;
+    }
+
+    std::shared_ptr<TailWait> m_tailWait = std::make_shared<TailWait>(m_settings.tailMaximumSeconds, m_settings.tailHoldSeconds);
+    mutable std::once_flag m_tailOnce;
 };
 }

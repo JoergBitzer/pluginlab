@@ -247,10 +247,24 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     }
 #endif
 #if PLUGINLAB_TEST_PLUGIN_TIME_MODE == 4
-    // a tempo-synced delay (W11.1a): the input plus half of it one beat later; the beat from the host's play head (120 BPM without one)
+    // a tempo-synced delay (W11.1a): the input plus half of it one beat later; the beat from the host's play head (120 BPM without one).
+    // The mode (W11.1b): A that, B 100 % wet with one echo (no dry path), C 100 % wet with feedback 0.5 (an echo every beat)
     constexpr double kTempoWithoutPlayHead = 120.0;
     constexpr double kSecondsPerMinute = 60.0;
     constexpr float kEchoLevel = 0.5f;
+    constexpr float kFeedback = 0.5f;
+    float dry = 1.0f;
+    float wet = kEchoLevel;
+    float feedback = 0.0f;
+    if (m_mode->getIndex() > 0)
+    {
+        dry = 0.0f;
+        wet = 1.0f;
+    }
+    if (m_mode->getIndex() == 2)
+    {
+        feedback = kFeedback;
+    }
     double tempo = kTempoWithoutPlayHead;
     if (juce::AudioPlayHead* hostPlayHead = getPlayHead())
     {
@@ -271,8 +285,9 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         {
             std::vector<float>& line = m_beatLines[static_cast<size_t>(channel)];
             const float input = buffer.getSample(channel, sample);
-            buffer.setSample(channel, sample, input + kEchoLevel * line[static_cast<size_t>(readPosition)]);
-            line[static_cast<size_t>(m_beatPosition)] = input;
+            const float delayed = line[static_cast<size_t>(readPosition)];
+            buffer.setSample(channel, sample, dry * input + wet * delayed);
+            line[static_cast<size_t>(m_beatPosition)] = input + feedback * delayed;
         }
         m_beatPosition = (m_beatPosition + 1) % lineLength;
     }

@@ -6,8 +6,10 @@
 
 #include "BenchmarkProcessor.h"
 #include "TestPluginPaths.h"
+#include "pluginlab/engine/Fingerprint.h"
 #include "pluginlab/engine/FixedPlayHead.h"
 #include "pluginlab/engine/ImpulseRender.h"
+#include "pluginlab/engine/LatencyMeasurer.h"
 #include "pluginlab/engine/MeasurementEngine.h"
 #include "pluginlab/engine/PluginDevice.h"
 #include "pluginlab/hosting/FormatManager.h"
@@ -133,6 +135,57 @@ public:
             const engine::ImpulseRender render = engine::renderImpulse(*m_formatManager, description, defaults, options);
             expect(! render.decayed, "not decayed within 0.3 s");
             expectLessOrEqual(render.seconds, options.maxSeconds + kBlockSize / kSampleRate);
+        }
+
+        beginTest("the latency of a delay (W11.1b): an echo is no latency (100 % wet with one echo: later than any latency; with feedback: a second echo)");
+        {
+            constexpr int kModeParameter = 2;
+            struct Case
+            {
+                float mode;
+                bool echo;
+                juce::String reason;
+            };
+            for (const Case& item : {Case{0.0f, false, ""}, Case{0.5f, true, "plausible"}, Case{1.0f, true, "second echo"}})
+            {
+                juce::String error;
+                std::unique_ptr<pluginlab::hosting::HostedPlugin> plugin = pluginlab::hosting::HostedPlugin::load(*m_formatManager, description, kSampleRate, kBlockSize, error);
+                expect(plugin != nullptr, error);
+                if (plugin == nullptr)
+                {
+                    continue;
+                }
+                plugin->getInstance().getParameters()[kModeParameter]->setValue(item.mode);
+                engine::LatencyOptions options;
+                options.observeSeconds = 1.5; // the second echo of 120 BPM at 1 s
+                const engine::LatencyResult latency = engine::measureLatency(plugin->getInstance(), kSampleRate, kBlockSize, 2, options);
+                expect(latency.found);
+                expectEquals(latency.measuredSamples, 0, "the latency");
+                expect(latency.peakIsEcho == item.echo, "an echo: " + juce::String(static_cast<int>(item.echo)));
+                if (item.echo)
+                {
+                    expectEquals(latency.echoSamples, getBeatSamples(kStandardTempo));
+                    expect(latency.echoReason.contains(item.reason), latency.echoReason);
+                }
+            }
+        }
+
+        beginTest("the fingerprint of a delay (W11.1b): the waits last until the echo has gone, so it is time-invariant and recovers; the latency agrees");
+        {
+            engine::FingerprintSettings settings;
+            settings.realTimeTests = false;
+            settings.zipperTests = false;
+            settings.measurements = false;
+            const engine::PluginFingerprint fingerprint = engine::measureFingerprint(*m_formatManager, description, settings);
+            expect(fingerprint.timeInvariant, "time-invariant");
+            expect(fingerprint.tailDecayed, "the echo decayed");
+            expectGreaterOrEqual(fingerprint.timeInvarianceGapSeconds, 0.5 + settings.tailHoldSeconds, "the gap lasted until the echo had gone");
+            expect(fingerprint.settlesInTime, "settles");
+            expect(fingerprint.recoversFromJumps, "recovers from jumps");
+            for (const engine::RateFingerprint& rate : fingerprint.rates)
+            {
+                expectEquals(rate.measuredLatency, 0, "the latency at " + juce::String(rate.sampleRate));
+            }
         }
 
         beginTest("the application's engine: its own play head at 97 BPM reaches the plugin of a slot");

@@ -222,8 +222,9 @@ A synchronized sweep (20 Hz ... 20 kHz, 3 s, -6 dBFS, then 0.5 s of silence) thr
 channel 1, as pictures next to the report, with their parameters in a table: see [spectrogram.md](../measurements/spectrogram.md).
 
 ### 3.7 Other
-- **time-invariant** (R6): one instance: poke, setting B, **settled for `longSettleSeconds` (2 s)**, noise → first output; `timeInvarianceGapSeconds` (0.5 s) of silence;
-  the same noise again → second output; the two the same (< -80 dB). If not: "time-varying" (an LFO, a random element, dither, a noise generator). For a time-varying plugin
+- **time-invariant** (R6): one instance: poke, setting B, **settled for `longSettleSeconds` (2 s)** and until the output has decayed, noise → first output; silence for
+  at least `timeInvarianceGapSeconds` (0.5 s) and until the output has decayed (W11.1b, 0.73.0: every sample below `tailSilenceDbfs` -120 dBFS for `tailHoldSeconds` 1 s, at
+  most `tailMaximumSeconds` 30 s; the report gives the time); the same noise again → second output; the two the same (< -80 dB). If not: "time-varying" (an LFO, a random element, dither, a noise generator). For a time-varying plugin
   determinism, repeatability (delivery), recovery and silence are printed with "expected for a time-varying plugin" and are not bold in the summary.
 - **settles within `settleSeconds`** (R6): render(B) with the normal 0.25 s settle against the first output of the time invariance test (2 s settle). If they differ the plugin
   smooths its parameters (or has an envelope) longer than 0.25 s: the tests that follow a change (delivery, recovery) can fail because of that, they are marked "possibly
@@ -291,7 +292,13 @@ BL-Gain12 and BL-Gain24: nothing unusual; every way ok; all block sizes identica
 
 ## 6. Where the test is still weak
 1. **Latency is the largest peak at the default parameters** (by design): for a plugin with a long tail or a later peak (reverb, delay, a first reflection below a later one)
-   it is not a "block latency"; for a plugin that is silent at its defaults (mix 0, a gate) nothing comes out.
+   it is not a "block latency"; for a plugin that is silent at its defaults (mix 0, a gate) nothing comes out. Since 0.73.0 (W11.1b) a peak at least 5 ms after the reported
+   latency counts as a delay's echo (the latency is then the reported one, a finding names the echo) when the dry path arrives at the reported latency (at most 40 dB
+   below the peak), when a second echo follows at the same distance, or when it is more than 50 ms late (no plausible latency). A 100 % wet delay without feedback
+   shorter than 50 ms still reads as a latency.
+7. **Memory longer than the compared noise** (W11.1b): the noise of the comparisons is 256 ms long; a 100 % wet delay with a longer delay time gives (almost) silence in
+   the compared part at that setting, and its comparisons judge little. Every wait (settle, the time invariance gap, the recovery) lasts until the output has decayed
+   (0.73.0), so the tails of a delay, a reverb or a compressor's release no longer read as "time-varying".
 2. **Parameters are moved to 0.25 and 0.75 with noise at -20 dBFS** (settings): a threshold at -10 dB, a slow LFO, an attack of seconds or an effect only at 0 or 1 reads "no".
 3. **Time-varying versus slow**: the time invariance test settles for 2 s; a plugin whose smoothing or envelope is slower than that, or a very slow LFO, can still be
    classified wrongly. `longSettleSeconds` and `timeInvarianceGapSeconds` are in the settings.

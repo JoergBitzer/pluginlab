@@ -165,6 +165,27 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
   0.5 s between the two runs of the time-invariance test, so almost every reverb and delay, and compressors with a long release, come out
   "time-varying", "does not settle", "delivery: none". The waits have to last until the tail has decayed (`renderImpulse`'s criterion).
 
+### W11.1b part 1: the reference delay and the echo response (0.72.0, done)
+- `reference::FeedbackDelay` (src/reference): the author's class ported with the corrections above; fractional delay by Lagrange (order 3, the
+  author's nodes) or a first-order Thiran all-pass, feedback, mix, first-order low and high cut in the loop; its exact transfer function, echo
+  times and echo gains; `LoopOrder::AuthorsOrder` keeps the original order (echoes at D, 2D + 1, ...) as a teaching example.
+- `measure::analyseEchoes` (src/measure/EchoResponse): arrivals = peaks of |h| that stand out of their surroundings (crest against the RMS
+  around them: the slow undershoot a high-pass in the loop leaves after each echo is no arrival); per arrival the time from the phase slope and
+  the gain from the real part of its spectrum in a low band (20 Hz ... 2 kHz, where the interpolator is flat); the arrival at the latency is the
+  direct path. Derived: delay time, spacing and its spread, feedback (dB per repeat), decay (dB/s), mix, loop filter (the ratio of the spectra of
+  successive echoes). `EchoResponseTests`: within 0.1 sample, 0.05 dB, the loop filter within 0.1 dB; the author's order shows as spacing - delay = 1.
+
+### W11.1b part 2: the fingerprint fixes (0.73.0, done)
+- **Latency against echo**: `measureLatency` calls a peak at least 5 ms after the reported latency a delay's echo when the dry path arrives at the
+  reported latency, when a second echo follows at the same distance, or when it is more than 50 ms late; the latency is then the reported one
+  (also for the engine's alignment), a finding names the echo. Test plugin Tempo Delay got modes: A dry + echo, B 100 % wet one echo, C 100 % wet
+  with feedback 0.5.
+- **Waits until the tail has decayed**: every settle (`Rig::settle`), the gap of the time invariance test and the recovery wait run on until every
+  output sample stayed below -120 dBFS for 1 s (longer than an echo spacing: with 0.25 s the wait ended between two echoes), at most 30 s; a
+  plugin that never decays is waited for once, then the bench stops waiting. The fingerprint of the Tempo Delay (mode C as setting B: echoes for
+  9 s) is time-invariant, settles, recovers, latency 0.
+- Still open: the compared noise (256 ms) is shorter than a long 100 % wet delay; at such a setting the comparisons see (almost) silence.
+
 ## 9. Questions for the author
 1. **Which delays** form the test set (free ones: e.g. a clean digital delay, a tape echo model, a BBD model, a ping-pong)?
    Answer: all. You will find a full delay class with digital and tape in ~/AudioDev. I have no modell for BBD. I will look for some free examples of delays as well. We will collect a list for some free delay plugins

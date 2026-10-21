@@ -63,6 +63,9 @@ struct RateFingerprint
     int measuredLatency = 0;
     double outputBeforePeakDb = -200.0;      // largest output between the impulse and the peak, relative to the peak
     double outputBeforeImpulseDbfs = -200.0; // largest output before the impulse arrived
+    bool peakIsEcho = false;                 // the largest output is a delay's echo (W11.1b), the latency is the reported one
+    int echoSamples = 0;
+    juce::String echoReason;
 };
 
 // The A, A, B, A test (LESSONS_LEARNED §2) for one way of giving the plugin its parameters
@@ -162,6 +165,8 @@ struct PluginFingerprint
     bool deterministic = false;
     bool timeInvariant = true;                // the same noise twice through one instance (with silence between) gives the same output
     Difference timeInvarianceDifference;
+    double timeInvarianceGapSeconds = 0.0;    // the silence between the two runs: until the output had decayed (at least the setting's gap)
+    bool tailDecayed = true;                  // the output decayed within tailMaximumSeconds in every wait until silent
     bool settlesInTime = true;                // after settleSeconds the output equals the output after longSettleSeconds (no slow smoothing)
     Difference settleDifference;
     bool streamReacts = true;                 // the stream way of the delivery test changes its output when the parameters change

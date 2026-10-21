@@ -571,6 +571,16 @@ juce::String describeLargestHarmonic(double largestHarmonicDb)
 }
 
 // the zipper noise column of the report
+// the wait until silent stopped at its limit: the output never decayed (a frozen reverb, a plugin with noise of its own)
+juce::String getTailNote(const PluginFingerprint& fingerprint)
+{
+    if (fingerprint.tailDecayed)
+    {
+        return {};
+    }
+    return "; it did not decay within the limit";
+}
+
 juce::String getZipperVerdict(bool zipper)
 {
     if (zipper)
@@ -908,6 +918,9 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         entry.measuredLatency = latency.measuredSamples;
         entry.outputBeforePeakDb = latency.outputBeforePeakDb;
         entry.outputBeforeImpulseDbfs = latency.outputBeforeImpulseDbfs;
+        entry.peakIsEcho = latency.peakIsEcho;
+        entry.echoSamples = latency.echoSamples;
+        entry.echoReason = latency.echoReason;
         fingerprint.rates.push_back(entry);
     }
 
@@ -999,12 +1012,15 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
         rig->apply(makePokeValues(settingB, settings));
         rig->process(makeDifferentNoise(kReferenceBlock, settings.noiseLevel));
         rig->apply(settingB);
-        rig->settleFor(settings.longSettleSeconds);
+        bool decayed = true;
+        rig->settleUntilSilent(settings.longSettleSeconds, decayed); // a long tail (a reverb, a delay) of the poke's noise must not be in the output
+        fingerprint.tailDecayed = decayed;
         const Signal first = rig->process(noise);
         const Signal afterShortSettle = bench.render(kReferenceRate, kReferenceBlock, settingB, noise);
         fingerprint.settleDifference = compare(afterShortSettle, first, compareFrom, settings);
         fingerprint.settlesInTime = isBelow(fingerprint.settleDifference, settings.sameBelowDb);
-        rig->process(makeSilence(static_cast<int>(kReferenceRate * settings.timeInvarianceGapSeconds)));
+        fingerprint.timeInvarianceGapSeconds = rig->settleUntilSilent(settings.timeInvarianceGapSeconds, decayed);
+        fingerprint.tailDecayed = fingerprint.tailDecayed && decayed;
         const Signal second = rig->process(noise);
         fingerprint.timeInvarianceDifference = compare(second, first, compareFrom, settings);
         fingerprint.timeInvariant = isBelow(fingerprint.timeInvarianceDifference, settings.sameBelowDb);
@@ -1042,6 +1058,8 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
             rig->apply(settingB);
             rig->settle();
             rig->process(noise); // time to come back
+            bool decayed = true;
+            rig->settleUntilSilent(settings.settleSeconds, decayed); // the tail of that noise (a reverb, a delay) must not be in the output
             const Signal afterwards = rig->process(noise);
             finite = ! rig->sawNonFinite();
             return finite && ! reachedB.empty() && isBelow(compare(afterwards, reachedB, compareFrom, settings), settings.sameBelowDb);
@@ -1153,6 +1171,12 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
             fingerprint.findings.push_back(at + "nothing came out for the impulse (at the default parameters): no latency measured");
             continue;
         }
+        if (rate.peakIsEcho)
+        {
+            fingerprint.findings.push_back(at + "the largest output, " + juce::String(rate.echoSamples) + " samples ("
+                                           + juce::String(rate.echoSamples * 1000.0 / rate.sampleRate, 1) + " ms) after the impulse, is a delay's echo, not a "
+                                             "latency (" + rate.echoReason + "); the latency is the reported one");
+        }
         if (rate.reportedAfterAudio != rate.measuredLatency)
         {
             fingerprint.findings.push_back(at + "the plugin reports " + juce::String(rate.reportedAfterAudio) + " samples, measured "
@@ -1178,8 +1202,8 @@ PluginFingerprint measureFingerprint(juce::AudioPluginFormatManager& formatManag
     if (! fingerprint.timeInvariant)
     {
         expected = " (expected for a time-varying plugin)";
-        fingerprint.findings.push_back("The plugin is time-varying: the same noise twice through one instance, with " + juce::String(settings.timeInvarianceGapSeconds, 2)
-                                       + " s of silence between, gives different output (" + formatDifference(fingerprint.timeInvarianceDifference)
+        fingerprint.findings.push_back("The plugin is time-varying: the same noise twice through one instance, with " + juce::String(fingerprint.timeInvarianceGapSeconds, 2)
+                                       + " s of silence between (until the output had decayed" + getTailNote(fingerprint) + "), gives different output (" + formatDifference(fingerprint.timeInvarianceDifference)
                                        + "): an LFO, a random element, dither, a noise generator or a slow envelope. Repeatability, determinism, recovery and "
                                          "silence cannot be judged as for a time-invariant plugin.");
     }
@@ -1406,6 +1430,10 @@ std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
     if (reference != nullptr && reference->outputFound)
     {
         latencyCell = juce::String(reference->reportedAfterAudio) + " / " + juce::String(reference->measuredLatency);
+        if (reference->peakIsEcho)
+        {
+            latencyCell += " (an echo at " + juce::String(reference->echoSamples) + ")";
+        }
     }
     else if (reference != nullptr)
     {
@@ -1853,7 +1881,10 @@ juce::String createReport(const PluginFingerprint& fingerprint)
     }
 
     text << "\n## Other\n";
-    text << "- time-invariant (one instance: settled for " << juce::String(settings.longSettleSeconds, 2) << " s, noise, " << juce::String(settings.timeInvarianceGapSeconds, 2) << " s silence, the same noise again; the two outputs the same): "
+    text << "- time-invariant (one instance: settled for " << juce::String(settings.longSettleSeconds, 2) << " s and until the output had decayed, noise, "
+         << juce::String(fingerprint.timeInvarianceGapSeconds, 2) << " s silence (at least " << juce::String(settings.timeInvarianceGapSeconds, 2)
+         << " s, until every sample stayed below " << juce::String(settings.tailSilenceDbfs, 0) << " dBFS for " << juce::String(settings.tailHoldSeconds, 2)
+         << " s" << getTailNote(fingerprint) << "), the same noise again; the two outputs the same): "
          << yesNo(fingerprint.timeInvariant) << " (" << formatDifference(fingerprint.timeInvarianceDifference) << ")\n";
     text << "- settles within " << juce::String(settings.settleSeconds, 2) << " s after a parameter change (the output then against the output after "
          << juce::String(settings.longSettleSeconds, 2) << " s): " << yesNo(fingerprint.settlesInTime) << " (" << formatDifference(fingerprint.settleDifference) << ")\n";

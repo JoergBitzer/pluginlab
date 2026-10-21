@@ -20,6 +20,11 @@ struct FingerprintSettings
     double silenceBelowDbfs = -200.0;        // the output for silence counts as silent below this (default: exactly zero)
     double timeInvarianceGapSeconds = 0.5;   // the silence between the two runs of the time invariance test
     double longSettleSeconds = 2.0;          // the settle time of the time invariance test (also the reference for "settles in time")
+    // waits that last until the output has decayed (the time invariance test, the recovery from jumps): the tail of a reverb or a delay,
+    // the release of a compressor; every output sample below tailSilenceDbfs for tailHoldSeconds, at most tailMaximumSeconds
+    double tailSilenceDbfs = -120.0;
+    double tailHoldSeconds = 1.0;              // longer than the spacing of a delay's echoes (a quarter note at 60 BPM)
+    double tailMaximumSeconds = 30.0;
 
     // signals and timing
     double noiseLevel = 0.1;                 // peak of the uniform white noise (linear)
