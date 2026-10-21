@@ -142,6 +142,29 @@ The boundary to modulation effects: chorus, flanger and phaser are a class of th
 Test set (the author): every kind; the author's digital and tape delays in ~/AudioDev; no BBD model for now; a list of free delay plugins is
 collected by the author.
 
+## Progress
+### W11.1a tempo and the impulse with its tail (0.71.0, done)
+- `engine::FixedPlayHead`: a play head of our own (tempo, 4/4, playing, the position from the samples processed). The measurement rig gives it
+  to every instance (`Rig::setTempo`, 120 BPM unless set); the application's engine has one (`MeasurementEngine::setTempo`); inside a DAW
+  Jade Benchmark passes the DAW's play head to the slots for every block (`setExternalPlayHead`; the slots' plugins had no tempo before).
+- `engine::renderImpulse`: the delta impulse (-6 dBFS, after 1024 samples of silence) into a fresh instance with the setting delivered the
+  careful way, then silence until the output stays below -100 dBFS for 1 s; stopped at 30 s ("not decayed") or at +24 dBFS ("overflowed": a loop
+  that grows); the output before the impulse is kept (a plugin's own signal); the tempo of the play head is an option (120 and 97 BPM).
+- Test plugin **Tempo Delay**: the input plus half of it one beat of the host's tempo later (with a dry path, so that the engine's latency
+  measurement sees the first arrival at 0).
+- Tests (`TempoTests`): the echo exactly one beat later at 120 and 97 BPM, the render ending one second after it; a render stopped at its
+  limit; the engine's own play head and the DAW's play head (in Jade Benchmark) reach a slot's plugin.
+
+### Findings of the fingerprints of the candidates (2026-10-21, `~/AudioDev/W11Plugins/fingerprints/SUMMARY.md`)
+37 of 40 plugins measured without a crash. Not ours: Shu does not load here (built against glibc 2.43); ToneLib EasyComp crashed once with five
+fingerprints in parallel (three later runs clean); REEV-R crashes every time when the host runs the message loop after instances came and
+went (a run-loop handler of a destroyed instance is called, inside the plugin's JUCE copy). Ours, to fix in W11.1b:
+- **The latency of a 100 % wet delay is its first echo** ("0 / 9600" for ChowMatrix, "0 / 9599" for Dub Delay Lite, "0 / 12532" for MVerb2020):
+  the engine would delay every slot by that much. The latency measurement has to tell the first arrival of a delay from a latency.
+- **Memory longer than half a second** (reverb tails, echoes, the release of compressors): the fingerprint waits 0.25 s after a setting and
+  0.5 s between the two runs of the time-invariance test, so almost every reverb and delay, and compressors with a long release, come out
+  "time-varying", "does not settle", "delivery: none". The waits have to last until the tail has decayed (`renderImpulse`'s criterion).
+
 ## 9. Questions for the author
 1. **Which delays** form the test set (free ones: e.g. a clean digital delay, a tape echo model, a BBD model, a ping-pong)?
    Answer: all. You will find a full delay class with digital and tape in ~/AudioDev. I have no modell for BBD. I will look for some free examples of delays as well. We will collect a list for some free delay plugins

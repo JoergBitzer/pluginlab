@@ -99,6 +99,11 @@ void TestPluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     m_smoothedGain = juce::Decibels::decibelsToGain(m_gain->get());
     m_lfoPhase = 0.0;
     m_sampleRate = sampleRate;
+#if PLUGINLAB_TEST_PLUGIN_TIME_MODE == 4
+    constexpr double kLongestBeatSeconds = 4.0; // 15 BPM
+    m_beatLines.assign(static_cast<size_t>(getTotalNumOutputChannels()), std::vector<float>(static_cast<size_t>(kLongestBeatSeconds * sampleRate), 0.0f));
+    m_beatPosition = 0;
+#endif
 
     // a windowed-sinc low-pass at a quarter of the sample rate, symmetric (linear phase): the peak is in the middle
     constexpr int kTaps = PLUGINLAB_TEST_PLUGIN_FIR_TAPS;
@@ -239,6 +244,37 @@ void TestPluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         {
             buffer.setSample(channel, sample, buffer.getSample(channel, sample) * level);
         }
+    }
+#endif
+#if PLUGINLAB_TEST_PLUGIN_TIME_MODE == 4
+    // a tempo-synced delay (W11.1a): the input plus half of it one beat later; the beat from the host's play head (120 BPM without one)
+    constexpr double kTempoWithoutPlayHead = 120.0;
+    constexpr double kSecondsPerMinute = 60.0;
+    constexpr float kEchoLevel = 0.5f;
+    double tempo = kTempoWithoutPlayHead;
+    if (juce::AudioPlayHead* hostPlayHead = getPlayHead())
+    {
+        if (const juce::Optional<juce::AudioPlayHead::PositionInfo> position = hostPlayHead->getPosition())
+        {
+            if (const juce::Optional<double> bpm = position->getBpm())
+            {
+                tempo = *bpm;
+            }
+        }
+    }
+    const int lineLength = static_cast<int>(m_beatLines.front().size());
+    const int beat = juce::jlimit(1, lineLength - 1, juce::roundToInt(kSecondsPerMinute / tempo * m_sampleRate));
+    for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+    {
+        const int readPosition = (m_beatPosition - beat + lineLength) % lineLength;
+        for (int channel = 0; channel < mainChannels; ++channel)
+        {
+            std::vector<float>& line = m_beatLines[static_cast<size_t>(channel)];
+            const float input = buffer.getSample(channel, sample);
+            buffer.setSample(channel, sample, input + kEchoLevel * line[static_cast<size_t>(readPosition)]);
+            line[static_cast<size_t>(m_beatPosition)] = input;
+        }
+        m_beatPosition = (m_beatPosition + 1) % lineLength;
     }
 #endif
 #if PLUGINLAB_TEST_PLUGIN_STEREO_MODE == 1

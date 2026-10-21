@@ -8,6 +8,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "pluginlab/engine/ChannelAdapter.h"
+#include "pluginlab/engine/FixedPlayHead.h"
 #include "pluginlab/engine/FingerprintSettings.h"
 
 // Internal header of pluginlab_engine: one instance of a plugin with what is needed to run audio through it, and the careful way of rendering with
@@ -96,6 +97,22 @@ public:
             return;
         }
         m_channels = ChannelAdapter::chooseLayout(*m_instance, 2);
+        m_playHead.setSampleRate(sampleRate);
+        m_instance->setPlayHead(&m_playHead); // a tempo and a position for tempo-synced plugins (W11.1a)
+    }
+
+    ~Rig()
+    {
+        if (m_instance != nullptr)
+        {
+            m_instance->setPlayHead(nullptr);
+        }
+    }
+
+    // the tempo the plugin sees (FixedPlayHead::kDefaultTempoBpm unless set)
+    void setTempo(double tempoBpm)
+    {
+        m_playHead.setTempo(tempoBpm);
     }
 
     bool isValid() const
@@ -122,6 +139,7 @@ public:
     {
         m_instance->setPlayConfigDetails(m_channels, m_channels, m_sampleRate, m_blockSize);
         m_instance->prepareToPlay(m_sampleRate, m_blockSize);
+        m_playHead.reset();
     }
 
     // The offline flag (AudioProcessor::setNonRealtime, VST3 processMode kOffline): before prepare()
@@ -183,6 +201,7 @@ public:
                 }
             }
             m_instance->processBlock(block, midi);
+            m_playHead.advance(count);
             for (int channel = 0; channel < m_channels; ++channel)
             {
                 for (int sample = 0; sample < count; ++sample)
@@ -241,6 +260,7 @@ private:
         }
     }
 
+    FixedPlayHead m_playHead; // before the instance: it outlives it
     std::unique_ptr<juce::AudioPluginInstance> m_instance;
     double m_sampleRate;
     int m_blockSize;

@@ -93,7 +93,8 @@ void BenchmarkProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 {
     juce::ignoreUnused(midiMessages);
     juce::ScopedNoDenormals noDenormals;
-    m_engine.processExternal(buffer); // every slot processes the track; the audible one comes out
+    m_engine.setExternalPlayHead(getPlayHead()); // the DAW's tempo and position for tempo-synced plugins in the slots (W11.1a)
+    m_engine.processExternal(buffer);            // every slot processes the track; the audible one comes out
 }
 
 juce::AudioProcessorEditor* BenchmarkProcessor::createEditor()

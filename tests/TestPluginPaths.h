@@ -129,6 +129,11 @@ inline juce::File getTremoloPlugin()
 }
 
 // real-time behaviour (W5c): the gain reaches the audio through a 100 ms timer; +6 dB offline; a tremolo on the system clock
+inline juce::File getTempoDelayPlugin()
+{
+    return getTestPluginFolder().getChildFile("PluginLabTestTempoDelay.vst3");
+}
+
 inline juce::File getTimerGainPlugin()
 {
     return getTestPluginFolder().getChildFile("PluginLabTestTimerGain.vst3");

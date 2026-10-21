@@ -1,8 +1,11 @@
 #pragma once
 
+#include <atomic>
+
 #include <memory>
 #include <vector>
 
+#include "pluginlab/engine/FixedPlayHead.h"
 #include "pluginlab/engine/AudioFileSource.h"
 #include "pluginlab/engine/RenderSlot.h"
 
@@ -75,6 +78,13 @@ public:
     int getActiveSlot() const;
     void setCrossfadeMs(float milliseconds);
 
+    // The tempo the plugins see (W11.1a): the engine's own play head (FixedPlayHead, 120 BPM unless set; the position counts from the start of
+    // the files); inside a DAW the plugin product passes the DAW's play head for every block instead (setExternalPlayHead, audio thread;
+    // nullptr: the engine's own again).
+    void setTempo(double tempoBpm);
+    double getTempo() const;
+    void setExternalPlayHead(juce::AudioPlayHead* playHead);
+
     // The level trim of a slot for listening (W10.4), in dB: the audible output only (processBlock, processExternal), not processAllSlots
     void setSlotTrimDb(int index, float decibels);
     float getSlotTrimDb(int index) const;
@@ -111,6 +121,8 @@ private:
     int m_maxBlockSize = 0;
     float m_crossfadeMs = kDefaultCrossfadeMs;
 
+    FixedPlayHead m_playHead; // before the slots: their plugins keep a pointer to it until they are gone
+    std::atomic<juce::AudioPlayHead*> m_externalPlayHead{nullptr};
     mutable juce::CriticalSection m_lock;
     std::vector<FileItem> m_files;
     std::vector<std::unique_ptr<RenderSlot>> m_slots;
@@ -122,6 +134,8 @@ private:
     std::vector<juce::AudioBuffer<float>> m_slotBuffers;
     juce::AudioBuffer<float> m_chunk;
     juce::AudioBuffer<float> m_external;   // the output of processExternal before it goes back into the DAW's buffer
+
+    juce::AudioPlayHead* getCurrentPlayHead();
 
     int m_activeSlot = 0;
     int m_previousSlot = 0;

@@ -15,6 +15,33 @@ void MeasurementEngine::prepare(double sampleRate, int maxBlockSize)
     m_slotBuffers.clear();
     m_slots.clear();
     m_fadeLength = static_cast<int>(sampleRate * m_crossfadeMs / 1000.0f);
+    m_playHead.setSampleRate(sampleRate);
+    m_playHead.reset();
+}
+
+void MeasurementEngine::setTempo(double tempoBpm)
+{
+    m_playHead.setTempo(tempoBpm);
+}
+
+double MeasurementEngine::getTempo() const
+{
+    return m_playHead.getTempo();
+}
+
+void MeasurementEngine::setExternalPlayHead(juce::AudioPlayHead* playHead)
+{
+    m_externalPlayHead.store(playHead);
+}
+
+juce::AudioPlayHead* MeasurementEngine::getCurrentPlayHead()
+{
+    juce::AudioPlayHead* external = m_externalPlayHead.load();
+    if (external != nullptr)
+    {
+        return external;
+    }
+    return &m_playHead;
 }
 
 double MeasurementEngine::getSampleRate() const
@@ -53,6 +80,7 @@ void MeasurementEngine::clearFiles()
     m_files.clear();
     m_currentFile = 0;
     m_finished = false;
+    m_playHead.reset();
 }
 
 void MeasurementEngine::removeFile(int index)
@@ -318,9 +346,10 @@ void MeasurementEngine::processChunk(juce::AudioBuffer<float>& output, int start
     for (size_t index = 0; index < m_slots.size(); ++index)
     {
         juce::AudioBuffer<float> slotOutput(m_slotBuffers[index].getArrayOfWritePointers(), kChannels, numSamples);
-        m_slots[index]->process(chunkInput, slotOutput);
+        m_slots[index]->process(chunkInput, slotOutput, getCurrentPlayHead());
         m_slots[index]->applyTrim(slotOutput); // listening only: the offline renders (processAllSlots) stay untrimmed
     }
+    m_playHead.advance(numSamples); // (counts also while the DAW's play head is used: unused then)
 
     const juce::AudioBuffer<float>& current = m_slotBuffers[static_cast<size_t>(m_activeSlot)];
     const juce::AudioBuffer<float>& previous = m_slotBuffers[static_cast<size_t>(m_previousSlot)];
@@ -398,7 +427,8 @@ void MeasurementEngine::processAllSlots(int numSamples, std::vector<juce::AudioB
     for (size_t index = 0; index < m_slots.size(); ++index)
     {
         slotOutputs[index].setSize(kChannels, numSamples, false, false, true);
-        m_slots[index]->process(chunkInput, slotOutputs[index]);
+        m_slots[index]->process(chunkInput, slotOutputs[index], getCurrentPlayHead());
     }
+    m_playHead.advance(numSamples);
 }
 }

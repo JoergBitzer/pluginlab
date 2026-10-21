@@ -95,6 +95,8 @@ pluginlab_add_test_plugin(PluginLabTestTremolo "PluginLab Test Tremolo" Ttr1 0 0
 pluginlab_add_test_plugin(PluginLabTestTimerGain "PluginLab Test Timer Gain" Ttg1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 1)
 pluginlab_add_test_plugin(PluginLabTestOfflineSwitch "PluginLab Test Offline Switch" Tos1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 2)
 pluginlab_add_test_plugin(PluginLabTestWallClock "PluginLab Test Wall Clock" Twc1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 3)
+# a tempo-synced delay (W11.1a): the input plus half of it one beat of the host's tempo later
+pluginlab_add_test_plugin(PluginLabTestTempoDelay "PluginLab Test Tempo Delay" Ttd1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 4)
 # editors for the GUI review (W5d.3): follows the scale factor, ignores it, changes only its size
 pluginlab_add_test_plugin(PluginLabTestEditorScales "PluginLab Test Editor Scales" Tes1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 1)
 pluginlab_add_test_plugin(PluginLabTestEditorIgnoresScale "PluginLab Test Editor Ignores Scale" Tei1 0 0 TRUE FALSE 0 0 0 0 0 0 0 0 0 2)

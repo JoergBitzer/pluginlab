@@ -34,8 +34,9 @@ public:
     void setCompensation(int samples);
     int getCompensation() const;
 
-    // Processes the block: output = this slot's version of input (same size). Audio thread safe after prepare().
-    void process(const juce::AudioBuffer<float>& input, juce::AudioBuffer<float>& output);
+    // Processes the block: output = this slot's version of input (same size). Audio thread safe after prepare(). The plugin sees the play head
+    // (tempo and position: the engine's own, or the DAW's inside the plugin product; nullptr: none).
+    void process(const juce::AudioBuffer<float>& input, juce::AudioBuffer<float>& output, juce::AudioPlayHead* playHead = nullptr);
 
     // The level trim for listening (W10.4: the slots compared at the same level): any thread; the audio thread ramps to a new value within
     // one block (no click)

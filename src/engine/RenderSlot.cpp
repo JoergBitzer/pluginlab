@@ -94,7 +94,7 @@ int RenderSlot::getCompensation() const
     return m_compensation;
 }
 
-void RenderSlot::process(const juce::AudioBuffer<float>& input, juce::AudioBuffer<float>& output)
+void RenderSlot::process(const juce::AudioBuffer<float>& input, juce::AudioBuffer<float>& output, juce::AudioPlayHead* playHead)
 {
     if (&input != &output)
     {
@@ -106,6 +106,7 @@ void RenderSlot::process(const juce::AudioBuffer<float>& input, juce::AudioBuffe
     if (m_plugin != nullptr)
     {
         juce::AudioPluginInstance& instance = m_plugin->getInstance();
+        instance.setPlayHead(playHead); // a DAW's play head is valid for this block only: set before every block (as the loader does)
         m_midi.clear();
         if (m_adapter.isTransparent())
         {

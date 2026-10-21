@@ -53,7 +53,8 @@ target_sources(PluginLabTests
         RealWorldTests.cpp
         ReferencePluginTests.cpp
         ReferenceTests.cpp
-        SignalsTests.cpp)
+        SignalsTests.cpp
+        TempoTests.cpp)
 
 target_compile_definitions(PluginLabTests
     PRIVATE

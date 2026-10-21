@@ -6,6 +6,8 @@ add_library(pluginlab_engine STATIC
     ChannelAdapter.cpp
     Fingerprint.cpp
     FingerprintSettings.cpp
+    FixedPlayHead.cpp
+    ImpulseRender.cpp
     Interactions.cpp
     KnobLaw.cpp
     LatencyMeasurer.cpp

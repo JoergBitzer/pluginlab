@@ -64,6 +64,8 @@ private:
 
     // the delay line of the audio (only used if the plugin delays the audio)
     std::vector<std::vector<float>> m_delayLines;
+    std::vector<std::vector<float>> m_beatLines; // PLUGINLAB_TEST_PLUGIN_TIME_MODE 4: one beat of the host's tempo
+    int m_beatPosition = 0;
     int m_delayPosition = 0;
     float m_smoothedGain = 1.0f;
     double m_lfoPhase = 0.0;
