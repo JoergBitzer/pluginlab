@@ -1,5 +1,8 @@
 #include <algorithm>
 #include <iostream>
+#include <map>
+#include <utility>
+#include <vector>
 
 #include <juce_core/juce_core.h>
 #include <juce_events/juce_events.h>
@@ -56,9 +59,19 @@ int main(int argc, char* argv[])
     }
 
     int numberOfFailures = 0;
+    std::map<juce::String, double> secondsPerTest; // the time of each test group: which ones to split off when the suite gets slow
     for (int resultIndex = 0; resultIndex < runner.getNumResults(); ++resultIndex)
     {
-        numberOfFailures += runner.getResult(resultIndex)->failures;
+        const juce::UnitTestRunner::TestResult* result = runner.getResult(resultIndex);
+        numberOfFailures += result->failures;
+        secondsPerTest[result->unitTestName] += (result->endTime - result->startTime).inSeconds();
+    }
+    std::vector<std::pair<juce::String, double>> times(secondsPerTest.begin(), secondsPerTest.end());
+    std::sort(times.begin(), times.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::cout << "Time per test (s):" << std::endl;
+    for (const auto& [name, seconds] : times)
+    {
+        std::cout << "  " << juce::String(seconds, 1) << "  " << name << std::endl;
     }
 
     juce::Logger::setCurrentLogger(nullptr);

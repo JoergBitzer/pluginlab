@@ -28,8 +28,9 @@ target_compile_definitions(PluginLabHost
     PRIVATE
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
-        JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabHost,JUCE_PRODUCT_NAME>"
-        JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PluginLabHost,JUCE_VERSION>")
+        JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabHost,JUCE_PRODUCT_NAME>")
+# the version is not a compile definition: a new version would recompile every file of the target (with its JUCE modules); the programs
+# read it from pluginlab/PluginLabVersion.h (one generated file in pluginlab_core)
 
 # the scanner is started by the host and is expected in the folder of the host executable (on macOS inside the app bundle):
 # build it first and copy it there after the host is built

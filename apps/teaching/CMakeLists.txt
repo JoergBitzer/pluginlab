@@ -11,8 +11,9 @@ target_sources(PluginLabTeachingFigures
 
 target_compile_definitions(PluginLabTeachingFigures
     PRIVATE
-        JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabTeachingFigures,JUCE_PRODUCT_NAME>"
-        JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PluginLabTeachingFigures,JUCE_VERSION>")
+        JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabTeachingFigures,JUCE_PRODUCT_NAME>")
+# the version is not a compile definition: a new version would recompile every file of the target (with its JUCE modules); the programs
+# read it from pluginlab/PluginLabVersion.h (one generated file in pluginlab_core)
 
 target_link_libraries(PluginLabTeachingFigures
     PRIVATE

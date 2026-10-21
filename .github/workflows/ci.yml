@@ -103,9 +103,9 @@ jobs:
           PLUGINLAB_REQUIRE_PLUGINVAL: "1"
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a ctest --test-dir build -C Release --output-on-failure
+            xvfb-run -a ctest --test-dir build -C Release --output-on-failure --parallel 3
           else
-            ctest --test-dir build -C Release --output-on-failure
+            ctest --test-dir build -C Release --output-on-failure --parallel 3
           fi
 
       - name: Package

@@ -42,11 +42,15 @@ pluginlab (mission: divide the myth from reality) measures, compares and matches
 git submodule update --init                       # JUCE (pinned submodule), once
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --parallel 16              # always a job count: bare --parallel = unlimited make -j (OOM)
-tools/ctest_offscreen.sh                          # CTest in Xvfb + openbox (no windows on the desktop)
+tools/ctest_offscreen.sh -LE long                 # the quick run: CTest in Xvfb + openbox, 10 tests at a time, without the long ones
+tools/ctest_offscreen.sh                          # the full run (about 10 minutes): before a work package is committed, and in CI
 tools/run_pluginval.sh build/plugins/loader/PluginLabLoader_artefacts/Debug/VST3/PluginLabLoader.vst3 1
 ```
 Develop with the Debug build (JUCE assertions are on). **Run the tests offscreen** (the author's rule: no test windows on the desktop):
-`tools/ctest_offscreen.sh` runs CTest in Xvfb with openbox (hosted VST2 editors need a window manager; without one they die with an X "BadAtom"
+Two levels (2026-10-21): the quick run (`-LE long`) during the work, the full run before a work package is committed; tests that measure
+time run alone (RUN_SERIAL), the longest groups of PluginLabTests are CTests of their own (PluginLabTests prints the time of each group at its
+end: split again when one grows). The version is no compile definition of the programs (they read `pluginlab/PluginLabVersion.h`), so a new
+version does not rebuild them. `tools/ctest_offscreen.sh` runs CTest in Xvfb with openbox (hosted VST2 editors need a window manager; without one they die with an X "BadAtom"
 error). Compared on 2026-10-08: offscreen and desktop give the same results. `tools/run_pluginval.sh` runs itself in Xvfb (+ openbox) when
 `xvfb-run` exists (pluginval opens the plugin's editor); `PLUGINVAL_ON_DESKTOP=1` overrides. `PluginLabTests --only <part of a test name>` runs single tests.
 CI (`.github/workflows/ci.yml`, W10.8) builds, tests, runs pluginval (and auval for the AU on macOS) and packages both products on Linux,

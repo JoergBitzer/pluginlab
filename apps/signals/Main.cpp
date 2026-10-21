@@ -3,6 +3,7 @@
 
 #include <juce_audio_formats/juce_audio_formats.h>
 
+#include "pluginlab/PluginLabVersion.h"
 #include "pluginlab/signals/Signals.h"
 #include "pluginlab/signals/SteppedSine.h"
 #include "pluginlab/signals/SweptSine.h"
@@ -325,7 +326,7 @@ int main(int argc, char* argv[])
     }
 
     juce::String overview;
-    overview << "Test signals of pluginlab (PluginLabSignals " << JUCE_APPLICATION_VERSION_STRING << "), src/signals, docs/design/W6-plan.md.\n"
+    overview << "Test signals of pluginlab (PluginLabSignals " << pluginlab::getVersionString() << "), src/signals, docs/design/W6-plan.md.\n"
              << "All files: stereo, " << juce::String(sampleRate, 0) << " Hz, 32-bit float WAV, deterministic (the same files every time).\n\n";
     int written = 0;
     for (const double seconds : lengths)

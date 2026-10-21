@@ -66,8 +66,9 @@ target_compile_definitions(PluginLabTests
         PLUGINLAB_MAPPING_DIR="${CMAKE_SOURCE_DIR}/mappings"
         PLUGINLAB_SCANNER_EXECUTABLE="$<TARGET_FILE:PluginLabScanner>"
         PLUGINLAB_HOST_EXECUTABLE="$<TARGET_FILE:PluginLabHost>"
-        JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_PRODUCT_NAME>"
-        JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_VERSION>")
+        JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:PluginLabTests,JUCE_PRODUCT_NAME>")
+# the version is not a compile definition: a new version would recompile every file of the target (with its JUCE modules); the programs
+# read it from pluginlab/PluginLabVersion.h (one generated file in pluginlab_core)
 
 target_link_libraries(PluginLabTests
     PRIVATE
@@ -95,9 +96,21 @@ if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
 
-add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)|Fast render path (W9.3)|Plugin matching (W9.4)|Match attribution (W9.5)|Easy page (W10.4)|Expert page (W10.5)|Measurement presets (W10.6)|Crash protection (W10.7)")
+add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)|Fast render path (W9.3)|Plugin matching (W9.4)|Match attribution (W9.5)|Easy page (W10.4)|Expert page (W10.5)|Measurement presets (W10.6)|Crash protection (W10.7)|Jade Benchmark (W10.2)|EQ band identification|Matcher, EQ domain (W9.2)|Measure: system class|Measure: plugins through the host|Measure: null test|Live transfer function display (W10.3)")
 # a hanging test (a dialog nobody can click, a plugin that never returns) must fail soon, not after the default 25 minutes
-set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 1200 RESOURCE_LOCK display) # about 580 s in Debug on the development machine (2026-10-21); to be split further (W10.8)
+set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 1200 RESOURCE_LOCK display) # about 100 s in Debug since the split of 2026-10-21 (was 580 s)
+
+# the longest groups of PluginLabTests as tests of their own, so that "ctest -j" runs them side by side (PluginLabTests prints the time of each
+# group at its end: split again when one grows); times in Debug on the development machine, 2026-10-21
+foreach(GROUP "Jade Benchmark (W10.2)" "EQ band identification" "Matcher, EQ domain (W9.2)" "Measure: system class"
+              "Measure: plugins through the host" "Measure: null test")
+    string(REGEX REPLACE "[^A-Za-z0-9]" "" GROUP_TEST_NAME "${GROUP}")
+    add_test(NAME PluginLab_${GROUP_TEST_NAME} COMMAND PluginLabTests --only "${GROUP}") # 150, 109, 63, 50, 46, 39 s
+    set_tests_properties(PluginLab_${GROUP_TEST_NAME} PROPERTIES TIMEOUT 900)
+endforeach()
+# the live transfer functions (W10.3) check how fast a curve follows a knob (0.3 s): alone, so that other tests do not slow them down
+add_test(NAME PluginLabLiveResponse COMMAND PluginLabTests --only "Live transfer function display (W10.3)")
+set_tests_properties(PluginLabLiveResponse PROPERTIES TIMEOUT 600 RUN_SERIAL TRUE)
 # the fingerprint measures many test plugins (with the system class at A and B since 0.49.0): a test with a limit of its own; not at the same
 # time as PluginLabTests (the lock: both are long and render much)
 add_test(NAME PluginLabFingerprint COMMAND PluginLabTests --only "PluginFingerprint")
@@ -109,7 +122,7 @@ set_tests_properties(PluginLabFingerprintRealTime PROPERTIES TIMEOUT 600 RUN_SER
 # that "ctest -j" runs them side by side
 # the fast render path of the matcher (W9.3): plugins against the careful delivery
 add_test(NAME PluginLabFastRenderPath COMMAND PluginLabTests --only "Fast render path (W9.3)")
-set_tests_properties(PluginLabFastRenderPath PROPERTIES TIMEOUT 1200)
+set_tests_properties(PluginLabFastRenderPath PROPERTIES TIMEOUT 1200 RUN_SERIAL TRUE) # it checks the time per render: alone
 # matching plugins (W9.4): the test pairs of the plan
 add_test(NAME PluginLabPluginMatching COMMAND PluginLabTests --only "Plugin matching (W9.4)")
 set_tests_properties(PluginLabPluginMatching PROPERTIES TIMEOUT 1800)
@@ -141,7 +154,7 @@ endforeach()
 foreach(SURVEYED "Test EQ Drive" "Test EQ Switch" "Reference EQ" "Reference Utility" "Reference Nonlinear")
     string(REPLACE " " "" SURVEY_TEST_NAME "${SURVEYED}")
     add_test(NAME PluginLabParameterSurvey_${SURVEY_TEST_NAME} COMMAND PluginLabTests --only "Parameter survey (W8.4): ${SURVEYED}")
-    set_tests_properties(PluginLabParameterSurvey_${SURVEY_TEST_NAME} PROPERTIES TIMEOUT 1800)
+    set_tests_properties(PluginLabParameterSurvey_${SURVEY_TEST_NAME} PROPERTIES TIMEOUT 1800 LABELS long)
 endforeach()
 
 # Smoke test of the stand-alone app: it starts, writes its version into a file and quits; the version is the one of CMake.
@@ -223,6 +236,7 @@ if(UNIX AND NOT APPLE)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckHostGuiRobustness.cmake)
     # tests that open windows in the virtual display do not run at the same time under "ctest -j" (the captures would overlap)
     set_tests_properties(PluginLabHostGuiSnapshot PluginLabHostGuiScaling PluginLabHostGuiRobustness PROPERTIES RESOURCE_LOCK display)
+    set_tests_properties(PluginLabHostGuiScaling PluginLabHostGuiRobustness PROPERTIES LABELS long)
 endif()
 
 # The loader plugin is self-contained: its bundle holds the scanner (found next to the plugin binary when the plugin runs in a DAW).
@@ -238,3 +252,16 @@ add_test(NAME PluginLabSignalsWrites
         -DSIGNALS_APPLICATION=$<TARGET_FILE:PluginLabSignals>
         -DOUTPUT_FOLDER=${CMAKE_CURRENT_BINARY_DIR}/signals_smoke
         -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckSignals.cmake)
+
+# Two levels (2026-10-21): the quick run for everyday work leaves out the tests labelled "long" (tools/ctest_offscreen.sh -LE long, a few
+# minutes); the full run (all tests) before a work package is committed, and in CI
+set_tests_properties(PluginLabFingerprint PluginLabFingerprintRealTime PluginLabPluginMatching PluginLabMatchAttribution PluginLabHostMap
+                     PluginLabHostFingerprint PROPERTIES LABELS long)
+foreach(COMBINED "Test EQ Two Bands" "Test EQ Parallel" "Reference EQ")
+    string(REPLACE " " "" INTERACTION_TEST_NAME "${COMBINED}")
+    set_tests_properties(PluginLabInteractions_${INTERACTION_TEST_NAME} PROPERTIES LABELS long)
+endforeach()
+foreach(CALIBRATED "Test EQ" "Test EQ Fs Fault" "Test EQ Knob Faults" "Reference EQ")
+    string(REPLACE " " "" CALIBRATION_TEST_NAME "${CALIBRATED}")
+    set_tests_properties(PluginLabCalibration_${CALIBRATION_TEST_NAME} PROPERTIES LABELS long)
+endforeach()
