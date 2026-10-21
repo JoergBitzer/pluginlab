@@ -234,6 +234,20 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
   saturation found exactly when there is one; feedback 120 % with saturation reported as self-oscillating; the plugin through the rig.
 - Not yet: the harmonic responses per echo (the synchronized sweep), ducking (the dynamics methods of W11.3).
 
+### W11.1f the report section (0.78.0, done)
+- The measurement unit "echoes" (`getMeasurementUnitKeys`, so in `--measure`, in the fingerprint's measurements and on the Expert page):
+  `measure::measureEchoResponse` on the device: an impulse (-6 dBFS, 4 s of silence); with echoes the stereo paths, the levels -40/-20/-6 dBFS
+  and an impulse train for the modulation follow. Rows: echoes, delay time, spacing (spread), feedback per repeat (dB/s), mix, stereo kind,
+  level dependence, delay modulation. The dry path is at the plugin's reported latency (`MeasurementOptions::latencySamples`; unknown: the
+  first arrival); an arrival sooner than 5 ms after it without a dry path is an unreported latency, no echo.
+- The fingerprint's summary item "echoes" (one line: "none", or delay time, ping-pong / cross feedback, saturates / self-oscillating,
+  modulated) and the Developer page's column "Echoes".
+- On the way: the trajectory takes the echo nearest to the first echo's time in each period (with feedback a later echo of the impulse before
+  comes first); the plugin device keeps one bench for all its renders (the tail probe once, not before every render).
+- Tests: the Reference Delay with ping-pong, LFO and saturation: all rows right; the Reference EQ, the linear-phase plugin (latency 127) and the
+  latency liar (an unreported latency): "none"; the host fingerprint's summary has the item.
+- Not yet: the views of section 6 (echo plot, trajectory plot) in the reports.
+
 ## 9. Questions for the author
 1. **Which delays** form the test set (free ones: e.g. a clean digital delay, a tape echo model, a BBD model, a ping-pong)?
    Answer: all. You will find a full delay class with digital and tape in ~/AudioDev. I have no modell for BBD. I will look for some free examples of delays as well. We will collect a list for some free delay plugins

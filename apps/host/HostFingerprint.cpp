@@ -282,6 +282,16 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
             const pluginlab::engine::MeasurementSummary summary = pluginlab::engine::measurePlugin(
                 formatManager, description, pluginlab::engine::getDefaultSetting(formatManager, description, getMeasurementRate()), {});
             report += pluginlab::engine::createMeasurementReport(summary) + "\n";
+            fingerprint.echoes = pluginlab::engine::summarizeEchoes(summary);
+            juce::StringArray rows;
+            for (const pluginlab::engine::MeasurementRow& row : summary.rows)
+            {
+                if (row.unit == "echoes")
+                {
+                    rows.add(row.quantity + ": " + row.text);
+                }
+            }
+            fingerprint.echoesDetail = rows.joinIntoString("; ");
         }
         // the single results for programs (the Developer page): <report>.json, or <report>.<n>.json for further plugins of the file
         juce::String jsonPath = reportFile.getFullPathName() + ".json";

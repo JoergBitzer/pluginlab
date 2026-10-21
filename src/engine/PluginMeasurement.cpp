@@ -6,6 +6,7 @@
 #include "pluginlab/measure/Crosstalk.h"
 #include "pluginlab/measure/Delay.h"
 #include "pluginlab/measure/Distortion.h"
+#include "pluginlab/measure/EchoResponse.h"
 #include "pluginlab/measure/FrequencyResponse.h"
 #include "pluginlab/measure/Gain.h"
 #include "pluginlab/measure/Intermodulation.h"
@@ -19,6 +20,7 @@ namespace pluginlab::engine
 namespace
 {
 constexpr double kNotApplicable = std::numeric_limits<double>::quiet_NaN();
+constexpr int kLatencyBlock = 512; // the block size of the instance that reports its latency
 
 class Rows
 {
@@ -63,6 +65,104 @@ juce::String formatDb(double value, const juce::String& unit, int decimals = 2)
     return juce::String(value, decimals) + " " + unit;
 }
 
+juce::String getStereoKindName(measure::StereoEchoKind kind)
+{
+    if (kind == measure::StereoEchoKind::PingPong)
+    {
+        return "ping-pong";
+    }
+    if (kind == measure::StereoEchoKind::CrossFeedback)
+    {
+        return "cross feedback";
+    }
+    return "independent channels";
+}
+
+juce::String getShapeName(measure::LfoShapeFound shape)
+{
+    if (shape == measure::LfoShapeFound::Sine)
+    {
+        return "sine";
+    }
+    if (shape == measure::LfoShapeFound::Triangle)
+    {
+        return "triangle";
+    }
+    if (shape == measure::LfoShapeFound::Other)
+    {
+        return "neither sine nor triangle";
+    }
+    return "none";
+}
+
+// the echo response (W11.1f): rows only for a device that answers with echoes
+void addEchoRows(Rows& rows, const measure::Device& device, int channels, const MeasurementOptions& options)
+{
+    const juce::String kClause = "W11.1";
+    const double fs = options.sampleRate;
+    const auto ms = [fs](double samples) { return juce::String(samples * 1000.0 / fs, 2) + " ms (" + juce::String(samples, 1) + " samples)"; };
+    measure::EchoMeasurementSettings settings;
+    settings.sampleRate = fs;
+    settings.channels = channels;
+    settings.latencySamples = options.latencySamples;
+    const measure::EchoMeasurement echoes = measure::measureEchoResponse(device, settings);
+    if (! echoes.hasEchoes)
+    {
+        rows.add("echoes", "echoes after an impulse (channel 1)", 0.0, "none (no delay)", kClause);
+        return;
+    }
+    const measure::EchoAnalysis& analysis = echoes.echoes;
+    rows.add("echoes", "echoes after an impulse (channel 1)", static_cast<double>(analysis.echoes.size()),
+             juce::String(static_cast<int>(analysis.echoes.size())) + " within 60 dB of the largest arrival", kClause);
+    rows.add("echoes", "delay time (first echo after the dry path)", analysis.delaySamples * 1000.0 / fs, ms(analysis.delaySamples), kClause);
+    if (analysis.echoes.size() >= 2)
+    {
+        rows.add("echoes", "echo spacing (spread)", analysis.spacingSamples * 1000.0 / fs,
+                 ms(analysis.spacingSamples) + ", spread " + juce::String(analysis.spacingSpreadSamples, 2) + " samples", kClause);
+        rows.add("echoes", "feedback per repeat", analysis.feedbackDb,
+                 juce::String(analysis.feedbackDb, 2) + " dB (" + juce::String(analysis.decayDbPerSecond, 1) + " dB/s)", kClause);
+    }
+    if (analysis.hasDirect)
+    {
+        rows.addDb("echoes", "first echo against the dry path (mix)", analysis.mixDb, "dB", kClause);
+    }
+    if (echoes.stereo)
+    {
+        juce::String text = getStereoKindName(echoes.stereoEchoes.kind);
+        if (echoes.stereoEchoes.kind == measure::StereoEchoKind::PingPong)
+        {
+            text << ", one bounce " << ms(echoes.stereoEchoes.pingPongSpacingSamples);
+        }
+        rows.add("echoes", "stereo (one input at a time)", static_cast<double>(static_cast<int>(echoes.stereoEchoes.kind)), text, kClause);
+    }
+    const measure::LevelDependence& levels = echoes.levels;
+    juce::String levelText = "first echo " + juce::String(levels.compressionDb, 2) + " dB, feedback " + juce::String(levels.feedbackChangeDb, 2)
+                             + " dB per repeat from -40 to -6 dBFS: ";
+    if (levels.saturates)
+    {
+        levelText << "saturation in the loop";
+    }
+    else
+    {
+        levelText << "linear";
+    }
+    if (levels.selfOscillating)
+    {
+        levelText << "; SELF-OSCILLATING (the echoes do not decay)";
+    }
+    rows.add("echoes", "level dependence of the echoes", levels.compressionDb, levelText, kClause);
+    const measure::DelayTrajectory& trajectory = echoes.trajectory;
+    juce::String modulation = "none";
+    double modulationValue = 0.0;
+    if (trajectory.shape != measure::LfoShapeFound::None)
+    {
+        modulationValue = trajectory.depthSamples * 1000.0 / fs;
+        modulation = getShapeName(trajectory.shape) + ", " + juce::String(trajectory.rateHz, 2) + " Hz, depth " + ms(trajectory.depthSamples) + ", "
+                     + juce::String(trajectory.pitchDeviationCents, 1) + " cents";
+    }
+    rows.add("echoes", "delay modulation (impulse train)", modulationValue, modulation, kClause);
+}
+
 // the number of units a run measures: the chosen ones, or all if none is chosen
 int getUnitCount(const MeasurementOptions& options)
 {
@@ -76,7 +176,7 @@ int getUnitCount(const MeasurementOptions& options)
 
 const juce::StringArray& getMeasurementUnitKeys()
 {
-    static const juce::StringArray keys{"gain", "response", "delay", "phase", "distortion", "imd", "noise", "crosstalk", "maximum", "linearity"};
+    static const juce::StringArray keys{"gain", "response", "delay", "phase", "distortion", "imd", "noise", "crosstalk", "maximum", "linearity", "echoes"};
     return keys;
 }
 
@@ -84,7 +184,7 @@ juce::String getMeasurementUnitTitle(const juce::String& key)
 {
     static const juce::StringArray titles{"level and gain",       "frequency response", "delay and polarity", "phase",
                                           "THD and THD+N",        "intermodulation",    "noise",              "crosstalk",
-                                          "maximum input level",  "gain linearity (slow)"};
+                                          "maximum input level",  "gain linearity (slow)", "echo response (delays)"};
     const int index = getMeasurementUnitKeys().indexOf(key);
     if (index >= 0)
     {
@@ -333,6 +433,11 @@ MeasurementSummary measureDevice(const measure::Device& device, int channels, co
         rows.add("linearity", "gain non-linearity: largest deviation (channel 1)", worst,
                  juce::String(worst, 3) + " dB at " + juce::String(worstAt, 0) + " dBFS (down to " + juce::String(curve.inputDbfs.back(), 0) + " dBFS)", "AES17 6.3.7");
     }
+    if (wants("echoes"))
+    {
+        announce("echo response");
+        addEchoRows(rows, device, used, options);
+    }
     summary.seconds = (juce::Time::getMillisecondCounterHiRes() - startMs) / 1000.0;
     return summary;
 }
@@ -341,7 +446,19 @@ MeasurementSummary measurePlugin(juce::AudioPluginFormatManager& formatManager, 
                                  const MeasurementOptions& options)
 {
     const int channels = getPluginChannels(formatManager, description, options.sampleRate);
-    return measureDevice(makePluginDevice(formatManager, description, setting), channels, description.name, options);
+    MeasurementOptions withLatency = options;
+    if (withLatency.latencySamples < 0.0)
+    {
+        // the reported latency (after prepare): where the dry path of the echo response arrives
+        juce::String error;
+        if (std::unique_ptr<juce::AudioPluginInstance> instance = formatManager.createPluginInstance(description, options.sampleRate, kLatencyBlock, error))
+        {
+            instance->prepareToPlay(options.sampleRate, kLatencyBlock);
+            withLatency.latencySamples = instance->getLatencySamples();
+            instance->releaseResources();
+        }
+    }
+    return measureDevice(makePluginDevice(formatManager, description, setting), channels, description.name, withLatency);
 }
 
 juce::String createMeasurementReport(const MeasurementSummary& summary)
@@ -420,6 +537,50 @@ MeasurementSummary parseMeasurementJson(const juce::var& json)
         }
     }
     return summary;
+}
+
+juce::String summarizeEchoes(const MeasurementSummary& summary)
+{
+    const MeasurementRow* echoes = findRow(summary, "echoes after an impulse (channel 1)");
+    if (echoes == nullptr)
+    {
+        return {};
+    }
+    if (echoes->value <= 0.0)
+    {
+        return "none";
+    }
+    juce::StringArray parts;
+    if (const MeasurementRow* delay = findRow(summary, "delay time (first echo after the dry path)"))
+    {
+        parts.add(juce::String(delay->value, 1) + " ms");
+    }
+    if (const MeasurementRow* stereo = findRow(summary, "stereo (one input at a time)"))
+    {
+        if (! stereo->text.startsWith("independent"))
+        {
+            parts.add(stereo->text.upToFirstOccurrenceOf(",", false, false));
+        }
+    }
+    if (const MeasurementRow* levels = findRow(summary, "level dependence of the echoes"))
+    {
+        if (levels->text.contains("SELF-OSCILLATING"))
+        {
+            parts.add("self-oscillating");
+        }
+        else if (levels->text.contains("saturation"))
+        {
+            parts.add("saturates");
+        }
+    }
+    if (const MeasurementRow* modulation = findRow(summary, "delay modulation (impulse train)"))
+    {
+        if (modulation->value > 0.0)
+        {
+            parts.add("modulated");
+        }
+    }
+    return parts.joinIntoString(", ");
 }
 
 const MeasurementRow* findRow(const MeasurementSummary& summary, const juce::String& quantity)

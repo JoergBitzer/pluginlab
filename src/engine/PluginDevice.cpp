@@ -1,5 +1,7 @@
 #include "pluginlab/engine/PluginDevice.h"
 
+#include <memory>
+
 #include "PluginRig.h"
 
 namespace pluginlab::engine
@@ -32,12 +34,18 @@ juce::AudioBuffer<float> toBuffer(const detail::Signal& signal)
 measure::Device makePluginDevice(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, std::vector<float> setting,
                                  PluginDeviceOptions options)
 {
-    return [&formatManager, description, setting, options](const juce::AudioBuffer<float>& input, double sampleRate)
+    // one bench for all renders of the device: the plugin's tail (the hold of the waits until silent) is measured once
+    struct State
     {
         FingerprintSettings settings;
-        settings.settleSeconds = options.settleSeconds;
-        const detail::Bench bench(formatManager, description, settings);
-        return toBuffer(bench.render(sampleRate, options.blockSize, setting, toSignal(input)));
+        std::unique_ptr<detail::Bench> bench;
+    };
+    auto state = std::make_shared<State>();
+    state->settings.settleSeconds = options.settleSeconds;
+    state->bench = std::make_unique<detail::Bench>(formatManager, description, state->settings);
+    return [state, setting, options](const juce::AudioBuffer<float>& input, double sampleRate)
+    {
+        return toBuffer(state->bench->render(sampleRate, options.blockSize, setting, toSignal(input)));
     };
 }
 

@@ -24,7 +24,13 @@ if(POSITION EQUAL -1)
     message(FATAL_ERROR "The summary does not contain the item 'deterministic'")
 endif()
 
-foreach(EXPECTED "# Fingerprint: PluginLab Test Gain" "## Summary" "## Findings" "## Delivery of parameters" "## Block sizes" "## Measurements (AES17)" "Reviewed by Jade Benchmark, pluginlab")
+# the echo response of the measurements (W11.1f): a gain has none
+string(FIND "${SUMMARY}" "\"key\": \"echoes\"" POSITION)
+if(POSITION EQUAL -1)
+    message(FATAL_ERROR "The summary does not contain the item 'echoes'")
+endif()
+
+foreach(EXPECTED "# Fingerprint: PluginLab Test Gain" "## Summary" "## Findings" "## Delivery of parameters" "## Block sizes" "## Measurements (AES17)" "echoes after an impulse (channel 1) | none (no delay)" "Reviewed by Jade Benchmark, pluginlab")
     string(FIND "${REPORT}" "${EXPECTED}" POSITION)
     if(POSITION EQUAL -1)
         message(FATAL_ERROR "The report does not contain '${EXPECTED}'")

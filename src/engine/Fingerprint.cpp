@@ -1503,6 +1503,10 @@ std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
         add("zipper", "zipper noise while a parameter moves (one new value per block)", describeZipperCount(judged, fingerprint.zipper.zipperCount),
             juce::String(judged) + " continuous parameter(s) judged", none || timeVarying);
     }
+    if (fingerprint.echoes.isNotEmpty())
+    {
+        add("echoes", "echo response at the defaults (delays)", fingerprint.echoes, fingerprint.echoesDetail, true); // a property, never a fault
+    }
     add("blockSizes", "block size independent (steady state)", yesNo(fingerprint.blockSizeIndependent), worstBlock, fingerprint.blockSizeIndependent);
     add("deterministic", "deterministic (two instances, bit exact)", yesNo(fingerprint.deterministic), expectedNote, fingerprint.deterministic || timeVarying);
     add("finite", "output stays finite after parameter jumps", yesNo(fingerprint.outputStaysFinite), {}, fingerprint.outputStaysFinite);

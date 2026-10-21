@@ -31,7 +31,7 @@ struct MeasurementSummary
 };
 
 // The units by key (the Expert page chooses them, W10.5); the system class always runs first
-const juce::StringArray& getMeasurementUnitKeys();       // gain, response, delay, phase, distortion, imd, noise, crosstalk, maximum, linearity
+const juce::StringArray& getMeasurementUnitKeys();       // gain, response, delay, phase, distortion, imd, noise, crosstalk, maximum, linearity, echoes
 juce::String getMeasurementUnitTitle(const juce::String& key);
 
 struct MeasurementOptions
@@ -39,6 +39,7 @@ struct MeasurementOptions
     double sampleRate = 48000.0;
     bool linearity = true;                       // gain non-linearity (the slowest unit: up to 28 levels)
     juce::StringArray units;                     // the keys of getMeasurementUnitKeys() to run; empty: all
+    double latencySamples = -1.0;                // the device's latency (the dry path of the echo response); < 0: unknown (measurePlugin: the reported one)
     std::function<void(double fraction, const juce::String& unit)> progress; // before each unit
 };
 
@@ -55,6 +56,10 @@ juce::String createMeasurementReport(const MeasurementSummary& summary);
 // The summary as JSON (device, rate, channels, seconds, rows) and back: the Expert page reads what the measurement process wrote
 juce::var createMeasurementJson(const MeasurementSummary& summary);
 MeasurementSummary parseMeasurementJson(const juce::var& json);
+
+// The echo response in one line for the Developer page (W11.1f): "none", or the delay time, the stereo kind, saturation, modulation; empty if
+// the unit did not run
+juce::String summarizeEchoes(const MeasurementSummary& summary);
 
 // Finds a row by its quantity (nullptr if there is none)
 const MeasurementRow* findRow(const MeasurementSummary& summary, const juce::String& quantity);

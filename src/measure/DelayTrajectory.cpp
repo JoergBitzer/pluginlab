@@ -191,7 +191,17 @@ DelayTrajectory measureTrajectoryFromImpulses(const std::vector<double>& output,
         {
             continue;
         }
-        const double delay = analysis.echoes.front().timeSamples;
+        double delay = analysis.echoes.front().timeSamples;
+        if (settings.expectedDelaySamples > 0.0)
+        {
+            for (const Arrival& echo : analysis.echoes)
+            {
+                if (std::abs(echo.timeSamples - settings.expectedDelaySamples) < std::abs(delay - settings.expectedDelaySamples))
+                {
+                    delay = echo.timeSamples;
+                }
+            }
+        }
         points.push_back({static_cast<double>(start) + delay, delay});
     }
     return fitTrajectory(std::move(points), settings);

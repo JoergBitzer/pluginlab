@@ -2,6 +2,9 @@
 
 #include <vector>
 
+#include "pluginlab/measure/DelayTrajectory.h"
+#include "pluginlab/measure/Device.h"
+
 namespace pluginlab::measure
 {
 // The echo response of a delay (W11.1b, docs/design/W11-delay-plan.md 4.1): from the response to a unit impulse (sample 0 = the impulse, the
@@ -88,4 +91,31 @@ struct StereoEchoAnalysis
 
 // responses[input][output]: the response of each output to a unit impulse into one input (the other input silent)
 StereoEchoAnalysis analyseStereoEchoes(const std::vector<double> (&responses)[2][2], const EchoSettings& settings);
+
+// The echo response of a device (W11.1f, the unit "echoes" of the reports): an impulse into both inputs, then silence; if echoes come back,
+// the stereo paths (one input at a time), the levels and the delay trajectory (an impulse train) follow
+struct EchoMeasurementSettings
+{
+    double sampleRate = 48000.0;
+    int channels = 2;
+    double latencySamples = -1.0;         // where the dry path arrives; < 0: unknown, the first arrival is taken as the dry path (a single arrival
+                                          // is then a latency, no echo; a 100 % wet delay loses its first echo to it)
+    double levelDbfs = -6.0;
+    std::vector<double> levelsDbfs = {-40.0, -20.0, -6.0};
+    double renderSeconds = 4.0;           // the silence after each impulse (longer echo trains are cut)
+    double trajectorySeconds = 4.0;       // the impulse train
+};
+
+struct EchoMeasurement
+{
+    bool hasEchoes = false;
+    EchoAnalysis echoes;                  // both inputs driven, output channel 1
+    bool stereo = false;
+    StereoEchoAnalysis stereoEchoes;
+    LevelDependence levels;
+    DelayTrajectory trajectory;
+    int trajectoryPeriodSamples = 0;
+};
+
+EchoMeasurement measureEchoResponse(const Device& device, const EchoMeasurementSettings& settings);
 }

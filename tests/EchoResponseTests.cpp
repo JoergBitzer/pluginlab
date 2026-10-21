@@ -9,6 +9,7 @@
 #include "TestPluginPaths.h"
 #include "pluginlab/engine/ImpulseRender.h"
 #include "pluginlab/engine/PluginDevice.h"
+#include "pluginlab/engine/PluginMeasurement.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
 #include "pluginlab/measure/EchoResponse.h"
@@ -440,6 +441,46 @@ private:
                 expect(dependence.saturates == (drive > 0.0f), "saturation found exactly when there is one");
             }
             setting[kSaturation] = 0.0f;
+        }
+
+        beginTest("the unit 'echoes' of the reports (W11.1f): the Reference Delay with ping-pong, LFO and saturation; no echoes for EQs and latencies");
+        {
+            constexpr size_t kPingPong = 10;
+            constexpr size_t kLfoDepth = 12;
+            constexpr size_t kSaturation = 14;
+            constexpr size_t kFeedback = 2;
+            std::vector<float> delaySetting = setting;
+            delaySetting[kSync] = 0.0f;
+            delaySetting[kPingPong] = 1.0f;
+            delaySetting[kLfoDepth] = 0.05f;    // 0.5 ms
+            delaySetting[kSaturation] = 0.4f;   // drive 2
+            delaySetting[kFeedback] = 0.75f;    // 47.5 %
+            pluginlab::engine::MeasurementOptions options;
+            options.units = {"echoes"};
+            const pluginlab::engine::MeasurementSummary summary = pluginlab::engine::measurePlugin(formatManager, description, delaySetting, options);
+            for (const pluginlab::engine::MeasurementRow& row : summary.rows)
+            {
+                logMessage(row.quantity + ": " + row.text);
+            }
+            const pluginlab::engine::MeasurementRow* stereo = pluginlab::engine::findRow(summary, "stereo (one input at a time)");
+            expect(stereo != nullptr && stereo->text.startsWith("ping-pong"), "ping-pong in the report");
+            const pluginlab::engine::MeasurementRow* levels = pluginlab::engine::findRow(summary, "level dependence of the echoes");
+            expect(levels != nullptr && levels->text.contains("saturation"), "the saturation in the report");
+            const pluginlab::engine::MeasurementRow* modulation = pluginlab::engine::findRow(summary, "delay modulation (impulse train)");
+            expect(modulation != nullptr && modulation->text.startsWith("sine, 0.50 Hz"), "the LFO in the report");
+
+            for (const juce::File& file : {testpaths::getReferencePlugin("Eq"), testpaths::getLinearPhasePlugin(), testpaths::getLatencyLiarPlugin()})
+            {
+                const pluginlab::hosting::PluginScanResult other = pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, file);
+                expect(! other.descriptions.isEmpty(), file.getFileName());
+                if (other.descriptions.isEmpty())
+                {
+                    continue;
+                }
+                const pluginlab::engine::MeasurementSummary none = pluginlab::engine::measurePlugin(formatManager, other.descriptions[0], {}, options);
+                const pluginlab::engine::MeasurementRow* row = pluginlab::engine::findRow(none, "echoes after an impulse (channel 1)");
+                expect(row != nullptr && row->text.startsWith("none"), file.getFileName() + ": no echoes");
+            }
         }
 
         beginTest("the Reference Delay plugin with ping-pong (W11.1c): the 2 x 2 response through the rig is recognised as ping-pong");

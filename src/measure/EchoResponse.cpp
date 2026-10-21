@@ -405,4 +405,114 @@ LevelDependence analyseLevelDependence(const std::vector<double>& levelsDbfs, co
     result.saturates = result.compressionDb < -thresholdDb || result.feedbackChangeDb < -thresholdDb;
     return result;
 }
+
+namespace
+{
+// the response of each output channel to an impulse of the given level into the chosen inputs (divided by the impulse's height)
+std::vector<std::vector<double>> renderImpulseThrough(const Device& device, const EchoMeasurementSettings& settings, double levelDbfs, int inputChannel)
+{
+    const int length = static_cast<int>(settings.renderSeconds * settings.sampleRate);
+    const double height = std::pow(10.0, levelDbfs / 20.0);
+    juce::AudioBuffer<float> input(settings.channels, length);
+    input.clear();
+    for (int channel = 0; channel < settings.channels; ++channel)
+    {
+        if (inputChannel < 0 || inputChannel == channel)
+        {
+            input.setSample(channel, 0, static_cast<float>(height));
+        }
+    }
+    const juce::AudioBuffer<float> output = device(input, settings.sampleRate);
+    std::vector<std::vector<double>> responses(static_cast<size_t>(output.getNumChannels()));
+    for (int channel = 0; channel < output.getNumChannels(); ++channel)
+    {
+        for (int sample = 0; sample < output.getNumSamples(); ++sample)
+        {
+            responses[static_cast<size_t>(channel)].push_back(output.getSample(channel, sample) / height);
+        }
+    }
+    return responses;
+}
+}
+
+EchoMeasurement measureEchoResponse(const Device& device, const EchoMeasurementSettings& settings)
+{
+    EchoMeasurement result;
+    EchoSettings echoSettings;
+    echoSettings.sampleRate = settings.sampleRate;
+    echoSettings.latencySamples = std::max(0.0, settings.latencySamples);
+    const std::vector<std::vector<double>> both = renderImpulseThrough(device, settings, settings.levelDbfs, -1);
+    if (both.empty())
+    {
+        return result;
+    }
+    result.echoes = analyseEchoes(both.front(), echoSettings);
+    // no dry path at the latency: the first arrival is the dry path if the latency is unknown, or if it comes sooner than any echo would
+    // (a latency the plugin does not report, as in the fingerprint's latency test)
+    constexpr double kShortestEchoSeconds = 0.005;
+    const bool unknown = settings.latencySamples < 0.0;
+    if (! result.echoes.hasDirect && ! result.echoes.echoes.empty()
+        && (unknown || result.echoes.echoes.front().timeSamples - echoSettings.latencySamples < kShortestEchoSeconds * settings.sampleRate))
+    {
+        echoSettings.latencySamples = result.echoes.echoes.front().timeSamples;
+        result.echoes = analyseEchoes(both.front(), echoSettings);
+    }
+    result.hasEchoes = ! result.echoes.echoes.empty();
+    if (! result.hasEchoes)
+    {
+        return result;
+    }
+
+    // stereo: one input at a time
+    if (settings.channels == 2 && both.size() == 2)
+    {
+        std::vector<double> paths[2][2];
+        for (int input = 0; input < 2; ++input)
+        {
+            const std::vector<std::vector<double>> responses = renderImpulseThrough(device, settings, settings.levelDbfs, input);
+            for (size_t output = 0; output < 2 && output < responses.size(); ++output)
+            {
+                paths[input][output] = responses[output];
+            }
+        }
+        result.stereo = true;
+        result.stereoEchoes = analyseStereoEchoes(paths, echoSettings);
+    }
+
+    // the levels
+    std::vector<EchoAnalysis> analyses;
+    for (const double level : settings.levelsDbfs)
+    {
+        analyses.push_back(analyseEchoes(renderImpulseThrough(device, settings, level, -1).front(), echoSettings));
+    }
+    result.levels = analyseLevelDependence(settings.levelsDbfs, analyses);
+
+    // the trajectory: an impulse train with a period longer than the first echo and its spread
+    const double firstEcho = result.echoes.echoes.front().timeSamples;
+    int period = 4096;
+    while (period < static_cast<int>(1.5 * firstEcho) + 1024)
+    {
+        period *= 2;
+    }
+    const int count = std::max(8, static_cast<int>(settings.trajectorySeconds * settings.sampleRate / period));
+    const std::vector<float> train = makeImpulseTrain(count, period, static_cast<float>(std::pow(10.0, settings.levelDbfs / 20.0)));
+    juce::AudioBuffer<float> input(settings.channels, static_cast<int>(train.size()));
+    for (int channel = 0; channel < settings.channels; ++channel)
+    {
+        input.copyFrom(channel, 0, train.data(), static_cast<int>(train.size()));
+    }
+    const juce::AudioBuffer<float> output = device(input, settings.sampleRate);
+    std::vector<double> first;
+    for (int sample = 0; sample < output.getNumSamples(); ++sample)
+    {
+        first.push_back(output.getSample(0, sample));
+    }
+    TrajectorySettings trajectorySettings;
+    trajectorySettings.sampleRate = settings.sampleRate;
+    trajectorySettings.latencySamples = echoSettings.latencySamples;
+    trajectorySettings.expectedDelaySamples = firstEcho;
+    result.trajectory = measureTrajectoryFromImpulses(first, count, period, trajectorySettings);
+    result.trajectoryPeriodSamples = period;
+    return result;
+}
 }

@@ -163,6 +163,8 @@ struct PluginFingerprint
     std::vector<BlockSizeResult> blockSizes;
     bool blockSizeIndependent = true;
     bool deterministic = false;
+    juce::String echoes;                      // the echo response in one line (summarizeEchoes of the measurements); empty: not measured
+    juce::String echoesDetail;
     bool timeInvariant = true;                // the same noise twice through one instance (with silence between) gives the same output
     Difference timeInvarianceDifference;
     double timeInvarianceGapSeconds = 0.0;    // the silence between the two runs: until the output had decayed (at least the setting's gap)

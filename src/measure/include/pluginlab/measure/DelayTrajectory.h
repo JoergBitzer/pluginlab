@@ -40,6 +40,8 @@ struct TrajectorySettings
 {
     double sampleRate = 48000.0;
     double latencySamples = 0.0;        // the dry path of each impulse arrives here (it is not the echo)
+    double expectedDelaySamples = 0.0;  // > 0: in each period the echo nearest to this delay (with feedback, later echoes of the impulse before
+                                        // can come first); 0: the first echo
     double minimumDepthSamples = 0.05;  // below this: no modulation
     double lowestRateHz = 0.05;         // the rates searched
     double shapeResidualShare = 0.1;    // a shape fits if its residual is below this share of the depth and below the other shape's

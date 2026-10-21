@@ -42,6 +42,7 @@ on 1 or 2 channels and give one row per result (unit, quantity, value, text, cla
 | noise ([noise.md](noise.md)) | idle channel noise (CCIR-RMS and A), dynamic range (CCIR-RMS and A), mains products |
 | crosstalk ([crosstalk.md](crosstalk.md)) | worst selective crosstalk (2 channels) |
 | maximum level and linearity ([maximum-level-and-linearity.md](maximum-level-and-linearity.md)) | maximum input level with overload/rollover; largest gain non-linearity |
+| echoes (W11.1f, [W11-delay-plan.md](../design/W11-delay-plan.md)) | "none (no delay)", or: echoes, delay time, spacing, feedback per repeat, mix, stereo kind, level dependence (saturation, self-oscillation), delay modulation |
 
 The null test (W7.10) needs two devices and is not part of the summary of one plugin; it is used by the Compare page and the matcher (W9).
 
