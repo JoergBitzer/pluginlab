@@ -30,18 +30,18 @@ double toDb(double magnitude)
     return 20.0 * std::log10(magnitude);
 }
 
-// the response of the delay to a unit impulse, `latency` samples of silence in front (a plugin's latency)
-std::vector<double> renderResponse(ref::FeedbackDelay& delay, int samples, int latency = 0)
+// the response of the delay to an impulse of the given height (divided by it), `latency` samples of silence in front (a plugin's latency)
+std::vector<double> renderResponse(ref::FeedbackDelay& delay, int samples, int latency = 0, double height = 1.0)
 {
     juce::AudioBuffer<float> buffer(1, samples);
     buffer.clear();
-    buffer.setSample(0, 0, 1.0f);
+    buffer.setSample(0, 0, static_cast<float>(height));
     delay.reset();
     delay.process(buffer);
     std::vector<double> response(static_cast<size_t>(latency), 0.0);
     for (int sample = 0; sample < samples; ++sample)
     {
-        response.push_back(buffer.getSample(0, sample));
+        response.push_back(buffer.getSample(0, sample) / height);
     }
     return response;
 }
@@ -225,6 +225,7 @@ public:
         }
 
         testStereo();
+        testLevels();
         testReferenceDelayPlugin();
     }
 
@@ -314,6 +315,51 @@ private:
         }
     }
 
+    // W11.1e: the echo response at three levels (docs/design/W11-delay-plan.md 4.4): the saturation in the loop, self-oscillation
+    void testLevels()
+    {
+        const std::vector<double> levels = {-40.0, -20.0, -6.0};
+        for (const double drive : {0.0, 2.0})
+        {
+            beginTest("level dependence, drive " + juce::String(drive, 0) + ": every echo at -40, -20, -6 dBFS as the exact iteration a(k+1) = s(g a(k))");
+            ref::FeedbackDelaySettings settings;
+            settings.delaySamples = 2400.0;
+            settings.feedback = 0.6;
+            settings.saturationDrive = drive;
+            ref::FeedbackDelay delay(kSampleRate, settings);
+            std::vector<measure::EchoAnalysis> analyses;
+            for (const double level : levels)
+            {
+                const double height = std::pow(10.0, level / 20.0);
+                analyses.push_back(measure::analyseEchoes(renderResponse(delay, getLength(settings), 0, height), {}));
+                const std::vector<double> expected = delay.getSaturatedEchoes(height, 5);
+                expectGreaterOrEqual(static_cast<int>(analyses.back().echoes.size()), 5);
+                for (size_t echo = 0; echo < 5 && echo < analyses.back().echoes.size(); ++echo)
+                {
+                    expectWithinAbsoluteError(analyses.back().echoes[echo].gainDb, toDb(expected[echo] / height), kGainTolerance,
+                                              "echo " + juce::String(static_cast<int>(echo) + 1) + " at " + juce::String(level, 0) + " dBFS");
+                }
+            }
+            const measure::LevelDependence dependence = measure::analyseLevelDependence(levels, analyses);
+            logMessage("compression " + juce::String(dependence.compressionDb, 3) + " dB, feedback change " + juce::String(dependence.feedbackChangeDb, 3) + " dB");
+            expect(dependence.saturates == (drive > 0.0), "saturation found exactly when there is one");
+            expect(! dependence.selfOscillating);
+        }
+
+        beginTest("self-oscillation: feedback 120 % held by the saturation does not decay and is reported");
+        {
+            ref::FeedbackDelaySettings settings;
+            settings.delaySamples = 2400.0;
+            settings.feedback = 1.2;
+            settings.saturationDrive = 2.0;
+            ref::FeedbackDelay delay(kSampleRate, settings);
+            const double height = std::pow(10.0, -20.0 / 20.0);
+            const std::vector<measure::EchoAnalysis> analyses = {measure::analyseEchoes(renderResponse(delay, 2400 * 40, 0, height), {})};
+            const measure::LevelDependence dependence = measure::analyseLevelDependence({-20.0}, analyses);
+            expect(dependence.selfOscillating, "self-oscillating");
+        }
+    }
+
     // W11.1b: the Reference Delay plugin through the measurement rig (renderImpulse with the play head's tempo): its echoes as the processor's
     void testReferenceDelayPlugin()
     {
@@ -367,6 +413,33 @@ private:
             expectWithinAbsoluteError(analysis.direct.gainDb, toDb(0.5), kGainTolerance);
             expectEchoes(analysis, expected, 6); // the later echoes of a fractional delay are spread by the interpolator, their peaks below -60 dB
             expectWithinAbsoluteError(analysis.feedbackDb, toDb(0.4), kGainTolerance);
+        }
+
+        beginTest("the Reference Delay plugin with its saturation (W11.1e): at -40, -20, -6 dBFS through the rig the echo gains fall with the level");
+        {
+            constexpr size_t kSaturation = 14;
+            for (const float drive : {0.0f, 0.4f}) // 0 and 2 of 0 ... 5
+            {
+                setting[kSync] = 0.0f;
+                setting[kSaturation] = drive;
+                const std::vector<double> levels = {-40.0, -20.0, -6.0};
+                std::vector<measure::EchoAnalysis> analyses;
+                for (const double level : levels)
+                {
+                    pluginlab::engine::ImpulseRenderOptions options;
+                    options.levelDbfs = level;
+                    const pluginlab::engine::ImpulseRender render = pluginlab::engine::renderImpulse(formatManager, description, setting, options);
+                    std::vector<double> response;
+                    for (const float value : render.output.front())
+                    {
+                        response.push_back(value / std::pow(10.0, level / 20.0));
+                    }
+                    analyses.push_back(measure::analyseEchoes(response, {}));
+                }
+                const measure::LevelDependence dependence = measure::analyseLevelDependence(levels, analyses);
+                expect(dependence.saturates == (drive > 0.0f), "saturation found exactly when there is one");
+            }
+            setting[kSaturation] = 0.0f;
         }
 
         beginTest("the Reference Delay plugin with ping-pong (W11.1c): the 2 x 2 response through the rig is recognised as ping-pong");

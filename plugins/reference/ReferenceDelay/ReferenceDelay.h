@@ -122,6 +122,19 @@ const struct
     const std::string help = "Peak deviation of the delay time; 0 = no LFO (with an LFO the interpolation is always Lagrange).";
 } g_paramLfoDepth;
 
+const struct
+{
+    const std::string ID = "saturation";
+    const std::string name = "Saturation";
+    const std::string unitName = "";
+    const float minValue = 0.0f;
+    const float maxValue = 5.0f;
+    const float defaultValue = 0.0f;
+    const int numDecimalPlaces = 2;
+    const bool logFrequency = false;
+    const std::string help = "Drive of the tanh saturation in the loop: s(u) = tanh(drive u) / drive (gain 1 for small signals); 0 = linear.";
+} g_paramSaturation;
+
 const pluginlab::refplugins::ChoiceSpec g_paramLfoShape{"lfoshape", "LFO shape", {"Sine", "Triangle"}, 0,
                                                         "Shape of the LFO on the delay time (the triangle with the same peaks)."};
 
@@ -185,6 +198,7 @@ private:
     std::atomic<float>* m_lfoRateParam = nullptr;
     std::atomic<float>* m_lfoDepthParam = nullptr;
     std::atomic<float>* m_lfoShapeParam = nullptr;
+    std::atomic<float>* m_saturationParam = nullptr;
     std::unique_ptr<pluginlab::reference::FeedbackDelay> m_delay;
     std::atomic<double> m_tailSeconds{0.0};
 };

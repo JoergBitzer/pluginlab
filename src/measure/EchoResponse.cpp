@@ -371,4 +371,38 @@ StereoEchoAnalysis analyseStereoEchoes(const std::vector<double> (&responses)[2]
     }
     return result;
 }
+
+LevelDependence analyseLevelDependence(const std::vector<double>& levelsDbfs, const std::vector<EchoAnalysis>& analyses, double thresholdDb)
+{
+    constexpr double kNotDecayingDb = -0.05;
+    constexpr size_t kFewestEchoes = 3;
+    LevelDependence result;
+    for (size_t index = 0; index < levelsDbfs.size() && index < analyses.size(); ++index)
+    {
+        const EchoAnalysis& analysis = analyses[index];
+        if (analysis.echoes.empty())
+        {
+            continue;
+        }
+        EchoLevel level;
+        level.levelDbfs = levelsDbfs[index];
+        level.firstEchoGainDb = analysis.echoes.front().gainDb;
+        level.feedbackDb = analysis.feedbackDb;
+        level.echoes = static_cast<int>(analysis.echoes.size());
+        result.levels.push_back(level);
+        if (analysis.echoes.size() >= kFewestEchoes && analysis.feedbackDb > kNotDecayingDb)
+        {
+            result.selfOscillating = true;
+        }
+    }
+    std::sort(result.levels.begin(), result.levels.end(), [](const EchoLevel& a, const EchoLevel& b) { return a.levelDbfs < b.levelDbfs; });
+    if (result.levels.size() < 2)
+    {
+        return result;
+    }
+    result.compressionDb = result.levels.back().firstEchoGainDb - result.levels.front().firstEchoGainDb;
+    result.feedbackChangeDb = result.levels.back().feedbackDb - result.levels.front().feedbackDb;
+    result.saturates = result.compressionDb < -thresholdDb || result.feedbackChangeDb < -thresholdDb;
+    return result;
+}
 }

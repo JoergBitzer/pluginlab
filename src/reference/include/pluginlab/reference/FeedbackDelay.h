@@ -50,6 +50,9 @@ struct FeedbackDelaySettings
     double lfoRateHz = 0.0;
     double lfoDepthSamples = 0.0;
     LfoShape lfoShape = LfoShape::Sine;
+    // a saturation in the loop (W11.1e): what is written into the line is s(u) = tanh(drive u) / drive (gain 1 for small signals, at most
+    // 1 / drive); 0: linear. With a saturation |feedback| may reach 1.5: the loop then oscillates at a level the saturation holds.
+    double saturationDrive = 0.0;
 };
 
 // The reference delay of W11.1 (docs/design/W11-delay-plan.md 7), ported from the author's jade::BasicDelayEffect (BSD 3-Clause, 2024) with the
@@ -85,12 +88,16 @@ public:
     // The delay at a sample counted from the reset (the LFO's trajectory; constant without LFO): output n reads the input of n - tau(n)
     double getDelayAt(juce::int64 sample) const;
     double getEchoGain(int echo) const;
+    // With the saturation: the echoes of an impulse of the given height (one channel, whole-sample delay, no loop filters, no LFO): echo k is
+    // mix a_k with a_1 = s(height), a_(k+1) = s(feedback a_k)
+    std::vector<double> getSaturatedEchoes(double height, int count) const;
 
     void reset() override;
     void process(juce::AudioBuffer<float>& buffer) override;
 
 private:
     void configure();
+    double saturate(double value) const;
     void setLagrange(double delaySamples);
     double readDelayed(size_t channel);
     // the feedback from the wet signal of channel `from` into the line of channel `to`, and the input of channel `from` into that line

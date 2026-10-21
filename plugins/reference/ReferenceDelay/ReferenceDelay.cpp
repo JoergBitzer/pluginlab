@@ -106,6 +106,7 @@ ref::FeedbackDelaySettings ReferenceDelayAudio::readSetting() const
     {
         settings.lfoShape = ref::LfoShape::Triangle;
     }
+    settings.saturationDrive = m_saturationParam->load();
     settings.order = ref::LoopOrder::Exact;
     if (pluginlab::refplugins::getChoiceIndex(m_loopOrderParam) == kLoopOrderAuthors)
     {
@@ -152,6 +153,7 @@ void ReferenceDelayAudio::addParameter(std::vector<std::unique_ptr<juce::RangedA
     paramVector.push_back(jade::makeParameter(g_paramLfoRate));
     paramVector.push_back(jade::makeParameter(g_paramLfoDepth));
     paramVector.push_back(pluginlab::refplugins::makeChoiceParameter(g_paramLfoShape));
+    paramVector.push_back(jade::makeParameter(g_paramSaturation));
 }
 
 void ReferenceDelayAudio::prepareParameter(std::unique_ptr<juce::AudioProcessorValueTreeState>& vts)
@@ -170,6 +172,7 @@ void ReferenceDelayAudio::prepareParameter(std::unique_ptr<juce::AudioProcessorV
     m_lfoRateParam = vts->getRawParameterValue(g_paramLfoRate.ID);
     m_lfoDepthParam = vts->getRawParameterValue(g_paramLfoDepth.ID);
     m_lfoShapeParam = vts->getRawParameterValue(g_paramLfoShape.ID);
+    m_saturationParam = vts->getRawParameterValue(g_paramSaturation.ID);
 }
 
 ReferenceDelayGUI::ReferenceDelayGUI(ReferenceDelayAudioProcessor& p, juce::AudioProcessorValueTreeState& apvts)
@@ -185,6 +188,7 @@ ReferenceDelayGUI::ReferenceDelayGUI(ReferenceDelayAudioProcessor& p, juce::Audi
     m_controls.addKnob(g_paramLowCut);
     m_controls.addKnob(g_paramHighCut);
     m_controls.addChoice(g_paramLoopOrder);
+    m_controls.addKnob(g_paramSaturation);
     m_controls.addKnob(g_paramLfoRate);
     m_controls.addKnob(g_paramLfoDepth);
     m_controls.addChoice(g_paramLfoShape);
@@ -193,7 +197,7 @@ ReferenceDelayGUI::ReferenceDelayGUI(ReferenceDelayAudioProcessor& p, juce::Audi
     m_controls.addKnob(g_paramMix);
     addAndMakeVisible(m_controls);
     m_flow = {{"Delay line", {g_paramTime.ID, g_paramSync.ID, g_paramInterpolation.ID}, 0, {}},
-              {"Loop", {g_paramFeedback.ID, g_paramLoopFilter.ID, g_paramLowCut.ID, g_paramHighCut.ID, g_paramLoopOrder.ID}, 0, {}},
+              {"Loop", {g_paramFeedback.ID, g_paramLoopFilter.ID, g_paramLowCut.ID, g_paramHighCut.ID, g_paramLoopOrder.ID, g_paramSaturation.ID}, 0, {}},
               {"LFO on the time", {g_paramLfoRate.ID, g_paramLfoDepth.ID, g_paramLfoShape.ID}, 1, {}},
               {"Stereo", {g_paramCrossFeedback.ID, g_paramPingPong.ID}, 1, {}},
               {"Mix", {g_paramMix.ID}, 1, {}}};

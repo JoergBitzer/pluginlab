@@ -45,7 +45,8 @@ void FeedbackDelay::setSettings(const FeedbackDelaySettings& settings)
 void FeedbackDelay::configure()
 {
     const FeedbackDelaySettings& settings = m_settings;
-    jassert(settings.delaySamples >= 3.0 && std::abs(settings.feedback) < 1.0);
+    jassert(settings.delaySamples >= 3.0);
+    jassert(std::abs(settings.feedback) < 1.0 || (settings.saturationDrive > 0.0 && std::abs(settings.feedback) <= 1.5));
     if (settings.interpolation == DelayInterpolation::Lagrange || settings.lfoDepthSamples > 0.0)
     {
         setLagrange(settings.delaySamples);
@@ -77,6 +78,27 @@ void FeedbackDelay::setLagrange(double delaySamples)
             }
         }
     }
+}
+
+double FeedbackDelay::saturate(double value) const
+{
+    if (m_settings.saturationDrive <= 0.0)
+    {
+        return value;
+    }
+    return std::tanh(m_settings.saturationDrive * value) / m_settings.saturationDrive;
+}
+
+std::vector<double> FeedbackDelay::getSaturatedEchoes(double height, int count) const
+{
+    std::vector<double> echoes;
+    double level = saturate(height);
+    for (int echo = 0; echo < count; ++echo)
+    {
+        echoes.push_back(m_settings.mix * level);
+        level = saturate(m_settings.feedback * level);
+    }
+    return echoes;
 }
 
 double FeedbackDelay::getDelayAt(juce::int64 sample) const
@@ -329,7 +351,7 @@ void FeedbackDelay::process(juce::AudioBuffer<float>& buffer)
                 }
                 value += getInputGain(to, from, stereo) * buffer.getSample(static_cast<int>(from), sample) + getFeedbackGain(to, from, stereo) * fed;
             }
-            m_channels[to].line[m_writePosition] = value;
+            m_channels[to].line[m_writePosition] = saturate(value);
         }
         if (m_settings.order == LoopOrder::AuthorsOrder)
         {

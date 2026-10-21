@@ -49,6 +49,28 @@ struct EchoAnalysis
 
 EchoAnalysis analyseEchoes(const std::vector<double>& response, const EchoSettings& settings);
 
+// The level dependence (W11.1e, docs/design/W11-delay-plan.md 4.4): the echo response at several input levels (e.g. -40, -20, -6 dBFS, each
+// response divided by its impulse's height). Echo gains that fall with the level: a saturation in the loop (a tape or BBD model, a limiter);
+// echoes that do not decay: the loop oscillates (feedback at or above 100 %, held by a saturation).
+struct EchoLevel
+{
+    double levelDbfs = 0.0;
+    double firstEchoGainDb = 0.0;
+    double feedbackDb = 0.0;
+    int echoes = 0;
+};
+
+struct LevelDependence
+{
+    std::vector<EchoLevel> levels;        // as given, the lowest level first after sorting
+    double compressionDb = 0.0;           // the first echo's gain at the highest level minus at the lowest (negative: saturation)
+    double feedbackChangeDb = 0.0;        // the feedback per repeat at the highest level minus at the lowest
+    bool saturates = false;               // one of the two below -thresholdDb
+    bool selfOscillating = false;         // at some level the echoes do not decay (at least three, feedback above -0.05 dB per repeat)
+};
+
+LevelDependence analyseLevelDependence(const std::vector<double>& levelsDbfs, const std::vector<EchoAnalysis>& analyses, double thresholdDb = 0.1);
+
 // Stereo (W11.1c, docs/design/W11-delay-plan.md 4.2): the 2 x 2 echo response, one input driven at a time, each to both outputs
 enum class StereoEchoKind
 {

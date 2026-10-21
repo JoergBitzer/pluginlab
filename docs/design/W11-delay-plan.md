@@ -195,7 +195,7 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
   A parameter change keeps the echoes (`FeedbackDelay::setSettings`); getTailLengthSeconds until the echoes are 120 dB down.
 - Test: the plugin through `renderImpulse` and `analyseEchoes` at its defaults and synced to a quarter note at 97 BPM: the echoes of the
   reference processor within 0.1 sample and 0.05 dB.
-- Not yet (later steps of 8): the saturation in the loop (W11.1e), the
+- Not yet (later steps of 8): the
   switch algorithms fade and tape (W11.1h).
 
 ### W11.1c stereo: 2 x 2, ping-pong, cross feedback (0.75.0, done)
@@ -222,6 +222,17 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
   impulse train. Found on the way: the template's log range (`jade::makeLogFrequencyRange`) snaps to whole Hz, so an LFO rate of 0.5 Hz
   became 1 Hz; the rate now has a linear range.
 - Not yet: the weighted peak flutter of AES6 (the weighting filter), the chirp train (Wright and Valimaki) for phasers and flangers (W11.4).
+
+### W11.1e level dependence, saturation, self-oscillation (0.77.0, done)
+- `reference::FeedbackDelay`: a tanh saturation on what is written into the line, s(u) = tanh(drive u) / drive; with it |feedback| up to 1.5
+  (the loop then oscillates at the level the saturation holds); `getSaturatedEchoes`: the exact echoes of an impulse (a(k+1) = s(g a(k))).
+  Reference Delay: Saturation (drive 0 ... 5; its feedback stays within -95 ... 95 %).
+- `measure::analyseLevelDependence`: the echo analyses at several levels; the compression of the first echo and the change of the feedback
+  per repeat from the lowest to the highest level (saturation below -0.1 dB), self-oscillation (at least three echoes that do not decay).
+  The renders keep their guards of W11.1a (30 s, +24 dBFS).
+- Tests: every echo at -40, -20, -6 dBFS as the exact iteration within 0.05 dB (drive 2: the first echo -2.37 dB at -6 dBFS; linear: 0.000 dB);
+  saturation found exactly when there is one; feedback 120 % with saturation reported as self-oscillating; the plugin through the rig.
+- Not yet: the harmonic responses per echo (the synchronized sweep), ducking (the dynamics methods of W11.3).
 
 ## 9. Questions for the author
 1. **Which delays** form the test set (free ones: e.g. a clean digital delay, a tape echo model, a BBD model, a ping-pong)?
