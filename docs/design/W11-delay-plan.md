@@ -115,6 +115,15 @@ feedback, low and high cut in the loop, dry/wet, switch algorithms digital / fad
 time (rate, depth, sine/triangle), a tanh saturation in the loop, fractional delay by an all-pass or Lagrange interpolation (switchable: the
 interpolation leaves its mark in the loop filter). Every measurement of 4 has an exact expected value; tests as for the Reference EQ.
 
+Porting the author's class (BSD 3-Clause, 2024), read on 2026-10-21; to correct in the port, and good teaching examples for the measurement:
+- **Mono**: `processSamples` sets the loop input `in` only for channel 0 of a stereo buffer and for channel 1; with one channel it stays
+  uninitialised.
+- **Echo spacing**: the feedback adds the previous sample's output (`m_oldOut`) to the input written now, so one trip around the loop takes
+  D + 1 samples: the echoes come at D, 2D + 1, 3D + 2, ... instead of D, 2D, 3D. Reading the delayed sample before writing the new input fixes
+  it. The echo response of 4.1 shows it directly (the spacing of the echoes against the first echo) - a test case for the measurement.
+- Correct as it is: the 4-point Lagrange interpolation of the tape glide (nodes -1, 0, 1, 2), the low and high cut inside the loop (the
+  feedback takes the filtered output: the darkening per repeat), the cross feedback.
+
 ## 8. Work packages
 | Step | Content | Done when |
 |---|---|---|
