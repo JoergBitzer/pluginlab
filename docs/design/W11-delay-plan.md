@@ -181,8 +181,11 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
   (also for the engine's alignment), a finding names the echo. Test plugin Tempo Delay got modes: A dry + echo, B 100 % wet one echo, C 100 % wet
   with feedback 0.5.
 - **Waits until the tail has decayed**: every settle (`Rig::settle`), the gap of the time invariance test and the recovery wait run on until every
-  output sample stayed below -120 dBFS for 1 s (longer than an echo spacing: with 0.25 s the wait ended between two echoes), at most 30 s; a
-  plugin that never decays is waited for once, then the bench stops waiting. The fingerprint of the Tempo Delay (mode C as setting B: echoes for
+  output sample stayed below -120 dBFS for the hold, at most 30 s. The hold must be longer than an echo spacing (with 0.25 s the wait ended
+  between two echoes); it comes from the plugin's impulse response at the defaults, measured once per plugin: the longest silent gap inside it
+  plus 50 ms, 1 s if it does not decay (so an EQ still settles in 0.25 s). The silence is counted from the start of the wait and processed in
+  chunks of 50 ms (the same samples for every block size: a free-running LFO stays in step). A plugin that never decays is waited for once,
+  then the bench stops waiting. The fingerprint of the Tempo Delay (mode C as setting B: echoes for
   9 s) is time-invariant, settles, recovers, latency 0.
 - Still open: the compared noise (256 ms) is shorter than a long 100 % wet delay; at such a setting the comparisons see (almost) silence.
 

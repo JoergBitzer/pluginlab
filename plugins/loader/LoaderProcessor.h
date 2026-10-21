@@ -54,12 +54,14 @@ public:
     std::function<void()> onHostedPluginChanged;
 
 private:
+    void logFirstBlock();
     void configureHostedPlugin();
     void restoreState(const juce::MemoryBlock& state);
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(LoaderProcessor)
 
-    std::atomic<bool> m_firstBlockLogged{false};
+    std::atomic<int> m_firstBlockChannels{-1}; // -1: no block since prepareToPlay (or already logged)
+    std::atomic<int> m_firstBlockSamples{0};
 
     juce::AudioPluginFormatManager m_formatManager;
     std::unique_ptr<pluginlab::hosting::HostedPlugin> m_hosted;

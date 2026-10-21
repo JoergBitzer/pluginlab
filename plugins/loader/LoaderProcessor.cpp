@@ -28,9 +28,20 @@ LoaderProcessor::LoaderProcessor()
 
 LoaderProcessor::~LoaderProcessor()
 {
+    logFirstBlock();
     loaderlog::write("loader deleted");
     const juce::ScopedLock lock(m_hostedLock);
     m_hosted.reset();
+}
+
+// the first block since the last prepareToPlay, if one came (the audio thread only stores its size); then armed for the next one
+void LoaderProcessor::logFirstBlock()
+{
+    const int channels = m_firstBlockChannels.exchange(-1);
+    if (channels >= 0)
+    {
+        loaderlog::write("first processBlock: " + juce::String(channels) + " channels, " + juce::String(m_firstBlockSamples.load()) + " samples");
+    }
 }
 
 const juce::String LoaderProcessor::getName() const
@@ -42,7 +53,7 @@ void LoaderProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     loaderlog::write("prepareToPlay: " + juce::String(sampleRate) + " Hz, " + juce::String(samplesPerBlock) + " samples, "
                      + juce::String(getTotalNumInputChannels()) + " in / " + juce::String(getTotalNumOutputChannels()) + " out");
-    m_firstBlockLogged = false;
+    logFirstBlock();
     m_sampleRate = sampleRate;
     m_blockSize = samplesPerBlock;
     const juce::ScopedLock lock(m_hostedLock);
@@ -51,6 +62,7 @@ void LoaderProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
 void LoaderProcessor::releaseResources()
 {
+    logFirstBlock();
     loaderlog::write("releaseResources");
     const juce::ScopedLock lock(m_hostedLock);
     if (m_hosted != nullptr)
@@ -84,10 +96,12 @@ void LoaderProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 {
     juce::ScopedNoDenormals noDenormals;
 
-    if (! m_firstBlockLogged)
+    if (m_firstBlockChannels.load() < 0)
     {
-        m_firstBlockLogged = true; // once per prepareToPlay, to see in the log that the host processes and with which buffer
-        loaderlog::write("first processBlock: " + juce::String(buffer.getNumChannels()) + " channels, " + juce::String(buffer.getNumSamples()) + " samples");
+        // once per prepareToPlay, to see in the log that the host processes and with which buffer; written outside the audio thread (no
+        // allocation here: pluginval's real-time check)
+        m_firstBlockSamples.store(buffer.getNumSamples());
+        m_firstBlockChannels.store(buffer.getNumChannels());
     }
 
     const juce::ScopedTryLock lock(m_hostedLock);
