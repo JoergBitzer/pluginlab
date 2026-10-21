@@ -19,6 +19,13 @@ enum class DelayInterpolation
 // The order inside the loop: Exact reads the delayed sample before the new input is written (one trip around the loop takes D samples); AuthorsOrder
 // is the author's original (jade::BasicDelayEffect): the input written now gets the previous sample's output, one trip takes D + 1 samples, the
 // echoes come at D, 2D + 1, 3D + 2, ... (a teaching example for the echo response: the spacing is one sample longer than the first echo)
+// The shape of the LFO on the delay time (W11.1d): s(phi) = sin(phi), or the triangle (2/pi) asin(sin(phi)) with the same peaks and zeros
+enum class LfoShape
+{
+    Sine,
+    Triangle
+};
+
 enum class LoopOrder
 {
     Exact,
@@ -38,6 +45,11 @@ struct FeedbackDelaySettings
     double crossFeedback = 0.0;       // each line also gets this much of the other channel's wet signal (the author's m_Crossfeedback)
     bool pingPong = false;            // the input (L + R) / 2 goes into the left line only, the feedback goes across (left wet into the right
                                       // line and back, gain `feedback`; crossFeedback is not used): the echoes alternate L, R, L, ...
+    // the LFO on the delay time (W11.1d): tau(n) = delaySamples + lfoDepthSamples s(2 pi lfoRateHz n / fs), n counted from the reset; the
+    // interpolation is then always Lagrange (its taps per sample), and delaySamples - lfoDepthSamples >= 3. Depth 0: no LFO.
+    double lfoRateHz = 0.0;
+    double lfoDepthSamples = 0.0;
+    LfoShape lfoShape = LfoShape::Sine;
 };
 
 // The reference delay of W11.1 (docs/design/W11-delay-plan.md 7), ported from the author's jade::BasicDelayEffect (BSD 3-Clause, 2024) with the
@@ -57,7 +69,8 @@ public:
     void setSettings(const FeedbackDelaySettings& settings);
     const FeedbackDelaySettings& getSettings() const;
 
-    // One trip through the delay line and the loop filters (without the feedback gain): F(f) I(f) e^(-j w Dint)
+    // One trip through the delay line and the loop filters (without the feedback gain): F(f) I(f) e^(-j w Dint). The transfer functions
+    // below assume no LFO (with one the delay is time-varying: getDelayAt gives its trajectory)
     std::complex<double> getTripResponse(double frequencyHz) const;
     // What colours each trip: the loop filters and the interpolator, |F(f) I(f)| (the magnitude of one trip)
     double getLoopFilterMagnitude(double frequencyHz) const;
@@ -69,6 +82,8 @@ public:
     std::complex<double> getResponse(int output, int input, double frequencyHz) const;
     // Echo k (k >= 1): its arrival in samples (k D, plus k - 1 in the author's order) and its broadband gain mix g^(k-1)
     double getEchoTime(int echo) const;
+    // The delay at a sample counted from the reset (the LFO's trajectory; constant without LFO): output n reads the input of n - tau(n)
+    double getDelayAt(juce::int64 sample) const;
     double getEchoGain(int echo) const;
 
     void reset() override;
@@ -76,6 +91,7 @@ public:
 
 private:
     void configure();
+    void setLagrange(double delaySamples);
     double readDelayed(size_t channel);
     // the feedback from the wet signal of channel `from` into the line of channel `to`, and the input of channel `from` into that line
     // (stereo: two channels; otherwise the cross feedback and ping-pong do not apply)
@@ -109,6 +125,7 @@ private:
     BiquadCoefficients m_highCut;
     size_t m_size = 0;
     size_t m_writePosition = 0;
+    juce::int64 m_lfoSample = 0;          // samples since the reset (the LFO's phase)
     std::vector<ChannelState> m_channels;
 };
 }

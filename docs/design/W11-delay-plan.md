@@ -195,7 +195,7 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
   A parameter change keeps the echoes (`FeedbackDelay::setSettings`); getTailLengthSeconds until the echoes are 120 dB down.
 - Test: the plugin through `renderImpulse` and `analyseEchoes` at its defaults and synced to a quarter note at 97 BPM: the echoes of the
   reference processor within 0.1 sample and 0.05 dB.
-- Not yet (later steps of 8): the LFO on the time (W11.1d), the saturation in the loop (W11.1e), the
+- Not yet (later steps of 8): the saturation in the loop (W11.1e), the
   switch algorithms fade and tape (W11.1h).
 
 ### W11.1c stereo: 2 x 2, ping-pong, cross feedback (0.75.0, done)
@@ -209,6 +209,19 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
 - Tests: the processing of both orders against the 2 x 2 matrix; independent, cross feedback and ping-pong recognised; the ping-pong echoes
   (k D, alternating, mix / 2 g^(k-1)) within 0.1 sample and 0.05 dB; the plugin with ping-pong through the rig recognised, spacing 250 ms.
 - Not yet: multi-tap (several taps per period with their pans); the reference has none.
+
+### W11.1d the delay trajectory (0.76.0, done)
+- `reference::FeedbackDelay`: an LFO on the delay time (sine, or the triangle (2/pi) asin(sin) with the same peaks), Lagrange taps per sample;
+  `getDelayAt(n)` is the exact trajectory (output n reads the input of n - tau(n)). Reference Delay: LFO rate, depth (ms), shape.
+- `measure::DelayTrajectory`: tau(t) by an impulse train (the first echo of each impulse by the echo analysis, at its arrival time) or by the
+  AES6 tone of 3150 Hz (the phase of the analytic signal: tau at every sample, whole periods from a rough delay); then the fit: the best sine
+  (rate on a grid of 1 / (8 T), refined by golden section; mean, depth), the best triangle of that rate (phase searched), the shape (sine,
+  triangle, other, none) by the residuals, the largest pitch deviation in cents.
+- Tests: sine and triangle at 1.3 Hz, 24 samples, by both methods: rate and depth within 1 % (measured: 1.3000 Hz, 24.000 samples), the shape,
+  the tone's tau within 0.1 sample at every point; no LFO found without one; the plugin's LFO (0.5 Hz, 0.5 ms) through the host by the
+  impulse train. Found on the way: the template's log range (`jade::makeLogFrequencyRange`) snaps to whole Hz, so an LFO rate of 0.5 Hz
+  became 1 Hz; the rate now has a linear range.
+- Not yet: the weighted peak flutter of AES6 (the weighting filter), the chirp train (Wright and Valimaki) for phasers and flangers (W11.4).
 
 ## 9. Questions for the author
 1. **Which delays** form the test set (free ones: e.g. a clean digital delay, a tape echo model, a BBD model, a ping-pong)?

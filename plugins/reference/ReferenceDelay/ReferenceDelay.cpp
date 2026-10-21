@@ -14,6 +14,7 @@ constexpr int kLoopFilterOn = 1;
 constexpr int kInterpolationAllPass = 1;
 constexpr int kLoopOrderAuthors = 1;
 constexpr int kPingPongOn = 1;
+constexpr int kLfoTriangle = 1;
 constexpr double kStableLoop = 0.99; // |feedback| + |cross feedback| below this (the loop of two channels stays stable)
 constexpr double kTempoWithoutHost = 120.0;
 constexpr double kSecondsPerMinute = 60.0;
@@ -44,7 +45,7 @@ void ReferenceDelayAudio::prepareToPlay(double sampleRate, int max_samplesPerBlo
     m_Latency = synchronblocksize;
     m_sampleRate = sampleRate;
     // the longest delay: the time knob's maximum, or a quarter note at the slowest tempo the line allows (the delay is limited to it)
-    const double longest = static_cast<double>(g_paramTime.maxValue) * 0.001 * sampleRate;
+    const double longest = static_cast<double>(g_paramTime.maxValue + g_paramLfoDepth.maxValue) * 0.001 * sampleRate;
     m_delay = std::make_unique<ref::FeedbackDelay>(sampleRate, readSetting(), longest);
     juce::AudioBuffer<float> empty(max_channels, 0);
     m_delay->process(empty); // the line of every channel now, not in the first processBlock
@@ -98,6 +99,13 @@ ref::FeedbackDelaySettings ReferenceDelayAudio::readSetting() const
     {
         settings.interpolation = ref::DelayInterpolation::AllPass;
     }
+    settings.lfoRateHz = m_lfoRateParam->load();
+    settings.lfoDepthSamples = m_lfoDepthParam->load() * 0.001 * m_sampleRate;
+    settings.lfoShape = ref::LfoShape::Sine;
+    if (pluginlab::refplugins::getChoiceIndex(m_lfoShapeParam) == kLfoTriangle)
+    {
+        settings.lfoShape = ref::LfoShape::Triangle;
+    }
     settings.order = ref::LoopOrder::Exact;
     if (pluginlab::refplugins::getChoiceIndex(m_loopOrderParam) == kLoopOrderAuthors)
     {
@@ -141,6 +149,9 @@ void ReferenceDelayAudio::addParameter(std::vector<std::unique_ptr<juce::RangedA
     paramVector.push_back(pluginlab::refplugins::makeChoiceParameter(g_paramLoopOrder));
     paramVector.push_back(jade::makeParameter(g_paramCrossFeedback));
     paramVector.push_back(pluginlab::refplugins::makeChoiceParameter(g_paramPingPong));
+    paramVector.push_back(jade::makeParameter(g_paramLfoRate));
+    paramVector.push_back(jade::makeParameter(g_paramLfoDepth));
+    paramVector.push_back(pluginlab::refplugins::makeChoiceParameter(g_paramLfoShape));
 }
 
 void ReferenceDelayAudio::prepareParameter(std::unique_ptr<juce::AudioProcessorValueTreeState>& vts)
@@ -156,6 +167,9 @@ void ReferenceDelayAudio::prepareParameter(std::unique_ptr<juce::AudioProcessorV
     m_loopOrderParam = vts->getRawParameterValue(g_paramLoopOrder.ID);
     m_crossFeedbackParam = vts->getRawParameterValue(g_paramCrossFeedback.ID);
     m_pingPongParam = vts->getRawParameterValue(g_paramPingPong.ID);
+    m_lfoRateParam = vts->getRawParameterValue(g_paramLfoRate.ID);
+    m_lfoDepthParam = vts->getRawParameterValue(g_paramLfoDepth.ID);
+    m_lfoShapeParam = vts->getRawParameterValue(g_paramLfoShape.ID);
 }
 
 ReferenceDelayGUI::ReferenceDelayGUI(ReferenceDelayAudioProcessor& p, juce::AudioProcessorValueTreeState& apvts)
@@ -171,12 +185,16 @@ ReferenceDelayGUI::ReferenceDelayGUI(ReferenceDelayAudioProcessor& p, juce::Audi
     m_controls.addKnob(g_paramLowCut);
     m_controls.addKnob(g_paramHighCut);
     m_controls.addChoice(g_paramLoopOrder);
+    m_controls.addKnob(g_paramLfoRate);
+    m_controls.addKnob(g_paramLfoDepth);
+    m_controls.addChoice(g_paramLfoShape);
     m_controls.addKnob(g_paramCrossFeedback);
     m_controls.addChoice(g_paramPingPong);
     m_controls.addKnob(g_paramMix);
     addAndMakeVisible(m_controls);
     m_flow = {{"Delay line", {g_paramTime.ID, g_paramSync.ID, g_paramInterpolation.ID}, 0, {}},
               {"Loop", {g_paramFeedback.ID, g_paramLoopFilter.ID, g_paramLowCut.ID, g_paramHighCut.ID, g_paramLoopOrder.ID}, 0, {}},
+              {"LFO on the time", {g_paramLfoRate.ID, g_paramLfoDepth.ID, g_paramLfoShape.ID}, 1, {}},
               {"Stereo", {g_paramCrossFeedback.ID, g_paramPingPong.ID}, 1, {}},
               {"Mix", {g_paramMix.ID}, 1, {}}};
     updateControls();
@@ -189,6 +207,9 @@ void ReferenceDelayGUI::updateControls()
     const bool filters = pluginlab::refplugins::getChoiceIndex(m_apvts.getRawParameterValue(g_paramLoopFilter.ID)) == kLoopFilterOn;
     m_controls.setControlEnabled(g_paramLowCut.ID, filters);
     m_controls.setControlEnabled(g_paramHighCut.ID, filters);
+    const bool lfo = m_apvts.getRawParameterValue(g_paramLfoDepth.ID)->load() > 0.0f;
+    m_controls.setControlEnabled(g_paramLfoRate.ID, lfo);
+    m_controls.setControlEnabled(g_paramLfoShape.ID, lfo);
     m_controls.setControlEnabled(g_paramCrossFeedback.ID,
                                  pluginlab::refplugins::getChoiceIndex(m_apvts.getRawParameterValue(g_paramPingPong.ID)) != kPingPongOn);
 }

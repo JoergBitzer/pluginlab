@@ -86,6 +86,7 @@ of a parameter keeps the echoes in the line (a jump: the author's "digital" swit
 | Low cut, High cut | 20 ... 2000 Hz, 500 ... 20000 Hz | first-order Butterworth high- and low-pass in the loop |
 | Loop order | Exact, Author's original | the original adds the previous sample's output: echoes at D, 2D + 1, 3D + 2, ... |
 | Cross feedback | -95 ... 95 % | stereo: each line also gets this much of the other channel's wet signal (limited to |feedback| + |cross| < 99 %) (0.75.0) |
+| LFO rate, LFO depth, LFO shape | 0.05 ... 10 Hz, 0 ... 10 ms, Sine / Triangle | an LFO on the delay time: tau(n) = time + depth s(2 pi rate n / fs), from the last prepare; depth 0 = off; with an LFO the interpolation is Lagrange (its taps per sample) (0.76.0) |
 | Ping-pong | Off, On | stereo: (L + R) / 2 into the left line only, the feedback goes across: echoes L, R, L, ... (0.75.0) |
 | Mix | 0 ... 100 % | (1 - mix) dry + mix wet |
 

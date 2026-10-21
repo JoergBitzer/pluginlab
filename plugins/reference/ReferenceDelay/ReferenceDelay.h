@@ -96,6 +96,35 @@ const struct
     const std::string help = "Each channel's line also gets this much of the other channel's wet signal (stereo; |feedback| + |cross| < 100 %).";
 } g_paramCrossFeedback;
 
+const struct
+{
+    const std::string ID = "lforate";
+    const std::string name = "LFO rate";
+    const std::string unitName = "Hz";
+    const float minValue = 0.05f;
+    const float maxValue = 10.0f;
+    const float defaultValue = 0.5f;
+    const int numDecimalPlaces = 2;
+    const bool logFrequency = false; // the template's log range snaps to whole Hz (made for filter frequencies)
+    const std::string help = "Rate of the LFO on the delay time.";
+} g_paramLfoRate;
+
+const struct
+{
+    const std::string ID = "lfodepth";
+    const std::string name = "LFO depth";
+    const std::string unitName = "ms";
+    const float minValue = 0.0f;
+    const float maxValue = 10.0f;
+    const float defaultValue = 0.0f;
+    const int numDecimalPlaces = 2;
+    const bool logFrequency = false;
+    const std::string help = "Peak deviation of the delay time; 0 = no LFO (with an LFO the interpolation is always Lagrange).";
+} g_paramLfoDepth;
+
+const pluginlab::refplugins::ChoiceSpec g_paramLfoShape{"lfoshape", "LFO shape", {"Sine", "Triangle"}, 0,
+                                                        "Shape of the LFO on the delay time (the triangle with the same peaks)."};
+
 const pluginlab::refplugins::ChoiceSpec g_paramPingPong{
     "pingpong", "Ping-pong", {"Off", "On"}, 0,
     "On: the input (L + R) / 2 goes into the left line only and the feedback goes across: the echoes alternate L, R, L, ... (cross feedback "
@@ -153,6 +182,9 @@ private:
     std::atomic<float>* m_loopOrderParam = nullptr;
     std::atomic<float>* m_crossFeedbackParam = nullptr;
     std::atomic<float>* m_pingPongParam = nullptr;
+    std::atomic<float>* m_lfoRateParam = nullptr;
+    std::atomic<float>* m_lfoDepthParam = nullptr;
+    std::atomic<float>* m_lfoShapeParam = nullptr;
     std::unique_ptr<pluginlab::reference::FeedbackDelay> m_delay;
     std::atomic<double> m_tailSeconds{0.0};
 };

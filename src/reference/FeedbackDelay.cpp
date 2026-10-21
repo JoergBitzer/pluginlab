@@ -27,7 +27,7 @@ BiquadCoefficients makeLoopFilter(Pass pass, double cornerHz, double sampleRate)
 FeedbackDelay::FeedbackDelay(double sampleRate, const FeedbackDelaySettings& settings, double maximumDelaySamples)
     : m_sampleRate(sampleRate), m_settings(settings)
 {
-    const double longest = std::max(settings.delaySamples, maximumDelaySamples);
+    const double longest = std::max(settings.delaySamples + settings.lfoDepthSamples, maximumDelaySamples);
     m_size = static_cast<size_t>(std::floor(longest)) + kLineMargin;
     configure();
 }
@@ -35,7 +35,10 @@ FeedbackDelay::FeedbackDelay(double sampleRate, const FeedbackDelaySettings& set
 void FeedbackDelay::setSettings(const FeedbackDelaySettings& settings)
 {
     m_settings = settings;
-    m_settings.delaySamples = std::min(settings.delaySamples, static_cast<double>(m_size - kLineMargin));
+    const double longest = static_cast<double>(m_size - kLineMargin);
+    m_settings.delaySamples = std::min(settings.delaySamples, longest);
+    // the LFO stays inside the line and above the shortest delay the interpolator needs
+    m_settings.lfoDepthSamples = std::clamp(settings.lfoDepthSamples, 0.0, std::max(0.0, std::min(m_settings.delaySamples - 3.0, longest - m_settings.delaySamples)));
     configure();
 }
 
@@ -43,22 +46,9 @@ void FeedbackDelay::configure()
 {
     const FeedbackDelaySettings& settings = m_settings;
     jassert(settings.delaySamples >= 3.0 && std::abs(settings.feedback) < 1.0);
-    if (settings.interpolation == DelayInterpolation::Lagrange)
+    if (settings.interpolation == DelayInterpolation::Lagrange || settings.lfoDepthSamples > 0.0)
     {
-        // the taps at Dint - 1 ... Dint + 2 samples back, the delay d = 1 + fraction inside them: h_k = prod_(n != k) (d - n) / (k - n)
-        m_integerDelay = static_cast<int>(std::floor(settings.delaySamples));
-        const double delay = 1.0 + settings.delaySamples - m_integerDelay;
-        m_lagrange.assign(kLagrangeTaps, 1.0);
-        for (int k = 0; k < kLagrangeTaps; ++k)
-        {
-            for (int n = 0; n < kLagrangeTaps; ++n)
-            {
-                if (n != k)
-                {
-                    m_lagrange[static_cast<size_t>(k)] *= (delay - n) / (k - n);
-                }
-            }
-        }
+        setLagrange(settings.delaySamples);
     }
     else
     {
@@ -69,6 +59,39 @@ void FeedbackDelay::configure()
     }
     m_lowCut = makeLoopFilter(Pass::High, settings.lowCutHz, m_sampleRate);
     m_highCut = makeLoopFilter(Pass::Low, settings.highCutHz, m_sampleRate);
+}
+
+// the taps at Dint - 1 ... Dint + 2 samples back, the delay d = 1 + fraction inside them: h_k = prod_(n != k) (d - n) / (k - n)
+void FeedbackDelay::setLagrange(double delaySamples)
+{
+    m_integerDelay = static_cast<int>(std::floor(delaySamples));
+    const double delay = 1.0 + delaySamples - m_integerDelay;
+    m_lagrange.assign(kLagrangeTaps, 1.0);
+    for (int k = 0; k < kLagrangeTaps; ++k)
+    {
+        for (int n = 0; n < kLagrangeTaps; ++n)
+        {
+            if (n != k)
+            {
+                m_lagrange[static_cast<size_t>(k)] *= (delay - n) / (k - n);
+            }
+        }
+    }
+}
+
+double FeedbackDelay::getDelayAt(juce::int64 sample) const
+{
+    if (m_settings.lfoDepthSamples <= 0.0)
+    {
+        return m_settings.delaySamples;
+    }
+    const double phase = 2.0 * kPi * m_settings.lfoRateHz * static_cast<double>(sample) / m_sampleRate;
+    double shape = std::sin(phase);
+    if (m_settings.lfoShape == LfoShape::Triangle)
+    {
+        shape = 2.0 / kPi * std::asin(shape);
+    }
+    return m_settings.delaySamples + m_settings.lfoDepthSamples * shape;
 }
 
 const FeedbackDelaySettings& FeedbackDelay::getSettings() const
@@ -140,6 +163,7 @@ void FeedbackDelay::reset()
         state.highCut = {};
     }
     m_writePosition = 0;
+    m_lfoSample = 0;
 }
 
 void FeedbackDelay::prepareChannels(int channels)
@@ -150,6 +174,7 @@ void FeedbackDelay::prepareChannels(int channels)
         state.line.assign(m_size, 0.0);
     }
     m_writePosition = 0;
+    m_lfoSample = 0;
 }
 
 // the sample written `back` samples ago (0: the one written at this position in this sample period)
@@ -160,7 +185,7 @@ double FeedbackDelay::readDelayed(size_t channel)
     {
         return state.line[(m_writePosition + m_size - static_cast<size_t>(back)) % m_size];
     };
-    if (m_settings.interpolation == DelayInterpolation::Lagrange)
+    if (m_settings.interpolation == DelayInterpolation::Lagrange || m_settings.lfoDepthSamples > 0.0)
     {
         double value = 0.0;
         for (int k = 0; k < kLagrangeTaps; ++k)
@@ -275,8 +300,14 @@ void FeedbackDelay::process(juce::AudioBuffer<float>& buffer)
     }
     const size_t channels = m_channels.size();
     const bool stereo = channels == 2;
+    const bool modulated = m_settings.lfoDepthSamples > 0.0;
     for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
     {
+        if (modulated)
+        {
+            setLagrange(getDelayAt(m_lfoSample)); // the taps of this sample's delay (the vector keeps its size: no allocation)
+        }
+        ++m_lfoSample;
         // Exact: every channel's wet signal is read first, then every line written (the feedback crosses between the channels);
         // the author's order writes with the previous sample's wet signals, then reads
         if (m_settings.order == LoopOrder::Exact)
