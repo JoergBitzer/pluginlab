@@ -248,6 +248,29 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
   latency liar (an unreported latency): "none"; the host fingerprint's summary has the item.
 - Not yet: the views of section 6 (echo plot, trajectory plot) in the reports.
 
+### W11.1g comparing two delays (0.79.0, done)
+- `measure::compareEchoes`: the echoes paired by their order (time and gain of each, polarity), the differences B - A of delay time, spacing,
+  feedback, mix, and the loop filters (B's curve on A's frequencies). `engine::compareEchoResponses`: the echo response of two plugins at their
+  settings and a Markdown report (quantities side by side, the echoes, the loop filter at octave frequencies). Command line:
+  `PluginLabHost --compare-echoes <plugin A> <plugin B> <report>` (both at their defaults).
+- Tests: two references (1.5 samples and 0.1 more feedback apart, the same loop filter): every echo's time and gain difference; a lower cut-off:
+  the loop filters' difference within 0.2 dB; the report of the Reference Delay at two settings.
+- A lesson for the report: a low-pass in the loop adds its group delay to every trip (3000 Hz first order: about 2.3 samples), so two delays
+  with different loop filters differ in their echo times even at the same delay setting.
+- Fixed on the way: the stereo kind counted the silent output's residue (below -120 dBFS) as cross feedback (each path's threshold was relative
+  to its own largest arrival); a cross path now counts only within 60 dB of the loudest arrival of its input.
+
+### The echo unit on the real delays (2026-10-21, `~/AudioDev/W11Plugins/echo_reports/`, all at their defaults)
+| plugin | result | remark |
+|---|---|---|
+| Sirial 1.1.1 | 500 ms (a quarter at 120 BPM), -6.02 dB per repeat, linear, no modulation | tempo-synced |
+| Parrot 1.1.0 | 500 ms, -6.83 dB per repeat, mix -0.31 dB, linear | |
+| Dub Delay Lite 0.0.1 | 600 ms, -5.15 dB per repeat, no dry path (100 % wet) | |
+| SocaLabs Delay 1.1.11 | none | its Mix is 0 % by default |
+| ChowMatrix 1.3.0 | none | after the careful delivery (every parameter moved, then back to the defaults) the delay is gone: the dry impulse, then exact silence; the latency test (without the delivery) saw the echo at 200 ms. A delivery behaviour of the plugin (its fingerprint: 1 of 4 ways) |
+| PA BucketMan 2.0.0 beta (BBD) | not reliable | noise of its own at -94 dBFS, the echo at about 280 ms smeared over about 100 ms (the BBD's filters and clock modulation): the arrival analysis picks wrong peaks; no BBD model yet (the author) |
+| Reference Delay | 250 ms, -7.96 dB (40 %), mix 0 dB | as set |
+
 ## 9. Questions for the author
 1. **Which delays** form the test set (free ones: e.g. a clean digital delay, a tape echo model, a BBD model, a ping-pong)?
    Answer: all. You will find a full delay class with digital and tape in ~/AudioDev. I have no modell for BBD. I will look for some free examples of delays as well. We will collect a list for some free delay plugins

@@ -24,6 +24,7 @@ juce::File resolveFile(const juce::String& text)
 //   --fingerprint <plugin file> <file> [<plugin id>]  measures the fingerprint of the plugin (see HostFingerprint.h), writes it and quits
 //   --measure <plugin file> <file> [<plugin id>]      runs the measurement units of W7 on the plugin (see HostFingerprint.h), writes them and quits
 //   --expert <job file> <file>                       the measurement units and null tests of the page Expert (see HostFingerprint.h)
+//   --compare-echoes <plugin A> <plugin B> <file>    two delays compared echo by echo (see HostFingerprint.h)
 //   --map <plugin file> <file> [<plugin id>]          parameter survey and mapping proposal (see HostFingerprint.h); JSON into the user's mapping folder
 //   --gui-snapshot <plugin file> <folder> [<plugin id>] captures the plugin's editor and writes the GUI review (see HostGuiSnapshot.h); in a virtual display
 // Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
@@ -36,6 +37,7 @@ const juce::String kMapOption = "--map";                 // --map <plugin file> 
 const juce::String kCalibrateOption = "--calibrate";     // --calibrate <plugin file> <report file>
 const juce::String kMatchOption = "--match";             // --match <job file> <report file>
 const juce::String kExpertOption = "--expert";           // --expert <job file> <report file>
+const juce::String kCompareEchoesOption = "--compare-echoes"; // --compare-echoes <plugin file A> <plugin file B> <report file>
 const juce::String kGuiSnapshotOption = "--gui-snapshot"; // --gui-snapshot <plugin file> <folder>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
@@ -52,6 +54,7 @@ constexpr int kArgumentsOfOneValue = 1;
 constexpr int kArgumentsOfWriteVersion = 1;
 constexpr int kArgumentsOfReport = 2;
 constexpr int kArgumentsOfPlay = 2;
+constexpr int kArgumentsOfEchoComparison = 3;
 constexpr int kExitOk = 0;
 constexpr int kExitReportFailed = 1;
 
@@ -202,6 +205,16 @@ public:
             }
             const bool written =
                 pluginlab::host::writeCalibrationReport(resolveFile(arguments[calibrateIndex + 1]), resolveFile(arguments[calibrateIndex + 2]), identifier);
+            setApplicationReturnValue(getReportExitCode(written));
+            quit();
+            return;
+        }
+
+        const int compareEchoesIndex = arguments.indexOf(kCompareEchoesOption);
+        if (compareEchoesIndex >= 0 && compareEchoesIndex + kArgumentsOfEchoComparison < arguments.size())
+        {
+            const bool written = pluginlab::host::writeEchoComparison(resolveFile(arguments[compareEchoesIndex + 1]), resolveFile(arguments[compareEchoesIndex + 2]),
+                                                                      resolveFile(arguments[compareEchoesIndex + 3]));
             setApplicationReturnValue(getReportExitCode(written));
             quit();
             return;

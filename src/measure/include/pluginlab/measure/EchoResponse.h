@@ -118,4 +118,33 @@ struct EchoMeasurement
 };
 
 EchoMeasurement measureEchoResponse(const Device& device, const EchoMeasurementSettings& settings);
+
+// Two delays compared echo by echo (W11.1g, docs/design/W11-delay-plan.md 5; no matching): the echoes paired by their order, the differences
+// B - A of the times and gains, of the delay time, spacing, feedback and mix, and of the loop filters (B's curve on A's frequencies)
+struct EchoPair
+{
+    int echo = 0;                        // 1, 2, ...
+    double timeA = 0.0;
+    double timeB = 0.0;
+    double gainDbA = 0.0;
+    double gainDbB = 0.0;
+    bool polarityDiffers = false;
+};
+
+struct EchoComparison
+{
+    std::vector<EchoPair> pairs;
+    int echoesA = 0;
+    int echoesB = 0;
+    double delayDifferenceSamples = 0.0;
+    double spacingDifferenceSamples = 0.0;
+    double feedbackDifferenceDb = 0.0;
+    double mixDifferenceDb = 0.0;
+    std::vector<double> loopFrequencies;
+    std::vector<double> loopDifferenceDb;
+    std::vector<bool> loopValid;          // where both loop filters were measured
+    double largestLoopDifferenceDb = 0.0; // the largest |difference| where valid (between lowHz and highHz)
+};
+
+EchoComparison compareEchoes(const EchoAnalysis& a, const EchoAnalysis& b, double lowHz = 50.0, double highHz = 15000.0);
 }

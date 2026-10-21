@@ -18,6 +18,10 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
 // plugin of the file (or the one with the identifier); Markdown. Returns false if there is no such plugin or the report cannot be written.
 bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier = {});
 
+// Command line mode --compare-echoes <plugin file A> <plugin file B> <report file> (W11.1g): the two delays at their defaults (the first plugin of
+// each file) compared echo by echo; Markdown. Returns false if a file holds no plugin or the report cannot be written.
+bool writeEchoComparison(const juce::File& pluginFileA, const juce::File& pluginFileB, const juce::File& reportFile);
+
 // Command line mode --map <plugin file> <report file> [<plugin identifier>]: the parameter survey (W8.4) and the mapping proposal (W8.5) of every
 // plugin of the file (or the one with the identifier). The report (Markdown) has both; the proposal goes as JSON into the user's mapping folder
 // (HostSettings::getMappingFolder). A confirmed mapping there is never overwritten: the proposal is then written next to it

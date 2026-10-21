@@ -61,6 +61,11 @@ MeasurementSummary parseMeasurementJson(const juce::var& json);
 // the unit did not run
 juce::String summarizeEchoes(const MeasurementSummary& summary);
 
+// Two delays compared echo by echo (W11.1g, docs/design/W11-delay-plan.md 5; no matching): the echo response of each (its unit "echoes") and
+// a Markdown report: the quantities side by side, the echoes paired by their order, the loop filters at octave frequencies
+juce::String compareEchoResponses(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& descriptionA, const std::vector<float>& settingA,
+                                  const juce::PluginDescription& descriptionB, const std::vector<float>& settingB, double sampleRate = 48000.0);
+
 // Finds a row by its quantity (nullptr if there is none)
 const MeasurementRow* findRow(const MeasurementSummary& summary, const juce::String& quantity);
 }

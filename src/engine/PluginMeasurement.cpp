@@ -163,6 +163,21 @@ void addEchoRows(Rows& rows, const measure::Device& device, int channels, const 
     rows.add("echoes", "delay modulation (impulse train)", modulationValue, modulation, kClause);
 }
 
+// the plugin's reported latency after prepare (where the dry path of its echo response arrives); 0 if it cannot be created
+double getReportedLatency(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, double sampleRate)
+{
+    juce::String error;
+    std::unique_ptr<juce::AudioPluginInstance> instance = formatManager.createPluginInstance(description, sampleRate, kLatencyBlock, error);
+    if (instance == nullptr)
+    {
+        return 0.0;
+    }
+    instance->prepareToPlay(sampleRate, kLatencyBlock);
+    const double latency = instance->getLatencySamples();
+    instance->releaseResources();
+    return latency;
+}
+
 // the number of units a run measures: the chosen ones, or all if none is chosen
 int getUnitCount(const MeasurementOptions& options)
 {
@@ -449,14 +464,7 @@ MeasurementSummary measurePlugin(juce::AudioPluginFormatManager& formatManager, 
     MeasurementOptions withLatency = options;
     if (withLatency.latencySamples < 0.0)
     {
-        // the reported latency (after prepare): where the dry path of the echo response arrives
-        juce::String error;
-        if (std::unique_ptr<juce::AudioPluginInstance> instance = formatManager.createPluginInstance(description, options.sampleRate, kLatencyBlock, error))
-        {
-            instance->prepareToPlay(options.sampleRate, kLatencyBlock);
-            withLatency.latencySamples = instance->getLatencySamples();
-            instance->releaseResources();
-        }
+        withLatency.latencySamples = getReportedLatency(formatManager, description, options.sampleRate); // the dry path of the echo response
     }
     return measureDevice(makePluginDevice(formatManager, description, setting), channels, description.name, withLatency);
 }
@@ -537,6 +545,107 @@ MeasurementSummary parseMeasurementJson(const juce::var& json)
         }
     }
     return summary;
+}
+
+namespace
+{
+measure::EchoMeasurement measurePluginEchoes(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
+                                             const std::vector<float>& setting, double sampleRate)
+{
+    measure::EchoMeasurementSettings settings;
+    settings.sampleRate = sampleRate;
+    settings.channels = std::max(1, std::min(2, getPluginChannels(formatManager, description, sampleRate)));
+    settings.latencySamples = getReportedLatency(formatManager, description, sampleRate);
+    return measure::measureEchoResponse(makePluginDevice(formatManager, description, setting), settings);
+}
+
+// the loop filter of an analysis at a frequency (the nearest bin), or nothing where it was not measured
+juce::String getLoopText(const measure::EchoAnalysis& analysis, double frequency, double& value)
+{
+    if (analysis.loopFrequencies.size() < 2)
+    {
+        return "-";
+    }
+    const double width = analysis.loopFrequencies[1] - analysis.loopFrequencies[0];
+    const size_t bin = static_cast<size_t>(std::lround(frequency / width));
+    if (bin >= analysis.loopValid.size() || ! analysis.loopValid[bin])
+    {
+        return "-";
+    }
+    value = analysis.loopMagnitudeDb[bin];
+    return juce::String(value, 2) + " dB";
+}
+
+juce::String getModulationText(const measure::DelayTrajectory& trajectory, double sampleRate)
+{
+    if (trajectory.shape == measure::LfoShapeFound::None)
+    {
+        return "none";
+    }
+    return getShapeName(trajectory.shape) + " " + juce::String(trajectory.rateHz, 2) + " Hz, " + juce::String(trajectory.depthSamples * 1000.0 / sampleRate, 3) + " ms";
+}
+}
+
+juce::String compareEchoResponses(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& descriptionA, const std::vector<float>& settingA,
+                                  const juce::PluginDescription& descriptionB, const std::vector<float>& settingB, double sampleRate)
+{
+    const measure::EchoMeasurement a = measurePluginEchoes(formatManager, descriptionA, settingA, sampleRate);
+    const measure::EchoMeasurement b = measurePluginEchoes(formatManager, descriptionB, settingB, sampleRate);
+    const measure::EchoComparison comparison = measure::compareEchoes(a.echoes, b.echoes);
+    const auto ms = [sampleRate](double samples) { return juce::String(samples * 1000.0 / sampleRate, 3) + " ms"; };
+    juce::String text;
+    text << "# Echo comparison: " << descriptionA.name << " (A) and " << descriptionB.name << " (B)\n\n";
+    text << "The echo response of each at its setting (an impulse of -6 dBFS into both inputs, output channel 1; docs/design/W11-delay-plan.md 4.1 and 5), "
+            "no matching. Differences are B - A.\n\n";
+    if (! a.hasEchoes || ! b.hasEchoes)
+    {
+        text << "No comparison: " << descriptionA.name << " has " << juce::String(static_cast<int>(a.echoes.echoes.size())) << " echoes, " << descriptionB.name
+             << " has " << juce::String(static_cast<int>(b.echoes.echoes.size())) << ".\n";
+        return text;
+    }
+    text << "| quantity | A | B | B - A |\n|---|---|---|---|\n";
+    text << "| echoes within 60 dB | " << comparison.echoesA << " | " << comparison.echoesB << " | " << (comparison.echoesB - comparison.echoesA) << " |\n";
+    text << "| delay time | " << ms(a.echoes.delaySamples) << " | " << ms(b.echoes.delaySamples) << " | " << ms(comparison.delayDifferenceSamples) << " |\n";
+    text << "| echo spacing | " << ms(a.echoes.spacingSamples) << " | " << ms(b.echoes.spacingSamples) << " | " << ms(comparison.spacingDifferenceSamples) << " |\n";
+    text << "| feedback per repeat | " << juce::String(a.echoes.feedbackDb, 2) << " dB | " << juce::String(b.echoes.feedbackDb, 2) << " dB | "
+         << juce::String(comparison.feedbackDifferenceDb, 2) << " dB |\n";
+    text << "| first echo against the dry path | " << juce::String(a.echoes.mixDb, 2) << " dB | " << juce::String(b.echoes.mixDb, 2) << " dB | "
+         << juce::String(comparison.mixDifferenceDb, 2) << " dB |\n";
+    text << "| stereo | " << getStereoKindName(a.stereoEchoes.kind) << " | " << getStereoKindName(b.stereoEchoes.kind) << " | |\n";
+    text << "| level dependence (first echo, -40 to -6 dBFS) | " << juce::String(a.levels.compressionDb, 2) << " dB | " << juce::String(b.levels.compressionDb, 2)
+         << " dB | |\n";
+    text << "| delay modulation | " << getModulationText(a.trajectory, sampleRate) << " | " << getModulationText(b.trajectory, sampleRate) << " | |\n\n";
+
+    text << "## The echoes\n\n| echo | time A | time B | B - A | gain A | gain B | B - A | polarity |\n|---|---|---|---|---|---|---|---|\n";
+    for (const measure::EchoPair& pair : comparison.pairs)
+    {
+        juce::String polarity = "same";
+        if (pair.polarityDiffers)
+        {
+            polarity = "DIFFERS";
+        }
+        text << "| " << pair.echo << " | " << ms(pair.timeA) << " | " << ms(pair.timeB) << " | " << juce::String(pair.timeB - pair.timeA, 2) << " samples | "
+             << juce::String(pair.gainDbA, 2) << " dB | " << juce::String(pair.gainDbB, 2) << " dB | " << juce::String(pair.gainDbB - pair.gainDbA, 2) << " dB | "
+             << polarity << " |\n";
+    }
+
+    text << "\n## The loop filter (one trip with its feedback: the ratio of the spectra of successive echoes)\n\n";
+    text << "Largest difference 50 Hz ... 15 kHz: " << juce::String(comparison.largestLoopDifferenceDb, 2) << " dB.\n\n";
+    text << "| frequency | A | B | B - A |\n|---|---|---|---|\n";
+    for (const double frequency : {63.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0})
+    {
+        double valueA = 0.0;
+        double valueB = 0.0;
+        const juce::String textA = getLoopText(a.echoes, frequency, valueA);
+        const juce::String textB = getLoopText(b.echoes, frequency, valueB);
+        juce::String difference = "-";
+        if (textA != "-" && textB != "-")
+        {
+            difference = juce::String(valueB - valueA, 2) + " dB";
+        }
+        text << "| " << juce::String(frequency, 0) << " Hz | " << textA << " | " << textB << " | " << difference << " |\n";
+    }
+    return text;
 }
 
 juce::String summarizeEchoes(const MeasurementSummary& summary)

@@ -227,6 +227,7 @@ public:
 
         testStereo();
         testLevels();
+        testComparison();
         testReferenceDelayPlugin();
     }
 
@@ -361,6 +362,53 @@ private:
         }
     }
 
+    // W11.1g: two delays compared echo by echo: B is 1.5 samples longer, has more feedback and a low-pass in the loop
+    void testComparison()
+    {
+        beginTest("two delays compared echo by echo: the time and gain differences (the same loop filter), the loop filters' difference");
+        // B is 1.5 samples longer and has more feedback; the same low-pass in both loops, so the times differ by 1.5 samples per trip only
+        // (a low-pass of its own would add its group delay to every trip)
+        ref::FeedbackDelaySettings settingsA;
+        settingsA.delaySamples = 4800.0;
+        settingsA.feedback = 0.5;
+        settingsA.highCutHz = 3000.0;
+        ref::FeedbackDelaySettings settingsB = settingsA;
+        settingsB.delaySamples = 4801.5;
+        settingsB.feedback = 0.6;
+        ref::FeedbackDelay delayA(kSampleRate, settingsA);
+        ref::FeedbackDelay delayB(kSampleRate, settingsB);
+        const measure::EchoAnalysis a = measure::analyseEchoes(renderResponse(delayA, getLength(settingsB)), {});
+        const measure::EchoAnalysis b = measure::analyseEchoes(renderResponse(delayB, getLength(settingsB)), {});
+        const measure::EchoComparison comparison = measure::compareEchoes(a, b);
+        expectGreaterOrEqual(static_cast<int>(comparison.pairs.size()), 5);
+        for (size_t index = 0; index < 3 && index < comparison.pairs.size(); ++index)
+        {
+            const int echo = static_cast<int>(index) + 1;
+            expectWithinAbsoluteError(comparison.pairs[index].timeB - comparison.pairs[index].timeA, 1.5 * echo, kTimeTolerance, "the time of echo " + juce::String(echo));
+            expectWithinAbsoluteError(comparison.pairs[index].gainDbB - comparison.pairs[index].gainDbA, (echo - 1) * toDb(0.6 / 0.5), kGainTolerance,
+                                      "the gain of echo " + juce::String(echo));
+        }
+        expectWithinAbsoluteError(comparison.delayDifferenceSamples, 1.5, kTimeTolerance);
+
+        // C: A with a lower cut-off; the loop filters' difference is 20 log10(|H_C| / |H_A|)
+        ref::FeedbackDelaySettings settingsC = settingsA;
+        settingsC.highCutHz = 1500.0;
+        ref::FeedbackDelay delayC(kSampleRate, settingsC);
+        const measure::EchoComparison filters = measure::compareEchoes(a, measure::analyseEchoes(renderResponse(delayC, getLength(settingsA)), {}));
+        double worst = 0.0;
+        for (size_t bin = 0; bin < filters.loopFrequencies.size(); ++bin)
+        {
+            const double frequency = filters.loopFrequencies[bin];
+            if (! filters.loopValid[bin] || frequency < 100.0 || frequency > 10000.0)
+            {
+                continue;
+            }
+            const double expected = toDb(delayC.getLoopFilterMagnitude(frequency)) - toDb(delayA.getLoopFilterMagnitude(frequency));
+            worst = std::max(worst, std::abs(filters.loopDifferenceDb[bin] - expected));
+        }
+        expectLessThan(worst, 0.2, "the loop filters' difference");
+    }
+
     // W11.1b: the Reference Delay plugin through the measurement rig (renderImpulse with the play head's tempo): its echoes as the processor's
     void testReferenceDelayPlugin()
     {
@@ -480,6 +528,25 @@ private:
                 const pluginlab::engine::MeasurementSummary none = pluginlab::engine::measurePlugin(formatManager, other.descriptions[0], {}, options);
                 const pluginlab::engine::MeasurementRow* row = pluginlab::engine::findRow(none, "echoes after an impulse (channel 1)");
                 expect(row != nullptr && row->text.startsWith("none"), file.getFileName() + ": no echoes");
+            }
+        }
+
+        beginTest("the echo comparison report (W11.1g): the Reference Delay at two settings");
+        {
+            constexpr size_t kTime = 0;
+            constexpr size_t kFeedback = 2;
+            constexpr size_t kLoopFilter = 4;
+            std::vector<float> settingA = setting;
+            settingA[kSync] = 0.0f;
+            std::vector<float> settingB = settingA;
+            settingB[kTime] = settingA[kTime] + 0.0025f; // 5 ms longer (1 ... 2000 ms)
+            settingB[kFeedback] = 0.75f;                 // 47.5 %
+            settingB[kLoopFilter] = 1.0f;
+            const juce::String report = pluginlab::engine::compareEchoResponses(formatManager, description, settingA, description, settingB);
+            logMessage(report);
+            for (const juce::String expected : {"# Echo comparison", "| delay time |", "## The echoes", "| 1 |", "## The loop filter", "| 1000 Hz |"})
+            {
+                expect(report.contains(expected), "the report contains " + expected);
             }
         }
 

@@ -309,14 +309,8 @@ StereoEchoAnalysis analyseStereoEchoes(const std::vector<double> (&responses)[2]
         {
             result.paths[input][output] = analyseEchoes(responses[input][output], settings);
         }
-        const size_t other = 1 - input;
-        if (result.paths[input][other].echoes.empty() && ! result.paths[input][other].hasDirect)
-        {
-            continue;
-        }
-        crossEchoes = true;
-        // the echoes of this input over both outputs in the order of time: ping-pong if the output changes from each echo to the next. One
-        // threshold for both outputs (each path's own is relative to its largest arrival: the side with the dry path would stop earlier)
+        // one threshold for both outputs, relative to the loudest arrival of this input (each path's own is relative to its own largest
+        // arrival: the side with the dry path would stop earlier, and the silent side's residue would count)
         double loudest = -1.0e9;
         for (size_t output = 0; output < 2; ++output)
         {
@@ -330,6 +324,19 @@ StereoEchoAnalysis analyseStereoEchoes(const std::vector<double> (&responses)[2]
                 loudest = std::max(loudest, echo.gainDb);
             }
         }
+        const size_t other = 1 - input;
+        const EchoAnalysis& crossPath = result.paths[input][other];
+        bool crossArrivals = crossPath.hasDirect && crossPath.direct.gainDb >= loudest + settings.thresholdDb;
+        for (const Arrival& echo : crossPath.echoes)
+        {
+            crossArrivals = crossArrivals || echo.gainDb >= loudest + settings.thresholdDb;
+        }
+        if (! crossArrivals)
+        {
+            continue;
+        }
+        crossEchoes = true;
+        // the echoes of this input over both outputs in the order of time: ping-pong if the output changes from each echo to the next
         std::vector<std::pair<double, size_t>> merged;
         for (size_t output = 0; output < 2; ++output)
         {
@@ -513,6 +520,60 @@ EchoMeasurement measureEchoResponse(const Device& device, const EchoMeasurementS
     trajectorySettings.expectedDelaySamples = firstEcho;
     result.trajectory = measureTrajectoryFromImpulses(first, count, period, trajectorySettings);
     result.trajectoryPeriodSamples = period;
+    return result;
+}
+
+EchoComparison compareEchoes(const EchoAnalysis& a, const EchoAnalysis& b, double lowHz, double highHz)
+{
+    EchoComparison result;
+    result.echoesA = static_cast<int>(a.echoes.size());
+    result.echoesB = static_cast<int>(b.echoes.size());
+    for (size_t index = 0; index < a.echoes.size() && index < b.echoes.size(); ++index)
+    {
+        EchoPair pair;
+        pair.echo = static_cast<int>(index) + 1;
+        pair.timeA = a.echoes[index].timeSamples;
+        pair.timeB = b.echoes[index].timeSamples;
+        pair.gainDbA = a.echoes[index].gainDb;
+        pair.gainDbB = b.echoes[index].gainDb;
+        pair.polarityDiffers = a.echoes[index].inverted != b.echoes[index].inverted;
+        result.pairs.push_back(pair);
+    }
+    result.delayDifferenceSamples = b.delaySamples - a.delaySamples;
+    result.spacingDifferenceSamples = b.spacingSamples - a.spacingSamples;
+    result.feedbackDifferenceDb = b.feedbackDb - a.feedbackDb;
+    result.mixDifferenceDb = b.mixDb - a.mixDb;
+
+    // B's loop filter on A's frequencies (linear interpolation between B's bins where both neighbours are valid)
+    result.loopFrequencies = a.loopFrequencies;
+    result.loopDifferenceDb.assign(a.loopFrequencies.size(), 0.0);
+    result.loopValid.assign(a.loopFrequencies.size(), false);
+    if (b.loopFrequencies.size() < 2)
+    {
+        return result;
+    }
+    const double binWidth = b.loopFrequencies[1] - b.loopFrequencies[0];
+    for (size_t bin = 0; bin < a.loopFrequencies.size(); ++bin)
+    {
+        if (! a.loopValid[bin])
+        {
+            continue;
+        }
+        const double frequency = a.loopFrequencies[bin];
+        const size_t below = static_cast<size_t>(frequency / binWidth);
+        if (below + 1 >= b.loopFrequencies.size() || ! b.loopValid[below] || ! b.loopValid[below + 1])
+        {
+            continue;
+        }
+        const double fraction = (frequency - b.loopFrequencies[below]) / binWidth;
+        const double valueB = (1.0 - fraction) * b.loopMagnitudeDb[below] + fraction * b.loopMagnitudeDb[below + 1];
+        result.loopDifferenceDb[bin] = valueB - a.loopMagnitudeDb[bin];
+        result.loopValid[bin] = true;
+        if (frequency >= lowHz && frequency <= highHz)
+        {
+            result.largestLoopDifferenceDb = std::max(result.largestLoopDifferenceDb, std::abs(result.loopDifferenceDb[bin]));
+        }
+    }
     return result;
 }
 }
