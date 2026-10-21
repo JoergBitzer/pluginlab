@@ -6,6 +6,7 @@ add_library(pluginlab_measure STATIC
     Delay.cpp
     Device.cpp
     Distortion.cpp
+    EchoResponse.cpp
     FrequencyResponse.cpp
     Intermodulation.cpp
     Linearity.cpp

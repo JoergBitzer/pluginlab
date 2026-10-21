@@ -8,6 +8,7 @@ add_library(pluginlab_reference STATIC
     Delays.cpp
     Designs.cpp
     DirectFormFilter.cpp
+    FeedbackDelay.cpp
     LinearPhaseFir.cpp
     LinearProcessor.cpp
     Nonlinear.cpp
