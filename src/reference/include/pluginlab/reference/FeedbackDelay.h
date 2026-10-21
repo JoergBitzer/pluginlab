@@ -34,6 +34,10 @@ struct FeedbackDelaySettings
     double highCutHz = 0.0;           // a first-order Butterworth low-pass in the loop (0: none)
     DelayInterpolation interpolation = DelayInterpolation::Lagrange;
     LoopOrder order = LoopOrder::Exact;
+    // stereo (W11.1c, the author's cross feedback); a buffer with one channel ignores both
+    double crossFeedback = 0.0;       // each line also gets this much of the other channel's wet signal (the author's m_Crossfeedback)
+    bool pingPong = false;            // the input (L + R) / 2 goes into the left line only, the feedback goes across (left wet into the right
+                                      // line and back, gain `feedback`; crossFeedback is not used): the echoes alternate L, R, L, ...
 };
 
 // The reference delay of W11.1 (docs/design/W11-delay-plan.md 7), ported from the author's jade::BasicDelayEffect (BSD 3-Clause, 2024) with the
@@ -57,8 +61,12 @@ public:
     std::complex<double> getTripResponse(double frequencyHz) const;
     // What colours each trip: the loop filters and the interpolator, |F(f) I(f)| (the magnitude of one trip)
     double getLoopFilterMagnitude(double frequencyHz) const;
-    // The whole transfer function
+    // The whole transfer function of one channel (a buffer with one channel; stereo without cross feedback and ping-pong)
     std::complex<double> getResponse(double frequencyHz) const;
+    // Stereo: from input channel `input` to output channel `output` (0 left, 1 right). With the lines v = B x + F w, w = T v (one trip):
+    // y = (1 - mix) x + mix (I - T F)^-1 T B x, B the input matrix (I, or [[1/2, 1/2], [0, 0]] for ping-pong), F the feedback matrix
+    // ([[g, c], [c, g]], or [[0, g], [g, 0]] for ping-pong; times z^-1 in the author's order)
+    std::complex<double> getResponse(int output, int input, double frequencyHz) const;
     // Echo k (k >= 1): its arrival in samples (k D, plus k - 1 in the author's order) and its broadband gain mix g^(k-1)
     double getEchoTime(int echo) const;
     double getEchoGain(int echo) const;
@@ -69,6 +77,10 @@ public:
 private:
     void configure();
     double readDelayed(size_t channel);
+    // the feedback from the wet signal of channel `from` into the line of channel `to`, and the input of channel `from` into that line
+    // (stereo: two channels; otherwise the cross feedback and ping-pong do not apply)
+    double getFeedbackGain(size_t to, size_t from, bool stereo) const;
+    double getInputGain(size_t to, size_t from, bool stereo) const;
     double filter(size_t channel, double value);
     void prepareChannels(int channels);
 
@@ -81,6 +93,7 @@ private:
     {
         std::vector<double> line;
         double lastOutput = 0.0;          // the author's order: the previous sample's wet output
+        double wet = 0.0;                 // this sample's wet output
         double allPassInput = 0.0;        // x(n - 1) of the all-pass
         double allPassOutput = 0.0;       // y(n - 1) of the all-pass
         FilterState lowCut;

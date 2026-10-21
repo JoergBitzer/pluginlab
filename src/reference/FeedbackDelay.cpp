@@ -133,6 +133,7 @@ void FeedbackDelay::reset()
     {
         std::fill(state.line.begin(), state.line.end(), 0.0);
         state.lastOutput = 0.0;
+        state.wet = 0.0;
         state.allPassInput = 0.0;
         state.allPassOutput = 0.0;
         state.lowCut = {};
@@ -189,31 +190,128 @@ double FeedbackDelay::filter(size_t channel, double value)
     return value;
 }
 
+double FeedbackDelay::getFeedbackGain(size_t to, size_t from, bool stereo) const
+{
+    if (! stereo)
+    {
+        return m_settings.feedback;
+    }
+    if (m_settings.pingPong)
+    {
+        if (to == from)
+        {
+            return 0.0;
+        }
+        return m_settings.feedback;
+    }
+    if (to == from)
+    {
+        return m_settings.feedback;
+    }
+    return m_settings.crossFeedback;
+}
+
+double FeedbackDelay::getInputGain(size_t to, size_t from, bool stereo) const
+{
+    if (stereo && m_settings.pingPong)
+    {
+        if (to == 0)
+        {
+            return 0.5;
+        }
+        return 0.0;
+    }
+    if (to == from)
+    {
+        return 1.0;
+    }
+    return 0.0;
+}
+
+std::complex<double> FeedbackDelay::getResponse(int output, int input, double frequencyHz) const
+{
+    using Matrix = std::complex<double>[2][2];
+    const std::complex<double> trip = getTripResponse(frequencyHz);
+    std::complex<double> loopDelay = 1.0;
+    if (m_settings.order == LoopOrder::AuthorsOrder)
+    {
+        loopDelay = std::polar(1.0, -2.0 * kPi * frequencyHz / m_sampleRate);
+    }
+    // A = I - T F z^(-1 in the author's order), its inverse, then (A^-1 T B)[output][input]
+    Matrix a;
+    for (size_t row = 0; row < 2; ++row)
+    {
+        for (size_t column = 0; column < 2; ++column)
+        {
+            a[row][column] = -trip * getFeedbackGain(row, column, true) * loopDelay;
+            if (row == column)
+            {
+                a[row][column] += 1.0;
+            }
+        }
+    }
+    const std::complex<double> determinant = a[0][0] * a[1][1] - a[0][1] * a[1][0];
+    Matrix inverse = {{a[1][1] / determinant, -a[0][1] / determinant}, {-a[1][0] / determinant, a[0][0] / determinant}};
+    const size_t out = static_cast<size_t>(output);
+    const size_t in = static_cast<size_t>(input);
+    std::complex<double> wet;
+    for (size_t k = 0; k < 2; ++k)
+    {
+        wet += inverse[out][k] * trip * getInputGain(k, in, true);
+    }
+    std::complex<double> dry = 0.0;
+    if (out == in)
+    {
+        dry = 1.0 - m_settings.mix;
+    }
+    return dry + m_settings.mix * wet;
+}
+
 void FeedbackDelay::process(juce::AudioBuffer<float>& buffer)
 {
     if (static_cast<int>(m_channels.size()) != buffer.getNumChannels())
     {
         prepareChannels(buffer.getNumChannels());
     }
+    const size_t channels = m_channels.size();
+    const bool stereo = channels == 2;
     for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
     {
-        for (size_t channel = 0; channel < m_channels.size(); ++channel)
+        // Exact: every channel's wet signal is read first, then every line written (the feedback crosses between the channels);
+        // the author's order writes with the previous sample's wet signals, then reads
+        if (m_settings.order == LoopOrder::Exact)
         {
-            ChannelState& state = m_channels[channel];
+            for (size_t channel = 0; channel < channels; ++channel)
+            {
+                m_channels[channel].wet = filter(channel, readDelayed(channel));
+            }
+        }
+        for (size_t to = 0; to < channels; ++to)
+        {
+            double value = 0.0;
+            for (size_t from = 0; from < channels; ++from)
+            {
+                double fed = m_channels[from].wet;
+                if (m_settings.order == LoopOrder::AuthorsOrder)
+                {
+                    fed = m_channels[from].lastOutput;
+                }
+                value += getInputGain(to, from, stereo) * buffer.getSample(static_cast<int>(from), sample) + getFeedbackGain(to, from, stereo) * fed;
+            }
+            m_channels[to].line[m_writePosition] = value;
+        }
+        if (m_settings.order == LoopOrder::AuthorsOrder)
+        {
+            for (size_t channel = 0; channel < channels; ++channel)
+            {
+                m_channels[channel].wet = filter(channel, readDelayed(channel));
+                m_channels[channel].lastOutput = m_channels[channel].wet;
+            }
+        }
+        for (size_t channel = 0; channel < channels; ++channel)
+        {
             const double input = buffer.getSample(static_cast<int>(channel), sample);
-            double wet = 0.0;
-            if (m_settings.order == LoopOrder::Exact)
-            {
-                wet = filter(channel, readDelayed(channel));
-                state.line[m_writePosition] = input + m_settings.feedback * wet;
-            }
-            else
-            {
-                state.line[m_writePosition] = input + m_settings.feedback * state.lastOutput;
-                wet = filter(channel, readDelayed(channel));
-                state.lastOutput = wet;
-            }
-            buffer.setSample(static_cast<int>(channel), sample, static_cast<float>((1.0 - m_settings.mix) * input + m_settings.mix * wet));
+            buffer.setSample(static_cast<int>(channel), sample, static_cast<float>((1.0 - m_settings.mix) * input + m_settings.mix * m_channels[channel].wet));
         }
         m_writePosition = (m_writePosition + 1) % m_size;
     }

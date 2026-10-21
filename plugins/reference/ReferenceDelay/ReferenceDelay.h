@@ -83,6 +83,24 @@ const struct
     const std::string help = "First-order Butterworth low-pass in the loop (with Loop filter on): every repeat gets darker.";
 } g_paramHighCut;
 
+const struct
+{
+    const std::string ID = "crossfeedback";
+    const std::string name = "Cross feedback";
+    const std::string unitName = "%";
+    const float minValue = -95.0f;
+    const float maxValue = 95.0f;
+    const float defaultValue = 0.0f;
+    const int numDecimalPlaces = 1;
+    const bool logFrequency = false;
+    const std::string help = "Each channel's line also gets this much of the other channel's wet signal (stereo; |feedback| + |cross| < 100 %).";
+} g_paramCrossFeedback;
+
+const pluginlab::refplugins::ChoiceSpec g_paramPingPong{
+    "pingpong", "Ping-pong", {"Off", "On"}, 0,
+    "On: the input (L + R) / 2 goes into the left line only and the feedback goes across: the echoes alternate L, R, L, ... (cross feedback "
+    "not used)."};
+
 const pluginlab::refplugins::ChoiceSpec g_paramSync{
     "sync", "Sync", {"Off (ms)", "1/4", "1/8", "1/8 dotted", "1/8 triplet", "1/16"}, 0,
     "The delay as a note value of the host's tempo (120 BPM without a host tempo), or the time in ms."};
@@ -133,12 +151,14 @@ private:
     std::atomic<float>* m_highCutParam = nullptr;
     std::atomic<float>* m_interpolationParam = nullptr;
     std::atomic<float>* m_loopOrderParam = nullptr;
+    std::atomic<float>* m_crossFeedbackParam = nullptr;
+    std::atomic<float>* m_pingPongParam = nullptr;
     std::unique_ptr<pluginlab::reference::FeedbackDelay> m_delay;
     std::atomic<double> m_tailSeconds{0.0};
 };
 
 // The controls in the order of the processing (the delay with its time, the loop with feedback and filters, the mix), grouped in boxes and
-// joined by arrows; the time is greyed out when synced, the cut frequencies when the loop filter is off
+// joined by arrows; the time is greyed out when synced, the cut frequencies when the loop filter is off, the cross feedback with ping-pong
 class ReferenceDelayGUI : public juce::Component, private juce::Timer
 {
 public:

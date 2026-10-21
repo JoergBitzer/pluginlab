@@ -1,5 +1,6 @@
 #include "ReferenceDelay.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "PluginProcessor.h"
@@ -12,6 +13,8 @@ constexpr int kSyncOff = 0;
 constexpr int kLoopFilterOn = 1;
 constexpr int kInterpolationAllPass = 1;
 constexpr int kLoopOrderAuthors = 1;
+constexpr int kPingPongOn = 1;
+constexpr double kStableLoop = 0.99; // |feedback| + |cross feedback| below this (the loop of two channels stays stable)
 constexpr double kTempoWithoutHost = 120.0;
 constexpr double kSecondsPerMinute = 60.0;
 constexpr double kShortestDelaySamples = 3.0; // the interpolators need their neighbours
@@ -76,6 +79,14 @@ ref::FeedbackDelaySettings ReferenceDelayAudio::readSetting() const
     }
     settings.delaySamples = std::max(kShortestDelaySamples, seconds * m_sampleRate);
     settings.feedback = m_feedbackParam->load() * kPercent;
+    settings.pingPong = pluginlab::refplugins::getChoiceIndex(m_pingPongParam) == kPingPongOn;
+    if (! settings.pingPong)
+    {
+        // the larger eigenvalue of [[g, c], [c, g]] is |g| + |c|: the cross feedback is limited so that the loop stays stable
+        const double cross = m_crossFeedbackParam->load() * kPercent;
+        const double room = std::max(0.0, kStableLoop - std::abs(settings.feedback));
+        settings.crossFeedback = std::clamp(cross, -room, room);
+    }
     settings.mix = m_mixParam->load() * kPercent;
     if (pluginlab::refplugins::getChoiceIndex(m_loopFilterParam) == kLoopFilterOn)
     {
@@ -128,6 +139,8 @@ void ReferenceDelayAudio::addParameter(std::vector<std::unique_ptr<juce::RangedA
     paramVector.push_back(jade::makeParameter(g_paramHighCut));
     paramVector.push_back(pluginlab::refplugins::makeChoiceParameter(g_paramInterpolation));
     paramVector.push_back(pluginlab::refplugins::makeChoiceParameter(g_paramLoopOrder));
+    paramVector.push_back(jade::makeParameter(g_paramCrossFeedback));
+    paramVector.push_back(pluginlab::refplugins::makeChoiceParameter(g_paramPingPong));
 }
 
 void ReferenceDelayAudio::prepareParameter(std::unique_ptr<juce::AudioProcessorValueTreeState>& vts)
@@ -141,6 +154,8 @@ void ReferenceDelayAudio::prepareParameter(std::unique_ptr<juce::AudioProcessorV
     m_highCutParam = vts->getRawParameterValue(g_paramHighCut.ID);
     m_interpolationParam = vts->getRawParameterValue(g_paramInterpolation.ID);
     m_loopOrderParam = vts->getRawParameterValue(g_paramLoopOrder.ID);
+    m_crossFeedbackParam = vts->getRawParameterValue(g_paramCrossFeedback.ID);
+    m_pingPongParam = vts->getRawParameterValue(g_paramPingPong.ID);
 }
 
 ReferenceDelayGUI::ReferenceDelayGUI(ReferenceDelayAudioProcessor& p, juce::AudioProcessorValueTreeState& apvts)
@@ -156,11 +171,14 @@ ReferenceDelayGUI::ReferenceDelayGUI(ReferenceDelayAudioProcessor& p, juce::Audi
     m_controls.addKnob(g_paramLowCut);
     m_controls.addKnob(g_paramHighCut);
     m_controls.addChoice(g_paramLoopOrder);
+    m_controls.addKnob(g_paramCrossFeedback);
+    m_controls.addChoice(g_paramPingPong);
     m_controls.addKnob(g_paramMix);
     addAndMakeVisible(m_controls);
     m_flow = {{"Delay line", {g_paramTime.ID, g_paramSync.ID, g_paramInterpolation.ID}, 0, {}},
               {"Loop", {g_paramFeedback.ID, g_paramLoopFilter.ID, g_paramLowCut.ID, g_paramHighCut.ID, g_paramLoopOrder.ID}, 0, {}},
-              {"Mix", {g_paramMix.ID}, 0, {}}};
+              {"Stereo", {g_paramCrossFeedback.ID, g_paramPingPong.ID}, 1, {}},
+              {"Mix", {g_paramMix.ID}, 1, {}}};
     updateControls();
     startTimerHz(kTimerHz);
 }
@@ -171,6 +189,8 @@ void ReferenceDelayGUI::updateControls()
     const bool filters = pluginlab::refplugins::getChoiceIndex(m_apvts.getRawParameterValue(g_paramLoopFilter.ID)) == kLoopFilterOn;
     m_controls.setControlEnabled(g_paramLowCut.ID, filters);
     m_controls.setControlEnabled(g_paramHighCut.ID, filters);
+    m_controls.setControlEnabled(g_paramCrossFeedback.ID,
+                                 pluginlab::refplugins::getChoiceIndex(m_apvts.getRawParameterValue(g_paramPingPong.ID)) != kPingPongOn);
 }
 
 void ReferenceDelayGUI::timerCallback()

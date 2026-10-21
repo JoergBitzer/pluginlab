@@ -46,6 +46,28 @@ std::vector<double> renderResponse(ref::FeedbackDelay& delay, int samples, int l
     return response;
 }
 
+// the responses [input][output] of a stereo delay: a unit impulse into one input, the other silent
+void renderStereo(ref::FeedbackDelay& delay, int samples, std::vector<double> (&responses)[2][2])
+{
+    for (int input = 0; input < 2; ++input)
+    {
+        juce::AudioBuffer<float> buffer(2, samples);
+        buffer.clear();
+        buffer.setSample(input, 0, 1.0f);
+        delay.reset();
+        delay.process(buffer);
+        for (int output = 0; output < 2; ++output)
+        {
+            std::vector<double>& response = responses[input][output];
+            response.clear();
+            for (int sample = 0; sample < samples; ++sample)
+            {
+                response.push_back(buffer.getSample(output, sample));
+            }
+        }
+    }
+}
+
 // the samples until the echoes are 120 dB down
 int getLength(const ref::FeedbackDelaySettings& settings)
 {
@@ -59,7 +81,7 @@ class EchoResponseTests : public juce::UnitTest
 {
 public:
     EchoResponseTests()
-        : juce::UnitTest("Echo response (W11.1b)", "pluginlab")
+        : juce::UnitTest("Echo response (W11.1)", "pluginlab")
     {
     }
 
@@ -202,10 +224,96 @@ public:
             expectLessThan(worst, kLoopTolerance);
         }
 
+        testStereo();
         testReferenceDelayPlugin();
     }
 
 private:
+    // W11.1c: the 2 x 2 response (docs/design/W11-delay-plan.md 4.2): the processing against the exact matrix, and what the analysis calls it
+    void testStereo()
+    {
+        beginTest("stereo: the processing is its 2 x 2 transfer function (cross feedback, ping-pong, both orders)");
+        for (const bool pingPong : {false, true})
+        {
+            for (const ref::LoopOrder order : {ref::LoopOrder::Exact, ref::LoopOrder::AuthorsOrder})
+            {
+                ref::FeedbackDelaySettings settings;
+                settings.delaySamples = 41.3;
+                settings.feedback = 0.5;
+                settings.crossFeedback = -0.3;
+                settings.mix = 0.6;
+                settings.highCutHz = 8000.0;
+                settings.pingPong = pingPong;
+                settings.order = order;
+                ref::FeedbackDelay delay(kSampleRate, settings);
+                std::vector<double> responses[2][2];
+                renderStereo(delay, 16384, responses);
+                double worst = 0.0;
+                for (int input = 0; input < 2; ++input)
+                {
+                    for (int output = 0; output < 2; ++output)
+                    {
+                        for (const double frequency : {60.0, 997.0, 5100.0, 14000.0})
+                        {
+                            std::complex<double> measured;
+                            const std::vector<double>& response = responses[input][output];
+                            for (size_t sample = 0; sample < response.size(); ++sample)
+                            {
+                                measured += response[sample] * std::polar(1.0, -2.0 * kPi * frequency * static_cast<double>(sample) / kSampleRate);
+                            }
+                            worst = std::max(worst, std::abs(measured - delay.getResponse(output, input, frequency)));
+                        }
+                    }
+                }
+                expectLessThan(worst, 1.0e-4);
+            }
+        }
+
+        struct Case
+        {
+            juce::String name;
+            double crossFeedback;
+            bool pingPong;
+            measure::StereoEchoKind kind;
+        };
+        for (const Case& item : {Case{"independent channels", 0.0, false, measure::StereoEchoKind::Independent},
+                                 Case{"cross feedback", 0.3, false, measure::StereoEchoKind::CrossFeedback},
+                                 Case{"ping-pong", 0.0, true, measure::StereoEchoKind::PingPong}})
+        {
+            beginTest("stereo: " + item.name + " is recognised");
+            ref::FeedbackDelaySettings settings;
+            settings.delaySamples = 3000.25;
+            settings.feedback = 0.5;
+            settings.crossFeedback = item.crossFeedback;
+            settings.pingPong = item.pingPong;
+            ref::FeedbackDelay delay(kSampleRate, settings);
+            std::vector<double> responses[2][2];
+            renderStereo(delay, getLength(settings), responses);
+            const measure::StereoEchoAnalysis analysis = measure::analyseStereoEchoes(responses, {});
+            expect(analysis.kind == item.kind, "the kind");
+            if (! item.pingPong)
+            {
+                continue;
+            }
+            // ping-pong: echo k at k D in the left output for odd k, in the right one for even k, gain mix / 2 g^(k-1) (the input is (L + R) / 2)
+            expectWithinAbsoluteError(analysis.pingPongSpacingSamples, settings.delaySamples, kTimeTolerance);
+            for (int input = 0; input < 2; ++input)
+            {
+                for (int output = 0; output < 2; ++output)
+                {
+                    const std::vector<measure::Arrival>& echoes = analysis.paths[input][output].echoes;
+                    expectGreaterOrEqual(static_cast<int>(echoes.size()), 4);
+                    for (size_t index = 0; index < 4 && index < echoes.size(); ++index)
+                    {
+                        const int echo = 2 * static_cast<int>(index) + 1 + output;
+                        expectWithinAbsoluteError(echoes[index].timeSamples, echo * settings.delaySamples, kTimeTolerance);
+                        expectWithinAbsoluteError(echoes[index].gainDb, toDb(0.5 * delay.getEchoGain(echo)), kGainTolerance);
+                    }
+                }
+            }
+        }
+    }
+
     // W11.1b: the Reference Delay plugin through the measurement rig (renderImpulse with the play head's tempo): its echoes as the processor's
     void testReferenceDelayPlugin()
     {
@@ -259,6 +367,32 @@ private:
             expectWithinAbsoluteError(analysis.direct.gainDb, toDb(0.5), kGainTolerance);
             expectEchoes(analysis, expected, 6); // the later echoes of a fractional delay are spread by the interpolator, their peaks below -60 dB
             expectWithinAbsoluteError(analysis.feedbackDb, toDb(0.4), kGainTolerance);
+        }
+
+        beginTest("the Reference Delay plugin with ping-pong (W11.1c): the 2 x 2 response through the rig is recognised as ping-pong");
+        {
+            constexpr size_t kPingPong = 10;
+            setting[kSync] = 0.0f;
+            setting[kPingPong] = 1.0f;
+            const double height = std::pow(10.0, -6.0 / 20.0);
+            std::vector<double> responses[2][2];
+            for (int input = 0; input < 2; ++input)
+            {
+                pluginlab::engine::ImpulseRenderOptions options;
+                options.impulseChannel = input;
+                const pluginlab::engine::ImpulseRender render = pluginlab::engine::renderImpulse(formatManager, description, setting, options);
+                expect(render.channels == 2 && render.decayed, render.error);
+                for (int output = 0; output < 2 && output < render.channels; ++output)
+                {
+                    for (const float value : render.output[static_cast<size_t>(output)])
+                    {
+                        responses[input][output].push_back(value / height);
+                    }
+                }
+            }
+            const measure::StereoEchoAnalysis analysis = measure::analyseStereoEchoes(responses, {});
+            expect(analysis.kind == measure::StereoEchoKind::PingPong, "ping-pong");
+            expectWithinAbsoluteError(analysis.pingPongSpacingSamples, 12000.0, kTimeTolerance);
         }
     }
 

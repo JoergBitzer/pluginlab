@@ -195,8 +195,20 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
   A parameter change keeps the echoes (`FeedbackDelay::setSettings`); getTailLengthSeconds until the echoes are 120 dB down.
 - Test: the plugin through `renderImpulse` and `analyseEchoes` at its defaults and synced to a quarter note at 97 BPM: the echoes of the
   reference processor within 0.1 sample and 0.05 dB.
-- Not yet (later steps of 8): ping-pong and cross feedback (W11.1c), the LFO on the time (W11.1d), the saturation in the loop (W11.1e), the
+- Not yet (later steps of 8): the LFO on the time (W11.1d), the saturation in the loop (W11.1e), the
   switch algorithms fade and tape (W11.1h).
+
+### W11.1c stereo: 2 x 2, ping-pong, cross feedback (0.75.0, done)
+- `reference::FeedbackDelay`: the lines are coupled by a feedback matrix ([[g, c], [c, g]]; ping-pong [[0, g], [g, 0]] with the input
+  (L + R) / 2 into the left line only), the exact 2 x 2 transfer function `getResponse(output, input, f)`; in the Exact order every channel's
+  wet signal is read before any line is written.
+- `measure::analyseStereoEchoes`: the echo analysis of the four paths (one input driven at a time, `ImpulseRenderOptions::impulseChannel`) and
+  the kind: independent, cross feedback (echoes in the other output, the driven side keeps its train) or ping-pong (the echoes of one input
+  alternate between the outputs; one threshold for both outputs, relative to the loudest arrival of that input); the bounce spacing.
+- Reference Delay: Cross feedback (limited to |feedback| + |cross| < 99 %: the loop stays stable) and Ping-pong.
+- Tests: the processing of both orders against the 2 x 2 matrix; independent, cross feedback and ping-pong recognised; the ping-pong echoes
+  (k D, alternating, mix / 2 g^(k-1)) within 0.1 sample and 0.05 dB; the plugin with ping-pong through the rig recognised, spacing 250 ms.
+- Not yet: multi-tap (several taps per period with their pans); the reference has none.
 
 ## 9. Questions for the author
 1. **Which delays** form the test set (free ones: e.g. a clean digital delay, a tape echo model, a BBD model, a ping-pong)?

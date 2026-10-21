@@ -294,4 +294,81 @@ EchoAnalysis analyseEchoes(const std::vector<double>& response, const EchoSettin
     }
     return result;
 }
+
+StereoEchoAnalysis analyseStereoEchoes(const std::vector<double> (&responses)[2][2], const EchoSettings& settings)
+{
+    StereoEchoAnalysis result;
+    bool crossEchoes = false;
+    bool alternating = true;
+    int alternatingInputs = 0;
+    double spacingSum = 0.0;
+    int spacingCount = 0;
+    for (size_t input = 0; input < 2; ++input)
+    {
+        for (size_t output = 0; output < 2; ++output)
+        {
+            result.paths[input][output] = analyseEchoes(responses[input][output], settings);
+        }
+        const size_t other = 1 - input;
+        if (result.paths[input][other].echoes.empty() && ! result.paths[input][other].hasDirect)
+        {
+            continue;
+        }
+        crossEchoes = true;
+        // the echoes of this input over both outputs in the order of time: ping-pong if the output changes from each echo to the next. One
+        // threshold for both outputs (each path's own is relative to its largest arrival: the side with the dry path would stop earlier)
+        double loudest = -1.0e9;
+        for (size_t output = 0; output < 2; ++output)
+        {
+            const EchoAnalysis& path = result.paths[input][output];
+            if (path.hasDirect)
+            {
+                loudest = std::max(loudest, path.direct.gainDb);
+            }
+            for (const Arrival& echo : path.echoes)
+            {
+                loudest = std::max(loudest, echo.gainDb);
+            }
+        }
+        std::vector<std::pair<double, size_t>> merged;
+        for (size_t output = 0; output < 2; ++output)
+        {
+            for (const Arrival& echo : result.paths[input][output].echoes)
+            {
+                if (echo.gainDb >= loudest + settings.thresholdDb)
+                {
+                    merged.emplace_back(echo.timeSamples, output);
+                }
+            }
+        }
+        std::sort(merged.begin(), merged.end());
+        constexpr size_t kFewestEchoes = 3;
+        if (merged.size() < kFewestEchoes)
+        {
+            alternating = false;
+            continue;
+        }
+        for (size_t index = 1; index < merged.size(); ++index)
+        {
+            if (merged[index].second == merged[index - 1].second)
+            {
+                alternating = false;
+            }
+            spacingSum += merged[index].first - merged[index - 1].first;
+            ++spacingCount;
+        }
+        ++alternatingInputs;
+    }
+    if (! crossEchoes)
+    {
+        return result;
+    }
+    result.kind = StereoEchoKind::CrossFeedback;
+    if (alternating && alternatingInputs > 0)
+    {
+        result.kind = StereoEchoKind::PingPong;
+        result.pingPongSpacingSamples = spacingSum / spacingCount;
+    }
+    return result;
+}
 }

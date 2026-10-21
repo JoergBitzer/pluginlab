@@ -48,4 +48,22 @@ struct EchoAnalysis
 };
 
 EchoAnalysis analyseEchoes(const std::vector<double>& response, const EchoSettings& settings);
+
+// Stereo (W11.1c, docs/design/W11-delay-plan.md 4.2): the 2 x 2 echo response, one input driven at a time, each to both outputs
+enum class StereoEchoKind
+{
+    Independent,    // no echo reaches the other output
+    CrossFeedback,  // echoes reach the other output, and the driven side keeps its own echo train
+    PingPong        // the echoes of one input alternate between the outputs (L, R, L, ... or R, L, R, ...)
+};
+
+struct StereoEchoAnalysis
+{
+    EchoAnalysis paths[2][2];             // [input][output]
+    StereoEchoKind kind = StereoEchoKind::Independent;
+    double pingPongSpacingSamples = 0.0;  // ping-pong: the distance of successive echoes over both outputs (the delay of one bounce)
+};
+
+// responses[input][output]: the response of each output to a unit impulse into one input (the other input silent)
+StereoEchoAnalysis analyseStereoEchoes(const std::vector<double> (&responses)[2][2], const EchoSettings& settings);
 }
