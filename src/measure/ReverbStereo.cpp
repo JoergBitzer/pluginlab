@@ -283,4 +283,151 @@ LateralDecay getLateralDecay(const std::vector<double>& left, const std::vector<
     }
     return result;
 }
+
+namespace
+{
+// the first-order low-pass of RLE.m: the bilinear transform of 1 / (1 + s / (2 pi fg)) without pre-warping, b = [1 1] / a0
+std::vector<double> lowPassFirstOrder(const std::vector<double>& input, double cutoffHz, double sampleRate)
+{
+    const double a0 = 1.0 + sampleRate / (kPi * cutoffHz);
+    const double a1 = (1.0 - sampleRate / (kPi * cutoffHz)) / a0;
+    const double b = 1.0 / a0;
+    std::vector<double> output(input.size());
+    double previousInput = 0.0;
+    double previousOutput = 0.0;
+    for (size_t sample = 0; sample < input.size(); ++sample)
+    {
+        output[sample] = b * (input[sample] + previousInput) - a1 * previousOutput;
+        previousInput = input[sample];
+        previousOutput = output[sample];
+    }
+    return output;
+}
+
+double getEnergy(const std::vector<double>& values)
+{
+    double energy = 0.0;
+    for (const double value : values)
+    {
+        energy += value * value;
+    }
+    return energy;
+}
+
+// the segment's energy through the 6 kHz low-pass, padded with 0.1 s of zeros (the filter's tail counts)
+double getLowPassedEnergy(const std::vector<double>& segment, double sampleRate)
+{
+    std::vector<double> padded = segment;
+    padded.resize(segment.size() + static_cast<size_t>(std::lround(0.1 * sampleRate)), 0.0);
+    return getEnergy(lowPassFirstOrder(padded, 6000.0, sampleRate));
+}
+}
+
+RoomLevelEarly getRoomLevelEarly(const std::vector<double>& left, const std::vector<double>& right, int directSample, double sampleRate, double tau0Seconds)
+{
+    RoomLevelEarly result;
+    constexpr double kWindowSeconds = 0.002;     // t_window
+    constexpr double kDirectSeconds = 0.005;     // tD
+    constexpr double kLagSeconds = 0.001;        // tau_max
+    constexpr int kHop = 10;                     // samples between the segments (RLE.m, 08-Aug-2003)
+    constexpr double kLevelLag = 67.0e-6;        // K: seconds of lag per dB of level difference
+    constexpr double kLagSpread = 630.0e-6;      // sigma
+    constexpr double kGrowth = 0.015;            // TN
+    const double fs = sampleRate;
+    const int length = static_cast<int>(std::min(left.size(), right.size()));
+    const int i0 = std::clamp(directSample, 0, length);
+    const int span80 = static_cast<int>(std::lround(0.08 * fs));
+    const int regionLength = std::min(length - i0, 4 * span80);
+    if (regionLength <= span80)
+    {
+        return result;
+    }
+    const std::vector<double> bbLeft(left.begin() + i0, left.begin() + i0 + regionLength);
+    const std::vector<double> bbRight(right.begin() + i0, right.begin() + i0 + regionLength);
+    const std::vector<double> lpLeft = lowPassFirstOrder(bbLeft, 800.0, fs);
+    const std::vector<double> lpRight = lowPassFirstOrder(bbRight, 800.0, fs);
+
+    const int delays = static_cast<int>(std::ceil(kLagSeconds * fs)) - 1;   // the lags 0 ... delays - 1 (RLE.m assumed a time vector from 0)
+    const int window = static_cast<int>(std::lround((kWindowSeconds + kLagSeconds) * fs));
+    const int directLength = static_cast<int>(std::lround(kDirectSeconds * fs));
+    const int lagSamples = static_cast<int>(std::lround(kLagSeconds * fs));
+    std::vector<int> ends;
+    for (int end = directLength + kHop; end <= span80; end += kHop)
+    {
+        ends.push_back(end);
+    }
+
+    // the lag of a block: the largest of gamma(tau) f(tau) over both directions; f weights the lag the level difference implies
+    const auto chooseLag = [&](const std::vector<double>& gammaRl, const std::vector<double>& gammaLr, double levelDifferenceDb)
+    {
+        double best = -1.0e300;
+        double lag = 0.0;
+        for (int m = 0; m < delays; ++m)
+        {
+            const double tauRl = -m / fs;
+            const double tauLr = m / fs;
+            const double fRl = std::exp(-std::pow(tauRl - levelDifferenceDb * kLevelLag, 2.0) / (2.0 * kLagSpread * kLagSpread));
+            const double fLr = std::exp(-std::pow(tauLr - levelDifferenceDb * kLevelLag, 2.0) / (2.0 * kLagSpread * kLagSpread));
+            if (gammaRl[static_cast<size_t>(m)] * fRl > best)
+            {
+                best = gammaRl[static_cast<size_t>(m)] * fRl;
+                lag = tauRl;
+            }
+            if (gammaLr[static_cast<size_t>(m)] * fLr > best)
+            {
+                best = gammaLr[static_cast<size_t>(m)] * fLr;
+                lag = tauLr;
+            }
+        }
+        return lag;
+    };
+
+    double numerator = 0.0;
+    double rest = 0.0;
+    for (const int end : ends)
+    {
+        const int from = end - window;
+        if (from < 0)
+        {
+            continue;
+        }
+        // gamma_rl(m) = sum r(n) l(n - m), gamma_lr(m) = sum l(n) r(n - m) over the segment's last window - delays + 1 samples
+        std::vector<double> gammaRl(static_cast<size_t>(delays), 0.0);
+        std::vector<double> gammaLr(static_cast<size_t>(delays), 0.0);
+        const int count = window - delays + 1;
+        for (int m = 0; m < delays; ++m)
+        {
+            for (int k = 0; k < count; ++k)
+            {
+                const int n = from + delays - 1 + k;
+                gammaRl[static_cast<size_t>(m)] += lpRight[static_cast<size_t>(n)] * lpLeft[static_cast<size_t>(n - m)];
+                gammaLr[static_cast<size_t>(m)] += lpLeft[static_cast<size_t>(n)] * lpRight[static_cast<size_t>(n - m)];
+            }
+        }
+        // the energies of the segment's window (after the lag part), broadband
+        const std::vector<double> segmentLeft(bbLeft.begin() + from + lagSamples - 1, bbLeft.begin() + end);
+        const std::vector<double> segmentRight(bbRight.begin() + from + lagSamples - 1, bbRight.begin() + end);
+        const double energyLeft = getEnergy(segmentLeft);
+        const double energyRight = getEnergy(segmentRight);
+        const double levelDifference = 10.0 * std::log10(std::max(energyRight, kTiny) / std::max(energyLeft, kTiny));
+        const double tau = chooseLag(gammaRl, gammaLr, levelDifference);
+        const double sine = std::min(1.0, std::abs(tau) / tau0Seconds);
+        const double time = (end - 1) / fs;
+        const double q = 1.0 - std::exp(-(time - kWindowSeconds / 2.0) / kGrowth);
+        const double energy = getLowPassedEnergy(segmentLeft, fs) + getLowPassedEnergy(segmentRight, fs);
+        numerator += q * energy * sine;
+        rest += energy * (1.0 - sine * q);
+        result.segmentTimes.push_back(time);
+        result.lateralSine.push_back(sine);
+        result.segmentEnergy.push_back(energy);
+    }
+    // the direct sound: its first 5 ms, scaled by the segments' overlap (each sample of the segments is counted window / hop times)
+    const double overlap = std::lround(kWindowSeconds * fs) / static_cast<double>(kHop);
+    const std::vector<double> directLeft(bbLeft.begin(), bbLeft.begin() + directLength);
+    const std::vector<double> directRight(bbRight.begin(), bbRight.begin() + directLength);
+    const double direct = overlap * (getLowPassedEnergy(directLeft, fs) + getLowPassedEnergy(directRight, fs));
+    result.withDirectDb = toDb(numerator / std::max(direct + rest, kTiny));
+    result.withoutDirectDb = toDb(numerator / std::max(rest, kTiny));
+    return result;
+}
 }

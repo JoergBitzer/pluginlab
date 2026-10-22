@@ -316,4 +316,25 @@ struct ReverbComparison
 };
 
 ReverbComparison compareReverbs(const ReverbMeasurement& a, const ReverbMeasurement& b, double sameShare = 0.05, double closeShare = 0.10);
+
+// RLE, the early room level of Trautmann's criterion (Blau's m_bi2rle, ported from RLE.m with the corrections of docs/design/W11-reverb-plan.md
+// 4.7): from the direct sound on, 2 ms segments (plus 1 ms for the lags) every 10 samples up to 80 ms; per segment the lateral angle sin(phi) =
+// |tau| / tau0 from the lag of the largest cross-correlation of the 800 Hz low-passed channels, weighted towards the lag that the level
+// difference implies (K = 67 us/dB, sigma = 630 us); the weight q = 1 - exp(-t / 15 ms); the energies through a 6 kHz low-pass:
+//   RLE = 10 lg( sum q E sin(phi) / (E_D + sum E (1 - q sin(phi))) )
+// with the direct sound's energy E_D (its first 5 ms) or without it (E_D = 0: the author's "good candidate for quality evaluation").
+// tau0 = 0.7 ms (the ears' largest delay; a convention for a plugin's two outputs, kept as in the paper: the author). Corrected: the 6 kHz
+// low-pass filters (RLE.m set b = a); the analysis window runs from the direct sound for 4 x 80 ms (RLE.m multiplied the absolute index); the
+// direct energy is scaled by the segments' overlap, (2 ms * fs) / 10 samples, derived again (RLE.m: (fs/10000 * 74 + 1) / 75).
+struct RoomLevelEarly
+{
+    double withDirectDb = 0.0;
+    double withoutDirectDb = 0.0;
+    std::vector<double> segmentTimes;   // seconds after the direct sound
+    std::vector<double> lateralSine;    // sin(phi) per segment
+    std::vector<double> segmentEnergy;  // E per segment (both channels, 6 kHz low-pass)
+};
+
+RoomLevelEarly getRoomLevelEarly(const std::vector<double>& left, const std::vector<double>& right, int directSample, double sampleRate,
+                                 double tau0Seconds = 0.0007);
 }

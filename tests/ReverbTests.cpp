@@ -256,6 +256,7 @@ public:
         testVariance();
         testStereo();
         testLateralDecay();
+        testRoomLevelEarly();
         testReportUnit();
         testComparisonAndMatch();
         testViews();
@@ -511,6 +512,58 @@ public:
             expectWithinAbsoluteError(loudestAngle(0.1), -kPi / 4.0, 1.0e-9, "L");
             expectWithinAbsoluteError(loudestAngle(0.2), -kPi / 2.0, 1.0e-9, "L = -R: atan2(-1, 1) - pi/4");
         }
+    }
+
+    // RLE: centred (L = R), lateral (R = L 0.71 ms later: sin(phi) = 1), and the direct sound lowering it
+    void testRoomLevelEarly()
+    {
+        beginTest("RLE: centred reflections give no lateral energy; with the lag (0, 0.35, 0.71 ms) the lateral share and RLE grow; the direct sound lowers it");
+        // discrete reflections every 4 ms from 5 ms on (the method correlates 2 ms segments: made for early reflections). Note: a segment whose
+        // energy window holds the left copy of a reflection but not yet the right one finds no lag; with 0.71 ms about a third of the energy
+        // is lost that way (the method, not the port)
+        const int length = static_cast<int>(0.4 * kSampleRate);
+        juce::Random random(11);
+        std::vector<double> left(static_cast<size_t>(length), 0.0);
+        for (int sample = static_cast<int>(0.005 * kSampleRate); sample < length; sample += static_cast<int>(0.004 * kSampleRate))
+        {
+            left[static_cast<size_t>(sample)] = 0.1 + 0.4 * random.nextFloat();
+        }
+        const auto delayed = [&left, length](int lag)
+        {
+            std::vector<double> right(static_cast<size_t>(length), 0.0);
+            for (int sample = lag; sample < length; ++sample)
+            {
+                right[static_cast<size_t>(sample)] = left[static_cast<size_t>(sample - lag)];
+            }
+            return right;
+        };
+        const auto lateralShare = [](const measure::RoomLevelEarly& rle)
+        {
+            double lateral = 0.0;
+            double total = 0.0;
+            for (size_t index = 0; index < rle.lateralSine.size(); ++index)
+            {
+                lateral += rle.segmentEnergy[index] * rle.lateralSine[index];
+                total += rle.segmentEnergy[index];
+            }
+            return lateral / std::max(total, 1.0e-30);
+        };
+        const measure::RoomLevelEarly centred = measure::getRoomLevelEarly(left, left, 0, kSampleRate);
+        expectLessThan(centred.withoutDirectDb, -100.0, "L = R: no lateral energy");
+        const measure::RoomLevelEarly half = measure::getRoomLevelEarly(left, delayed(17), 0, kSampleRate);
+        const measure::RoomLevelEarly full = measure::getRoomLevelEarly(left, delayed(34), 0, kSampleRate);
+        logMessage("RLE without the direct sound: 0.35 ms " + juce::String(half.withoutDirectDb, 2) + " dB (lateral share " + juce::String(lateralShare(half), 3)
+                   + "), 0.71 ms " + juce::String(full.withoutDirectDb, 2) + " dB (" + juce::String(lateralShare(full), 3) + ")");
+        expectGreaterThan(lateralShare(half), 0.25, "0.35 ms: partly lateral (sin = 0.5 where found)");
+        expectGreaterThan(lateralShare(full), lateralShare(half) + 0.1, "0.71 ms: more lateral");
+        expectGreaterThan(full.withoutDirectDb, half.withoutDirectDb, "RLE grows with the lateral angle");
+
+        std::vector<double> leftDirect = left;
+        std::vector<double> rightDirect = delayed(34);
+        leftDirect[0] = 1.0;
+        rightDirect[0] = 1.0;
+        const measure::RoomLevelEarly withDirect = measure::getRoomLevelEarly(leftDirect, rightDirect, 0, kSampleRate);
+        expectLessThan(withDirect.withDirectDb, withDirect.withoutDirectDb - 1.0, "the direct sound lowers it");
     }
 
     // LEDT: two independent tails of T60 2 s (the IAD energy decays as the sum: both definitions give T60); the same tail in both channels: none

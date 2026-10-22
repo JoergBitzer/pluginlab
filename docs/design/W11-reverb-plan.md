@@ -280,6 +280,20 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
   longer at 8 kHz (+43 %: Dragonfly darkens its tail, Vital hardly); mixing 10 ms against 90 ms, late kurtosis 3.0 against 0.1.
 - Not yet: the tail's spectral balance as a feature, a reverb page in the products (the Matcher's domain switch).
 
+### W11.2g part 2: RLE (0.88.0, done)
+- `measure::getRoomLevelEarly`: Blau's m_bi2rle (GPL v2 or later, adapted by the author) ported with tau0 = 0.7 ms (question 6: as in the
+  paper), with and without the direct sound. The corrections of 4.7: the 6 kHz low-pass filters (RLE.m set b = a); the analysis window from the
+  direct sound for 4 x 80 ms; the lags counted from 0 (RLE.m assumed a time vector from 0); the direct energy scaled by the segments' overlap
+  (2 ms fs / 10 samples: 9.6 at 48 kHz, 8.8 at 44.1 kHz; RLE.m's (fs/10000 74 + 1) / 75 gives 4.75 and 4.36). The 800 Hz low-pass stays as it is
+  (a correct first-order low-pass; the comment "das ist kein TP" was wrong).
+- Tests: centred reflections: none; discrete reflections with R 0.35 ms and 0.71 ms later: the lateral share 0.42 and 0.65, RLE without the
+  direct sound -2.1 and +1.6 dB; the direct sound lowers it. Found: a segment whose energy window holds the left copy of a reflection but not
+  yet the right one finds no lag; at 0.71 ms about a third of the lateral energy is lost that way (a property of the method's 2 ms segments,
+  not of the port). For noise-like early responses the 2 ms correlations scatter (about 10 independent samples after the 800 Hz low-pass).
+- The author's example responses (`AES_121_Stereo/matlab/Tools/Data`, 44.1 kHz), RLE without / with the direct sound: Waves -1.3 / -14.7 dB,
+  AcousticVerb -4.5 / -21.7 dB, ClassicReverb -10.4 / -19.3 dB, CSR none (its early part is almost centred: the channels differ by 12 % of the
+  energy). Not compared with the paper's figure yet: a run of the corrected RLE.m in Matlab on the same signals would check the port.
+
 ### The views of section 6 (0.87.0, done)
 - `ui::renderChart` (lines or stems, linear or log x, markers, legend) and `ui::renderHeatmap` (plasma, log or linear rows, colour bar), the
   look of the response plot and the spectrogram. `ui::writeReverbViews`: twelve PNGs next to a report, with the Markdown that shows them:
@@ -312,6 +326,9 @@ Lets start with that-
    band filters against the class 1 mask), or stay out? For now the filters are tested by their exact design values (0 dB at the centre,
    -3.01 dB at both edges), without the table.
    Can you find this list in a public available document or website? If yes, we can use it. If not, we should not include it in the repository.
+   Searched (2026-10-22): the acceptance limits are in the standard only (IEC 61260-1:2014 Table 1, IEC 61260-3 Table C.1), sold by IEC and the
+   national bodies; the public preview of the IEC webstore holds no tables, no openly published copy was found. So the table stays out; the
+   filters stay tested by their exact design values.
 
 ## 10. References
 - D. Extra, U. Simmer, S. Fischer, J. Bitzer, "Artificial reverberation: comparing algorithms by using monaural analysis tools," AES 121st
