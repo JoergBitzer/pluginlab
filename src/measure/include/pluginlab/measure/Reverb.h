@@ -65,6 +65,7 @@ struct ReverbSettings
     double lowestCentreHz = 125.0;
     double highestCentreHz = 8000.0;
     int filterOrder = 3;
+    bool thirdOctaves = true;             // false: octaves only (the matcher's probe, faster)
 };
 
 struct ReverbAnalysis
@@ -271,4 +272,46 @@ struct ReverbMeasurement
 };
 
 ReverbMeasurement measureReverbResponse(const Device& device, const ReverbMeasurementSettings& settings);
+
+// Two reverbs compared (W11.2f, docs/design/W11-reverb-plan.md 5): per octave and third octave the T30 difference of B against A (the master) in
+// per cent with a verdict on the scale of just noticeable differences (the author: 5 % as "the same" to start with, ISO 3382-1 after Seraphim;
+// the literature reports 3 ... 26 %): the same up to sameShare, audibly close up to closeShare, different beyond; and the differences of the other
+// quantities (the clarity's JND, often quoted as 1 dB, is not judged until checked against ISO 3382-1)
+enum class JndVerdict
+{
+    Same,
+    Close,
+    Different
+};
+
+const char* getJndVerdictName(JndVerdict verdict);
+
+struct BandComparison
+{
+    Band band;
+    double t30A = 0.0;
+    double t30B = 0.0;
+    double differencePercent = 0.0;
+    JndVerdict verdict = JndVerdict::Same;
+};
+
+struct ReverbComparison
+{
+    std::vector<BandComparison> octaves;
+    std::vector<BandComparison> thirdOctaves;
+    double t30DifferencePercent = 0.0;
+    JndVerdict t30Verdict = JndVerdict::Same;
+    double edtDifferencePercent = 0.0;
+    double c80DifferenceDb = 0.0;
+    double preDelayDifferenceMs = 0.0;
+    double drrDifferenceDb = 0.0;
+    double mixingDifferenceMs = 0.0;
+    double lateKurtosisDifference = 0.0;
+    double iaccLateDifference = 0.0;
+    int octavesSame = 0;
+    int octavesClose = 0;
+    int octavesDifferent = 0;
+};
+
+ReverbComparison compareReverbs(const ReverbMeasurement& a, const ReverbMeasurement& b, double sameShare = 0.05, double closeShare = 0.10);
 }

@@ -11,6 +11,7 @@
 #include "pluginlab/engine/PluginMeasurement.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
+#include "pluginlab/match/ReverbDomain.h"
 #include "pluginlab/measure/DelayTrajectory.h"
 #include "pluginlab/measure/Device.h"
 #include "pluginlab/reference/Designs.h"
@@ -255,6 +256,7 @@ public:
         testStereo();
         testLateralDecay();
         testReportUnit();
+        testComparisonAndMatch();
 
     }
 
@@ -576,6 +578,90 @@ public:
         expect(pluginT30 != nullptr && std::abs(pluginT30->value - 1.5) < 1.5 * kDecayTolerance, "T30 1.5 s");
         const pluginlab::engine::MeasurementRow* preDelay = pluginlab::engine::findRow(plugin, "pre-delay (to the reverb's onset)");
         expect(preDelay != nullptr && std::abs(preDelay->value - (10.0 + 1031.0 / 48.0)) < 0.1, "the pre-delay");
+    }
+
+    // W11.2f: two FDN settings compared on the JND scale; the comparison report of the plugin; the plugin matched to itself
+    void testComparisonAndMatch()
+    {
+        const auto fdnDevice = [](double t60)
+        {
+            return measure::makeProcessorDevice([t60](double rate)
+            {
+                ref::FdnReverbSettings settings;
+                settings.sampleRate = rate;
+                settings.t60Seconds = t60;
+                return std::make_unique<ref::FdnReverb>(settings);
+            });
+        };
+        const measure::ReverbMeasurement master = measure::measureReverbResponse(fdnDevice(1.5), {});
+        beginTest("two reverbs compared per band: 1.6 s against 1.5 s is +6.7 %, audibly close in every octave; 1.52 s is the same");
+        {
+            const measure::ReverbComparison longer = measure::compareReverbs(master, measure::measureReverbResponse(fdnDevice(1.6), {}));
+            for (const measure::BandComparison& band : longer.octaves)
+            {
+                expectWithinAbsoluteError(band.differencePercent, 100.0 * (1.6 / 1.5 - 1.0), 1.5, "the difference at " + juce::String(band.band.centreHz, 0) + " Hz");
+                expect(band.verdict == measure::JndVerdict::Close, "audibly close");
+            }
+            expectEquals(longer.octavesClose, 7);
+            const measure::ReverbComparison near = measure::compareReverbs(master, measure::measureReverbResponse(fdnDevice(1.52), {}));
+            expectEquals(near.octavesSame, 7, "1.3 %: the same");
+            expect(near.t30Verdict == measure::JndVerdict::Same);
+        }
+
+        juce::AudioPluginFormatManager formatManager;
+        pluginlab::hosting::addHeadlessFormats(formatManager);
+        const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, testpaths::getReferencePlugin("Reverb"));
+        if (scan.descriptions.isEmpty())
+        {
+            expect(false, "the Reference Reverb plugin");
+            return;
+        }
+        const juce::PluginDescription description = scan.descriptions[0];
+        constexpr size_t kT60 = 0;
+        constexpr size_t kPreDelay = 1;
+        constexpr size_t kMix = 4;
+        const auto normalizedT60 = [](double seconds) { return static_cast<float>((seconds - 0.2) / 9.8); };
+        const auto normalizedPreDelay = [](double milliseconds) { return static_cast<float>(milliseconds / 200.0); };
+        std::vector<float> defaults = pluginlab::engine::getDefaultSetting(formatManager, description, kSampleRate);
+        defaults[kMix] = 1.0f;
+
+        beginTest("the reverb comparison report: the Reference Reverb at 1.5 s and 2.0 s");
+        {
+            std::vector<float> longer = defaults;
+            longer[kT60] = normalizedT60(2.0);
+            const juce::String report = pluginlab::engine::compareReverbResponses(formatManager, description, defaults, description, longer);
+            for (const juce::String expected : {"# Reverb comparison", "| T30 broadband |", "## T30 per octave", "| 1000.0 Hz |", "different", "## T30 per third octave"})
+            {
+                expect(report.contains(expected), "the report contains " + expected);
+            }
+        }
+
+        beginTest("the reverb domain of the matcher: the Reference Reverb matched to itself (2.2 s, 35 ms from the defaults 1.5 s, 10 ms)");
+        {
+            std::vector<float> masterSetting = defaults;
+            masterSetting[kT60] = normalizedT60(2.2);
+            masterSetting[kPreDelay] = normalizedPreDelay(35.0);
+            const auto probe = std::make_shared<pluginlab::match::ReverbProbe>();
+            const std::vector<double> masterFeatures = probe->measure(pluginlab::engine::makePluginDevice(formatManager, description, masterSetting));
+            pluginlab::match::ParameterSpace space;
+            space.base = defaults;
+            space.released.push_back({static_cast<int>(kT60), "T60", 0.0, 1.0, defaults[kT60]});
+            space.released.push_back({static_cast<int>(kPreDelay), "Pre-delay", 0.0, 1.0, defaults[kPreDelay]});
+            pluginlab::match::MatchProblem problem(
+                masterFeatures, [&formatManager, description](const std::vector<float>& setting) { return pluginlab::engine::makePluginDevice(formatManager, description, setting); },
+                probe, pluginlab::match::makeReverbObjective(masterFeatures.size()), space);
+            pluginlab::match::Budget budget;
+            budget.evaluations = 80;
+            budget.seconds = 300.0;
+            const pluginlab::match::OptimizerResult result = problem.solve(budget);
+            const double t60 = 0.2 + 9.8 * result.values[0];
+            const double preDelay = 200.0 * result.values[1];
+            logMessage("matched: T60 " + juce::String(t60, 3) + " s, pre-delay " + juce::String(preDelay, 2) + " ms, largest residual " + juce::String(result.largest, 3)
+                       + " JND, " + juce::String(result.evaluations) + " renders, " + pluginlab::match::getStopReasonName(result.reason));
+            expect(result.withinTolerance, "within one JND in every feature");
+            expectWithinAbsoluteError(t60, 2.2, 2.2 * kDecayTolerance, "T60 found");
+            expectWithinAbsoluteError(preDelay, 35.0, 1.0, "the pre-delay found");
+        }
     }
 
     static std::vector<double> render(ref::Processor& processor, const std::vector<float>& input)

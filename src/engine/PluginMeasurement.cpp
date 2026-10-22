@@ -716,6 +716,72 @@ juce::String compareEchoResponses(juce::AudioPluginFormatManager& formatManager,
     return text;
 }
 
+namespace
+{
+measure::ReverbMeasurement measurePluginReverb(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
+                                               const std::vector<float>& setting, double sampleRate)
+{
+    measure::ReverbMeasurementSettings settings;
+    settings.sampleRate = sampleRate;
+    settings.channels = std::max(1, std::min(2, getPluginChannels(formatManager, description, sampleRate)));
+    settings.latencySamples = getReportedLatency(formatManager, description, sampleRate);
+    return measure::measureReverbResponse(makePluginDevice(formatManager, description, setting), settings);
+}
+
+void addBandTable(juce::String& text, const std::vector<measure::BandComparison>& bands)
+{
+    text << "| band | T30 A | T30 B | B - A | verdict |\n|---|---|---|---|---|\n";
+    for (const measure::BandComparison& band : bands)
+    {
+        text << "| " << juce::String(band.band.centreHz, 1) << " Hz | " << juce::String(band.t30A, 3) << " s | " << juce::String(band.t30B, 3) << " s | "
+             << juce::String(band.differencePercent, 1) << " % | " << measure::getJndVerdictName(band.verdict) << " |\n";
+    }
+}
+}
+
+juce::String compareReverbResponses(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& descriptionA, const std::vector<float>& settingA,
+                                    const juce::PluginDescription& descriptionB, const std::vector<float>& settingB, double sampleRate)
+{
+    const measure::ReverbMeasurement a = measurePluginReverb(formatManager, descriptionA, settingA, sampleRate);
+    const measure::ReverbMeasurement b = measurePluginReverb(formatManager, descriptionB, settingB, sampleRate);
+    juce::String text;
+    text << "# Reverb comparison: " << descriptionA.name << " (A, the master) and " << descriptionB.name << " (B)\n\n";
+    text << "Each at its setting: an impulse of -6 dBFS, 8 s, output channel 1 (docs/design/W11-reverb-plan.md 4 and 5). The decay times from the "
+            "reverberant part (the direct path cut out). The verdicts on the scale of just noticeable differences of the decay time: the same up to 5 % "
+            "(ISO 3382-1 after Seraphim; the author's start), audibly close up to 10 %, different beyond; the literature reports JNDs of 3 ... 26 % "
+            "depending on the signal, the listener and the level. Differences are B - A.\n\n";
+    if (! a.hasReverb || ! b.hasReverb)
+    {
+        text << "No comparison: a reverb was not found (A: " << juce::String(static_cast<int>(a.hasReverb)) << ", B: " << juce::String(static_cast<int>(b.hasReverb))
+             << ").\n";
+        return text;
+    }
+    const measure::ReverbComparison comparison = measure::compareReverbs(a, b);
+    text << "Octaves: " << comparison.octavesSame << " the same, " << comparison.octavesClose << " audibly close, " << comparison.octavesDifferent << " different.\n\n";
+    text << "| quantity | A | B | B - A |\n|---|---|---|---|\n";
+    text << "| T30 broadband | " << juce::String(a.decay.broadband.t30, 3) << " s | " << juce::String(b.decay.broadband.t30, 3) << " s | "
+         << juce::String(comparison.t30DifferencePercent, 1) << " % (" << measure::getJndVerdictName(comparison.t30Verdict) << ") |\n";
+    text << "| EDT | " << juce::String(a.decay.broadband.edt, 3) << " s | " << juce::String(b.decay.broadband.edt, 3) << " s | "
+         << juce::String(comparison.edtDifferencePercent, 1) << " % |\n";
+    text << "| C80 | " << juce::String(a.decay.c80Db, 2) << " dB | " << juce::String(b.decay.c80Db, 2) << " dB | " << juce::String(comparison.c80DifferenceDb, 2)
+         << " dB (not judged: the JND is to be checked) |\n";
+    text << "| pre-delay | " << juce::String(a.decay.preDelaySeconds * 1000.0, 2) << " ms | " << juce::String(b.decay.preDelaySeconds * 1000.0, 2) << " ms | "
+         << juce::String(comparison.preDelayDifferenceMs, 2) << " ms |\n";
+    text << "| DRR | " << juce::String(a.decay.directToReverberantDb, 2) << " dB | " << juce::String(b.decay.directToReverberantDb, 2) << " dB | "
+         << juce::String(comparison.drrDifferenceDb, 2) << " dB |\n";
+    text << "| mixing time | " << juce::String(a.texture.mixingTimeSeconds * 1000.0, 1) << " ms | " << juce::String(b.texture.mixingTimeSeconds * 1000.0, 1)
+         << " ms | " << juce::String(comparison.mixingDifferenceMs, 1) << " ms |\n";
+    text << "| late kurtosis | " << juce::String(a.texture.lateKurtosis, 2) << " | " << juce::String(b.texture.lateKurtosis, 2) << " | "
+         << juce::String(comparison.lateKurtosisDifference, 2) << " |\n";
+    text << "| IACC late | " << juce::String(a.iaccLate.value, 3) << " | " << juce::String(b.iaccLate.value, 3) << " | " << juce::String(comparison.iaccLateDifference, 3)
+         << " |\n\n";
+    text << "## T30 per octave\n\n";
+    addBandTable(text, comparison.octaves);
+    text << "\n## T30 per third octave\n\n";
+    addBandTable(text, comparison.thirdOctaves);
+    return text;
+}
+
 juce::String summarizeEchoes(const MeasurementSummary& summary)
 {
     const MeasurementRow* echoes = findRow(summary, "echoes after an impulse (channel 1)");

@@ -3,7 +3,8 @@
 # hosting.
 add_library(pluginlab_match STATIC
     EqDomain.cpp
-    Match.cpp)
+    Match.cpp
+    ReverbDomain.cpp)
 
 target_include_directories(pluginlab_match
     PUBLIC

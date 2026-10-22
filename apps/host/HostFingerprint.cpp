@@ -222,6 +222,24 @@ bool writeEchoComparison(const juce::File& pluginFileA, const juce::File& plugin
     return reportFile.replaceWithText(pluginlab::engine::signReport(report, "PluginLabHost, echo comparison"));
 }
 
+bool writeReverbComparison(const juce::File& pluginFileA, const juce::File& pluginFileB, const juce::File& reportFile)
+{
+    juce::AudioPluginFormatManager formatManager;
+    hosting::addHeadlessFormats(formatManager);
+    const hosting::PluginScanResult scanA = hosting::PluginScanner::scanFileInProcess(formatManager, pluginFileA);
+    const hosting::PluginScanResult scanB = hosting::PluginScanner::scanFileInProcess(formatManager, pluginFileB);
+    if (scanA.descriptions.isEmpty() || scanB.descriptions.isEmpty())
+    {
+        return false;
+    }
+    const juce::PluginDescription& a = scanA.descriptions[0];
+    const juce::PluginDescription& b = scanB.descriptions[0];
+    const double rate = getMeasurementRate();
+    const juce::String report = pluginlab::engine::compareReverbResponses(formatManager, a, pluginlab::engine::getDefaultSetting(formatManager, a, rate), b,
+                                                                       pluginlab::engine::getDefaultSetting(formatManager, b, rate), rate);
+    return reportFile.replaceWithText(pluginlab::engine::signReport(report, "PluginLabHost, reverb comparison"));
+}
+
 bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier)
 {
     juce::AudioPluginFormatManager formatManager;

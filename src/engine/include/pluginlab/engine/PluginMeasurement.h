@@ -68,6 +68,11 @@ juce::String summarizeReverb(const MeasurementSummary& summary);
 juce::String compareEchoResponses(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& descriptionA, const std::vector<float>& settingA,
                                   const juce::PluginDescription& descriptionB, const std::vector<float>& settingB, double sampleRate = 48000.0);
 
+// Two reverbs compared (W11.2f, docs/design/W11-reverb-plan.md 5): the reverb measurement of each at its setting and a Markdown report: T30 per
+// octave and third octave with the verdict on the JND scale (the same <= 5 %, audibly close <= 10 %, different), the other quantities side by side
+juce::String compareReverbResponses(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& descriptionA, const std::vector<float>& settingA,
+                                    const juce::PluginDescription& descriptionB, const std::vector<float>& settingB, double sampleRate = 48000.0);
+
 // Finds a row by its quantity (nullptr if there is none)
 const MeasurementRow* findRow(const MeasurementSummary& summary, const juce::String& quantity);
 }

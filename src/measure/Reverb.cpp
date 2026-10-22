@@ -432,7 +432,10 @@ ReverbAnalysis analyseReverb(const std::vector<double>& response, const ReverbSe
     result.d50 = early / std::max(total, kTinyEnergy);
     result.centreTimeSeconds = moment / std::max(total, kTinyEnergy);
     result.octaves = analyseBands(response, *reverberant, 1, start, decayStart, settings);
-    result.thirdOctaves = analyseBands(response, *reverberant, 3, start, decayStart, settings);
+    if (settings.thirdOctaves)
+    {
+        result.thirdOctaves = analyseBands(response, *reverberant, 3, start, decayStart, settings);
+    }
     return result;
 }
 }

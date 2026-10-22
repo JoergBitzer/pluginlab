@@ -73,4 +73,90 @@ ReverbMeasurement measureReverbResponse(const Device& device, const ReverbMeasur
     result.lateral = getLateralDecay(first, second, direct, fs);
     return result;
 }
+
+const char* getJndVerdictName(JndVerdict verdict)
+{
+    if (verdict == JndVerdict::Same)
+    {
+        return "the same";
+    }
+    if (verdict == JndVerdict::Close)
+    {
+        return "audibly close";
+    }
+    return "different";
+}
+
+namespace
+{
+double getPercent(double a, double b)
+{
+    if (a <= 0.0)
+    {
+        return 0.0;
+    }
+    return 100.0 * (b / a - 1.0);
+}
+
+JndVerdict judge(double percent, double sameShare, double closeShare)
+{
+    if (std::abs(percent) <= 100.0 * sameShare)
+    {
+        return JndVerdict::Same;
+    }
+    if (std::abs(percent) <= 100.0 * closeShare)
+    {
+        return JndVerdict::Close;
+    }
+    return JndVerdict::Different;
+}
+
+std::vector<BandComparison> compareBands(const std::vector<BandDecay>& a, const std::vector<BandDecay>& b, double sameShare, double closeShare)
+{
+    std::vector<BandComparison> result;
+    for (size_t index = 0; index < a.size() && index < b.size(); ++index)
+    {
+        BandComparison band;
+        band.band = a[index].band;
+        band.t30A = a[index].times.t30;
+        band.t30B = b[index].times.t30;
+        band.differencePercent = getPercent(band.t30A, band.t30B);
+        band.verdict = judge(band.differencePercent, sameShare, closeShare);
+        result.push_back(band);
+    }
+    return result;
+}
+}
+
+ReverbComparison compareReverbs(const ReverbMeasurement& a, const ReverbMeasurement& b, double sameShare, double closeShare)
+{
+    ReverbComparison result;
+    result.octaves = compareBands(a.decay.octaves, b.decay.octaves, sameShare, closeShare);
+    result.thirdOctaves = compareBands(a.decay.thirdOctaves, b.decay.thirdOctaves, sameShare, closeShare);
+    for (const BandComparison& band : result.octaves)
+    {
+        if (band.verdict == JndVerdict::Same)
+        {
+            ++result.octavesSame;
+        }
+        else if (band.verdict == JndVerdict::Close)
+        {
+            ++result.octavesClose;
+        }
+        else
+        {
+            ++result.octavesDifferent;
+        }
+    }
+    result.t30DifferencePercent = getPercent(a.decay.broadband.t30, b.decay.broadband.t30);
+    result.t30Verdict = judge(result.t30DifferencePercent, sameShare, closeShare);
+    result.edtDifferencePercent = getPercent(a.decay.broadband.edt, b.decay.broadband.edt);
+    result.c80DifferenceDb = b.decay.c80Db - a.decay.c80Db;
+    result.preDelayDifferenceMs = 1000.0 * (b.decay.preDelaySeconds - a.decay.preDelaySeconds);
+    result.drrDifferenceDb = b.decay.directToReverberantDb - a.decay.directToReverberantDb;
+    result.mixingDifferenceMs = 1000.0 * (b.texture.mixingTimeSeconds - a.texture.mixingTimeSeconds);
+    result.lateKurtosisDifference = b.texture.lateKurtosis - a.texture.lateKurtosis;
+    result.iaccLateDifference = b.iaccLate.value - a.iaccLate.value;
+    return result;
+}
 }

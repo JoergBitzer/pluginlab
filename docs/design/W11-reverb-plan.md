@@ -266,6 +266,20 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
 - Not yet: the views of section 6 (EDC per band, decay over frequency, EDR, echogram, echo density, SDM, ...) in the reports; the 100 % wet
   guidance of 6b in the products.
 
+### W11.2f comparison and matching (0.86.0, done)
+- `measure::compareReverbs`: per octave and third octave the T30 difference of B against A in % with the verdict (the same <= 5 %, audibly
+  close <= 10 %, different), the differences of EDT, C80 (not judged until its JND is checked), pre-delay, DRR, mixing time, late kurtosis,
+  late IACC. `engine::compareReverbResponses` (Markdown) and `PluginLabHost --compare-reverbs <A> <B> <report>`.
+- The reverb domain of the matcher (`match::ReverbProbe`, `makeReverbObjective`): an impulse, the decay analysis (octaves), the features in
+  JND units (T30 per octave and EDT as ln(T) / ln(1.05), the pre-delay per ms, C80 per dB), one tolerance for all: 1 JND.
+- Tests: FDN 1.6 s against 1.5 s: +6.7 % (within 1.5 points per octave), audibly close in all 7 octaves; 1.52 s: the same; the report of the
+  plugin at 1.5 s and 2.0 s; **the Reference Reverb matched to itself**: from 1.5 s / 10 ms to 2.194 s / 34.91 ms (master 2.2 s / 35 ms) in
+  7 renders, every feature within 0.1 JND.
+- Two real reverbs compared (`~/AudioDev/W11Plugins/reverb_reports/compare_DragonflyHall_Vital.md`): Dragonfly Hall against Vital Reverb at
+  their defaults: T30 -8 % (audibly close); per octave 1 the same, 3 close, 3 different: Vital shorter in the bass (-19 % at 125 Hz) and much
+  longer at 8 kHz (+43 %: Dragonfly darkens its tail, Vital hardly); mixing 10 ms against 90 ms, late kurtosis 3.0 against 0.1.
+- Not yet: the tail's spectral balance as a feature, a reverb page in the products (the Matcher's domain switch).
+
 ## 9. Questions for the author
 1. **Test set**: which free reverbs (an FDN algorithm, a plate, a spring, a convolution reverb with a known IR)?
 Answer: I will collect a list of free reverbs. We should have at least A Moorer based reverb (Freeverb is a good candidate) in our own referenc plugin). Perhaps we will find source code for Dattoros tank and the coupled allpass from William Gardner. For convolution we can download some IRs from open source libraries. The spring reverb is a special case, since it is strongly dispersive and has a chirp in the impulse response. We will have to find a free example of that as well.

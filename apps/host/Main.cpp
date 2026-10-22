@@ -25,6 +25,7 @@ juce::File resolveFile(const juce::String& text)
 //   --measure <plugin file> <file> [<plugin id>]      runs the measurement units of W7 on the plugin (see HostFingerprint.h), writes them and quits
 //   --expert <job file> <file>                       the measurement units and null tests of the page Expert (see HostFingerprint.h)
 //   --compare-echoes <plugin A> <plugin B> <file>    two delays compared echo by echo (see HostFingerprint.h)
+//   --compare-reverbs <plugin A> <plugin B> <file>   two reverbs compared per band (see HostFingerprint.h)
 //   --map <plugin file> <file> [<plugin id>]          parameter survey and mapping proposal (see HostFingerprint.h); JSON into the user's mapping folder
 //   --gui-snapshot <plugin file> <folder> [<plugin id>] captures the plugin's editor and writes the GUI review (see HostGuiSnapshot.h); in a virtual display
 // Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
@@ -38,6 +39,7 @@ const juce::String kCalibrateOption = "--calibrate";     // --calibrate <plugin 
 const juce::String kMatchOption = "--match";             // --match <job file> <report file>
 const juce::String kExpertOption = "--expert";           // --expert <job file> <report file>
 const juce::String kCompareEchoesOption = "--compare-echoes"; // --compare-echoes <plugin file A> <plugin file B> <report file>
+const juce::String kCompareReverbsOption = "--compare-reverbs"; // --compare-reverbs <plugin file A> <plugin file B> <report file>
 const juce::String kGuiSnapshotOption = "--gui-snapshot"; // --gui-snapshot <plugin file> <folder>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
@@ -215,6 +217,16 @@ public:
         {
             const bool written = pluginlab::host::writeEchoComparison(resolveFile(arguments[compareEchoesIndex + 1]), resolveFile(arguments[compareEchoesIndex + 2]),
                                                                       resolveFile(arguments[compareEchoesIndex + 3]));
+            setApplicationReturnValue(getReportExitCode(written));
+            quit();
+            return;
+        }
+
+        const int compareReverbsIndex = arguments.indexOf(kCompareReverbsOption);
+        if (compareReverbsIndex >= 0 && compareReverbsIndex + kArgumentsOfEchoComparison < arguments.size())
+        {
+            const bool written = pluginlab::host::writeReverbComparison(resolveFile(arguments[compareReverbsIndex + 1]),
+                                                                        resolveFile(arguments[compareReverbsIndex + 2]), resolveFile(arguments[compareReverbsIndex + 3]));
             setApplicationReturnValue(getReportExitCode(written));
             quit();
             return;
