@@ -37,6 +37,11 @@ ReverbMeasurement measureReverbResponse(const Device& device, const ReverbMeasur
             responses[static_cast<size_t>(channel)].push_back(output.getSample(channel, sample) / height);
         }
     }
+    result.left = responses.front();
+    if (responses.size() > 1)
+    {
+        result.right = responses[1];
+    }
     const std::vector<double>& first = responses.front();
     ReverbSettings reverb;
     reverb.sampleRate = fs;

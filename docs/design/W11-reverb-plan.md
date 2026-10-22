@@ -280,6 +280,15 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
   longer at 8 kHz (+43 %: Dragonfly darkens its tail, Vital hardly); mixing 10 ms against 90 ms, late kurtosis 3.0 against 0.1.
 - Not yet: the tail's spectral balance as a feature, a reverb page in the products (the Matcher's domain switch).
 
+### The views of section 6 (0.87.0, done)
+- `ui::renderChart` (lines or stems, linear or log x, markers, legend) and `ui::renderHeatmap` (plasma, log or linear rows, colour bar), the
+  look of the response plot and the spectrogram. `ui::writeReverbViews`: twelve PNGs next to a report, with the Markdown that shows them:
+  EDC per octave with the T30 lines, T30 and EDT per third octave, the EDR, the echogram of the first 100 ms with the pre-delay, the echo
+  density profile with the mixing time, Griesinger's echo count, the short-time histogram and the kurtosis, the normalized autocorrelation,
+  the coherence, the IAD per octave over time, the Spatial Distribution Meter (every block re its loudest direction: TimePhaseScope.m's
+  bNormalize; silent blocks stay dark). The heat maps end at the pre-delay plus 1.2 times the longest octave's T30.
+- `--measure` and `--fingerprint` append them when the reverb unit found a reverb ("Reverb views").
+
 ## 9. Questions for the author
 1. **Test set**: which free reverbs (an FDN algorithm, a plate, a spring, a convolution reverb with a known IR)?
 Answer: I will collect a list of free reverbs. We should have at least A Moorer based reverb (Freeverb is a good candidate) in our own referenc plugin). Perhaps we will find source code for Dattoros tank and the coupled allpass from William Gardner. For convolution we can download some IRs from open source libraries. The spring reverb is a special case, since it is strongly dispersive and has a chirp in the impulse response. We will have to find a free example of that as well.
@@ -295,12 +304,14 @@ Lets start with that-
 6. **RLE for stereo reverbs**: the angle comes from the inter-channel lag with tau_0 = 0.7 ms (the ears' maximal delay); for a plugin's two
    outputs that is a convention, not a direction. Keep it as in the paper (comparable with the 2006 results), or scale tau_0 to the largest
    lag the plugin produces?
+   I think we should keep it as in the paper, since it is a convention and comparable with the 2006 results.
 7. **Order of the stereo tools**: is the Spatial Distribution Meter (the most telling picture) the first stereo tool to port, before IACC, LEDT
    and RLE?
 8. **The IEC 61260 tolerance table** (new, 2026-10-22): the author's `getSpec_IEC1260.m` holds the class 0/1/2 masks of IEC 1260:1995 and says
    "Using for scientific purpose only, no publication allowed (Implementation of standard)". May the table go into the repository (a test of the
    band filters against the class 1 mask), or stay out? For now the filters are tested by their exact design values (0 dB at the centre,
    -3.01 dB at both edges), without the table.
+   Can you find this list in a public available document or website? If yes, we can use it. If not, we should not include it in the repository.
 
 ## 10. References
 - D. Extra, U. Simmer, S. Fischer, J. Bitzer, "Artificial reverberation: comparing algorithms by using monaural analysis tools," AES 121st

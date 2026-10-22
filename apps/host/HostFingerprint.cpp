@@ -17,6 +17,7 @@
 #include "pluginlab/measure/Spectrogram.h"
 #include "pluginlab/ui/Logo.h"
 #include "pluginlab/ui/ResponsePlotImage.h"
+#include "pluginlab/ui/ReverbViews.h"
 #include "pluginlab/ui/SpectrogramImage.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
@@ -204,6 +205,26 @@ private:
 }
 
 
+// the views of a reverb (W11.2) next to the report, if the measurement found one; the Markdown that shows them
+juce::String writeReverbViewsFor(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
+                                 const pluginlab::engine::MeasurementSummary& summary, const juce::File& reportFile, int index)
+{
+    const juce::String reverb = pluginlab::engine::summarizeReverb(summary);
+    if (reverb.isEmpty() || reverb == "none")
+    {
+        return {};
+    }
+    const double rate = getMeasurementRate();
+    const pluginlab::measure::ReverbMeasurement measurement =
+        pluginlab::engine::measurePluginReverb(formatManager, description, pluginlab::engine::getDefaultSetting(formatManager, description, rate), rate);
+    juce::String stem = reportFile.getFileNameWithoutExtension() + "_reverb";
+    if (index > 0)
+    {
+        stem << "_" << index;
+    }
+    return pluginlab::ui::writeReverbViews(measurement, rate, reportFile.getParentDirectory(), stem, description.name);
+}
+
 bool writeEchoComparison(const juce::File& pluginFileA, const juce::File& pluginFileB, const juce::File& reportFile)
 {
     juce::AudioPluginFormatManager formatManager;
@@ -257,7 +278,8 @@ bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& repo
             formatManager, description, pluginlab::engine::getDefaultSetting(formatManager, description, getMeasurementRate()), {});
         results.add(pluginlab::engine::createMeasurementJson(summary));
         report += pluginlab::engine::signReport("# Measurements: " + description.name + " " + description.version + "\n\n"
-                                                    + pluginlab::engine::createMeasurementReport(summary),
+                                                    + pluginlab::engine::createMeasurementReport(summary)
+                                                    + writeReverbViewsFor(formatManager, description, summary, reportFile, results.size() - 1),
                                                 "PluginLabHost, measurement")
                   + "\n";
     }
@@ -318,6 +340,7 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
             const pluginlab::engine::MeasurementSummary summary = pluginlab::engine::measurePlugin(
                 formatManager, description, pluginlab::engine::getDefaultSetting(formatManager, description, getMeasurementRate()), {});
             report += pluginlab::engine::createMeasurementReport(summary) + "\n";
+            report += writeReverbViewsFor(formatManager, description, summary, reportFile, measured);
             fingerprint.echoes = pluginlab::engine::summarizeEchoes(summary);
             juce::StringArray rows;
             for (const pluginlab::engine::MeasurementRow& row : summary.rows)

@@ -718,16 +718,6 @@ juce::String compareEchoResponses(juce::AudioPluginFormatManager& formatManager,
 
 namespace
 {
-measure::ReverbMeasurement measurePluginReverb(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
-                                               const std::vector<float>& setting, double sampleRate)
-{
-    measure::ReverbMeasurementSettings settings;
-    settings.sampleRate = sampleRate;
-    settings.channels = std::max(1, std::min(2, getPluginChannels(formatManager, description, sampleRate)));
-    settings.latencySamples = getReportedLatency(formatManager, description, sampleRate);
-    return measure::measureReverbResponse(makePluginDevice(formatManager, description, setting), settings);
-}
-
 void addBandTable(juce::String& text, const std::vector<measure::BandComparison>& bands)
 {
     text << "| band | T30 A | T30 B | B - A | verdict |\n|---|---|---|---|---|\n";
@@ -737,6 +727,16 @@ void addBandTable(juce::String& text, const std::vector<measure::BandComparison>
              << juce::String(band.differencePercent, 1) << " % | " << measure::getJndVerdictName(band.verdict) << " |\n";
     }
 }
+}
+
+measure::ReverbMeasurement measurePluginReverb(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
+                                               const std::vector<float>& setting, double sampleRate)
+{
+    measure::ReverbMeasurementSettings settings;
+    settings.sampleRate = sampleRate;
+    settings.channels = std::max(1, std::min(2, getPluginChannels(formatManager, description, sampleRate)));
+    settings.latencySamples = getReportedLatency(formatManager, description, sampleRate);
+    return measure::measureReverbResponse(makePluginDevice(formatManager, description, setting), settings);
 }
 
 juce::String compareReverbResponses(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& descriptionA, const std::vector<float>& settingA,

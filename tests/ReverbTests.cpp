@@ -18,6 +18,7 @@
 #include "pluginlab/reference/FdnReverb.h"
 #include "pluginlab/reference/SchroederReverb.h"
 #include "pluginlab/reference/SyntheticReverb.h"
+#include "pluginlab/ui/ReverbViews.h"
 
 namespace
 {
@@ -257,6 +258,7 @@ public:
         testLateralDecay();
         testReportUnit();
         testComparisonAndMatch();
+        testViews();
 
     }
 
@@ -662,6 +664,31 @@ public:
             expectWithinAbsoluteError(t60, 2.2, 2.2 * kDecayTolerance, "T60 found");
             expectWithinAbsoluteError(preDelay, 35.0, 1.0, "the pre-delay found");
         }
+    }
+
+    // the views of section 6 as files next to a report
+    void testViews()
+    {
+        beginTest("the reverb views: twelve pictures of the FDN reference written, the Markdown shows them");
+        const measure::Device fdn = measure::makeProcessorDevice([](double rate)
+        {
+            ref::FdnReverbSettings settings;
+            settings.sampleRate = rate;
+            return std::make_unique<ref::FdnReverb>(settings);
+        });
+        const measure::ReverbMeasurement reverb = measure::measureReverbResponse(fdn, {});
+        const juce::File folder = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("pluginlab_reverb_views");
+        folder.deleteRecursively();
+        folder.createDirectory();
+        const juce::String markdown = pluginlab::ui::writeReverbViews(reverb, kSampleRate, folder, "fdn", "FDN");
+        for (const juce::String view : {"edc_octaves", "decay_frequency", "edr", "echogram", "echo_density", "echo_count", "histogram", "kurtosis", "autocorrelation",
+                                        "coherence", "iad", "sdm"})
+        {
+            const juce::File file = folder.getChildFile("fdn_" + view + ".png");
+            expect(file.existsAsFile() && file.getSize() > 1000, view);
+            expect(markdown.contains("(fdn_" + view + ".png)"), "the Markdown shows " + view);
+        }
+        folder.deleteRecursively();
     }
 
     static std::vector<double> render(ref::Processor& processor, const std::vector<float>& input)

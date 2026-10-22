@@ -7,6 +7,7 @@
 
 #include "pluginlab/engine/PluginDevice.h"
 #include "pluginlab/measure/Device.h"
+#include "pluginlab/measure/Reverb.h"
 
 namespace pluginlab::engine
 {
@@ -67,6 +68,10 @@ juce::String summarizeReverb(const MeasurementSummary& summary);
 // a Markdown report: the quantities side by side, the echoes paired by their order, the loop filters at octave frequencies
 juce::String compareEchoResponses(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& descriptionA, const std::vector<float>& settingA,
                                   const juce::PluginDescription& descriptionB, const std::vector<float>& settingB, double sampleRate = 48000.0);
+
+// The reverb measurement of a plugin at a setting (the plugin device, its reported latency): for the views of the reports
+measure::ReverbMeasurement measurePluginReverb(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
+                                               const std::vector<float>& setting, double sampleRate = 48000.0);
 
 // Two reverbs compared (W11.2f, docs/design/W11-reverb-plan.md 5): the reverb measurement of each at its setting and a Markdown report: T30 per
 // octave and third octave with the verdict on the JND scale (the same <= 5 %, audibly close <= 10 %, different), the other quantities side by side

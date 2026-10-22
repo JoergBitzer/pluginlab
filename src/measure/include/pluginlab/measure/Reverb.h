@@ -269,6 +269,8 @@ struct ReverbMeasurement
     CrossCorrelation iaccLate;          // 80 ms ... the truncation: the tail's own width
     double meanCoherence = 0.0;         // of the tail, 200 Hz ... 8 kHz
     LateralDecay lateral;
+    std::vector<double> left;           // the responses (divided by the impulse's height): for the views
+    std::vector<double> right;
 };
 
 ReverbMeasurement measureReverbResponse(const Device& device, const ReverbMeasurementSettings& settings);

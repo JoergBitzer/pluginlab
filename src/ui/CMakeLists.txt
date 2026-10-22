@@ -1,6 +1,7 @@
 # pluginlab_hosting_ui: GUI components shared by the host application and the loader plugin (plugin browser with scanning and
 # validation, parameter table, formats with editor support), the image variants of the GUI review (W5d) and the spectrogram picture of the reports.
 add_library(pluginlab_hosting_ui STATIC
+    ChartImage.cpp
     GuiFormats.cpp
     GuiReview.cpp
     Logo.cpp
@@ -9,6 +10,7 @@ add_library(pluginlab_hosting_ui STATIC
     PluginEditorWindow.cpp
     PluginBrowserComponent.cpp
     ResponsePlotImage.cpp
+    ReverbViews.cpp
     SpectrogramImage.cpp)
 
 target_include_directories(pluginlab_hosting_ui
