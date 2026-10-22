@@ -7,6 +7,7 @@
 #include "pluginlab/measure/Reverb.h"
 #include "pluginlab/reference/Biquad.h"
 #include "pluginlab/reference/Designs.h"
+#include "pluginlab/reference/SchroederReverb.h"
 #include "pluginlab/reference/SyntheticReverb.h"
 
 namespace
@@ -134,7 +135,7 @@ class ReverbTests : public juce::UnitTest
 {
 public:
     ReverbTests()
-        : juce::UnitTest("Reverb decay (W11.2a, b)", "pluginlab")
+        : juce::UnitTest("Reverb decay and texture (W11.2a, b, c)", "pluginlab")
     {
     }
 
@@ -240,6 +241,84 @@ public:
             const measure::ReverbAnalysis analysis = measure::analyseReverb(reverb.getImpulseResponse(), {});
             expect(! analysis.hasDirect, "no direct path");
             expectWithinAbsoluteError(analysis.preDelaySeconds, 0.012, kPreDelayTolerance, "the pre-delay to the first reflection");
+        }
+        testTexture();
+
+    }
+
+    // W11.2c: the texture of the noise tail (echo density 1, kurtosis near 0, no repetition) and of a Schroeder reverb (repetitions)
+    void testTexture()
+    {
+        beginTest("the noise tail's texture: echo density 1, mixed at once, kurtosis near 0, no repetition, coloration of Rayleigh noise, EDR = T60");
+        {
+            ref::SyntheticReverbSettings settings = makeSettings();
+            settings.directGain = 0.0;
+            const ref::SyntheticReverb reverb(settings);
+            const std::vector<double>& response = reverb.getImpulseResponse();
+            const int onset = static_cast<int>(settings.preDelaySeconds * kSampleRate);
+            const measure::Texture texture = measure::analyseTexture(response, onset, static_cast<int>(response.size()), {});
+            double density = 0.0;
+            int count = 0;
+            for (size_t index = 0; index < texture.density.size(); ++index)
+            {
+                if (texture.densityTimes[index] > 0.03 && texture.densityTimes[index] < 1.0)
+                {
+                    density += texture.density[index];
+                    ++count;
+                }
+            }
+            density /= std::max(1, count);
+            logMessage("density " + juce::String(density, 3) + ", mixing time " + juce::String(texture.mixingTimeSeconds * 1000.0, 1) + " ms, late kurtosis "
+                       + juce::String(texture.lateKurtosis, 3) + ", repetition " + juce::String(texture.repetitionStrength, 3) + " at "
+                       + juce::String(texture.repetitionLagSeconds * 1000.0, 2) + " ms, coloration " + juce::String(texture.colorationDb, 2) + " dB");
+            expectWithinAbsoluteError(density, 1.0, 0.05, "the echo density of noise");
+            expect(texture.mixingTimeSeconds >= 0.0 && texture.mixingTimeSeconds < 0.03, "mixed at once");
+            expectWithinAbsoluteError(texture.lateKurtosis, 0.0, 0.3, "the kurtosis of noise");
+            expectLessThan(texture.repetitionStrength, 0.1, "no repetition");
+            expectWithinAbsoluteError(texture.colorationDb, 5.57, 1.0, "the fine structure of a noise spectrum");
+            const measure::DecayRelief relief = measure::getDecayRelief(response, onset, static_cast<int>(response.size()), kSampleRate);
+            double sum = 0.0;
+            int bins = 0;
+            for (size_t bin = 0; bin < relief.frequencies.size(); ++bin)
+            {
+                if (relief.frequencies[bin] >= 500.0 && relief.frequencies[bin] <= 4000.0 && relief.t60[bin] > 0.0)
+                {
+                    sum += relief.t60[bin];
+                    ++bins;
+                }
+            }
+            expectGreaterThan(bins, 50);
+            expectWithinAbsoluteError(sum / std::max(1, bins), 2.0, 2.0 * 0.05, "the EDR's decay time, 500 Hz ... 4 kHz");
+        }
+
+        beginTest("a Schroeder reverb: its tail repeats (a peak of the normalized autocorrelation at a comb delay) and stays sparse");
+        {
+            ref::SchroederReverbSettings settings;
+            ref::SchroederReverb schroeder(settings);
+            juce::AudioBuffer<float> buffer(1, static_cast<int>(3.0 * kSampleRate));
+            buffer.clear();
+            buffer.setSample(0, 0, 1.0f);
+            schroeder.process(buffer);
+            std::vector<double> response;
+            for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+            {
+                response.push_back(buffer.getSample(0, sample));
+            }
+            const measure::Texture texture = measure::analyseTexture(response, 0, static_cast<int>(response.size()), {});
+            logMessage("mixing time " + juce::String(texture.mixingTimeSeconds * 1000.0, 1) + " ms, late kurtosis " + juce::String(texture.lateKurtosis, 3)
+                       + ", repetition " + juce::String(texture.repetitionStrength, 3) + " at " + juce::String(texture.repetitionLagSeconds * kSampleRate, 0)
+                       + " samples, coloration " + juce::String(texture.colorationDb, 2) + " dB");
+            expectGreaterThan(texture.repetitionStrength, 0.15, "the tail repeats (noise: about 0.01)");
+            expect(texture.mixingTimeSeconds < 0.0 || texture.mixingTimeSeconds > 0.1, "sparse: mixed late or never");
+            expectGreaterThan(texture.lateKurtosis, 3.0, "far from Gaussian (the paper: Schroeder's reverberator stays far from it)");
+            bool atComb = false;
+            for (const int delay : settings.combDelays)
+            {
+                const double lag = texture.repetitionLagSeconds * kSampleRate;
+                const double multiple = std::round(lag / delay);
+                atComb = atComb || (multiple >= 1.0 && std::abs(lag - multiple * delay) <= 2.0);
+            }
+            expect(atComb, "at a comb delay (or a multiple)");
         }
     }
 

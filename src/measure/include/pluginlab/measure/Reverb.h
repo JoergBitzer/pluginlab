@@ -83,4 +83,57 @@ struct ReverbAnalysis
 };
 
 ReverbAnalysis analyseReverb(const std::vector<double>& response, const ReverbSettings& settings);
+
+// The texture of the tail (W11.2c, docs/design/W11-reverb-plan.md 4.3), on response[start, end) (start: the reverb's onset):
+// - the echo density profile of Abel and Huang (2006): per window (Hann, normalized) the weighted share of samples outside one standard
+//   deviation, divided by erfc(1 / sqrt(2)) (the share for Gaussian noise): 1 = noise-like, below 1 sparse; the mixing time: where it first
+//   reaches densityMixed
+// - Griesinger's echo count: per block of 20 ms the samples within 20 dB of the block's largest, per second
+// - the short-time histogram and kurtosis (Extra, Simmer, Fischer, Bitzer 2006): h / sqrt(EDC) (the decay removed), blocks of 1024 samples, per
+//   block the histogram of the amplitudes and the excess kurtosis (0 for Gaussian noise)
+// - the normalized autocorrelation of h / sqrt(EDC) after the mixing time: repetitions in the tail (a peak away from lag 0)
+// - the coloration: the scatter in dB of the late spectrum's fine structure around its third-octave smoothing (Rayleigh noise: about 5.6 dB)
+struct TextureSettings
+{
+    double sampleRate = 48000.0;
+    double windowSeconds = 0.02;          // the echo density's window and Griesinger's block
+    double stepSeconds = 0.001;           // the echo density every millisecond
+    double densityMixed = 0.95;
+    int histogramBlock = 1024;
+    int histogramBins = 41;               // from -4 to +4 (in units of the normalized response's standard deviation)
+    double autocorrelationSeconds = 0.1;  // the lags examined
+    double shortestLagSeconds = 0.001;    // repetitions: peaks beyond this lag
+    double colorationSeconds = 0.2;       // the late window of the coloration (after the mixing time)
+};
+
+struct Texture
+{
+    std::vector<double> densityTimes;     // seconds after start
+    std::vector<double> density;
+    double mixingTimeSeconds = -1.0;      // after start; -1: never mixed
+    std::vector<double> echoTimes;
+    std::vector<double> echoesPerSecond;
+    std::vector<double> kurtosisTimes;
+    std::vector<double> kurtosis;
+    std::vector<std::vector<double>> histograms; // per block, histogramBins shares
+    double lateKurtosis = 0.0;            // the mean over the blocks after the mixing time (never mixed: the second half)
+    std::vector<double> autocorrelation;  // lag 0 ... autocorrelationSeconds
+    double repetitionLagSeconds = 0.0;    // the largest peak beyond shortestLagSeconds
+    double repetitionStrength = 0.0;      // its height (1 = a perfect repetition)
+    double colorationDb = 0.0;
+};
+
+Texture analyseTexture(const std::vector<double>& response, int start, int end, const TextureSettings& settings);
+
+// The energy decay relief (Jot 1992): the backward-integrated energy per frequency bin of the short-time spectrum, in dB re its start; the decay
+// time per bin by least squares (-5 ... -35 dB, as T30)
+struct DecayRelief
+{
+    std::vector<double> frequencies;
+    std::vector<double> times;            // the frames' centres, seconds after start
+    std::vector<std::vector<float>> levelsDb; // [frame][bin]
+    std::vector<double> t60;              // per bin (0 where the decay does not reach -35 dB)
+};
+
+DecayRelief getDecayRelief(const std::vector<double>& response, int start, int end, double sampleRate, int frameSize = 1024, int hop = 256);
 }

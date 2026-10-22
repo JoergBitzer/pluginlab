@@ -13,6 +13,7 @@ add_library(pluginlab_reference STATIC
     LinearProcessor.cpp
     Nonlinear.cpp
     Processor.cpp
+    SchroederReverb.cpp
     StateVariableFilter.cpp
     SyntheticReverb.cpp
     Utility.cpp)

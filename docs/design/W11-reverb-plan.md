@@ -200,7 +200,19 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
   55 dB down (Lundeby): within 2 %; pre-delay within 0.1 ms; DRR within 0.1 dB; 100 % wet with a reflection. **The 2 % need the mean of
   several noise decays** (4 seeds): one decay of narrow-band noise scatters by about 1 / sqrt(B T) (the 125 Hz third octave, B = 29 Hz: about
   6 %); for narrow low bands the tolerance is that scatter. A single measured reverb carries the same uncertainty; the report should give it.
-- Not yet: the doubly complementary octave filterbank (FB_Init), EDR, the views.
+- Not yet: the doubly complementary octave filterbank (FB_Init), the views.
+
+### W11.2c the texture (0.82.0, done)
+- `measure::analyseTexture`: the echo density profile (Abel and Huang 2006: the weighted, normalized, sliding definition of the paper, every
+  millisecond, 20 ms Hann; the corrections of 4.7 for EchoDensity.m), the mixing time (density first at 0.95), Griesinger's echo count per
+  20 ms, the short-time histogram and the excess kurtosis of h / sqrt(EDC) per 1024 samples (the range from the data: +-4 standard deviations,
+  the correction of 4.7 for STH.m), the late kurtosis (after the mixing time; never mixed: the second half), the normalized autocorrelation of
+  h / sqrt(EDC) after the mixing time (by FFT) and its largest peak beyond 1 ms, the coloration (the scatter in dB of the late spectrum's fine
+  structure around its third-octave smoothing). `measure::getDecayRelief`: the EDR (Jot), the decay time per bin.
+- `reference::SchroederReverb`: four parallel combs (Freeverb's delays, gains for a T60), two all-passes in series.
+- Tests: the noise tail: density 1.000, mixed after 10 ms, late kurtosis 0.010, repetition 0.011, coloration 5.60 dB (Rayleigh: 5.57 dB), the
+  EDR's decay time 2.0 s within 5 % (500 Hz ... 4 kHz); Schroeder's reverb: repetition 0.26 at a comb delay (1422 samples), never mixed, late
+  kurtosis 59 (the paper: "far from" Gaussian).
 
 ## 9. Questions for the author
 1. **Test set**: which free reverbs (an FDN algorithm, a plate, a spring, a convolution reverb with a known IR)?
