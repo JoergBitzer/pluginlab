@@ -144,4 +144,66 @@ StepResponse measureStepResponse(const Device& device, int channels, const Stati
 // The look-ahead (the paper's method): white noise below the threshold through the device; the lag of the largest cross-correlation of input and
 // output (up to maximumSeconds)
 int measureLookahead(const Device& device, int channels, double sampleRate, double levelDbfs = -40.0, double maximumSeconds = 0.05);
+
+// The detector (W11.3d, 4.2; the paper's tests): the paper's first test: a 4 kHz square at levelDbfs, every second period replaced by zeros
+// (0.25 ms: the peak stays, the RMS falls by 3 dB). An RMS window (a millisecond or more) halves the power: the gain rises as the static curve
+// gives for -3 dB. A smoothed peak detector (the gain smoothing of Giannoulis et al.) is not an ideal one: in the gaps its release runs, its
+// reduction settles at c / (1 + tau_a / tau_r) whatever the gap length. So the decision compares the measured change with both predictions:
+// the RMS one, and the time model of W11.3c simulated with the gaps as silence; the nearer wins (unclear if they are within 0.3 dB of each other).
+// Reported too: the cross-check of constant RMS and varying peak (a pulse every 16 samples, 12 dB above the square; it does not decide: a
+// detector whose attack is slower than the pulses averages them).
+enum class DetectorKind
+{
+    Peak,
+    Rms,
+    Unclear
+};
+
+const char* getDetectorKindName(DetectorKind kind);
+
+struct DetectorTest
+{
+    DetectorKind kind = DetectorKind::Unclear;
+    double crestChangeDb = 0.0;           // the gain of the pulses minus that of the square (the same RMS)
+    double peakChangeDb = 0.0;            // what a peak detector would show (the static curve at +12 dB)
+    double gainChangeDb = 0.0;            // the zeros test: the gain with the zeros minus without
+    double rmsChangeDb = 0.0;             // what an RMS detector would show there (the static curve at -3 dB)
+    double peakModelChangeDb = 0.0;       // what the time model as a peak detector would show
+};
+
+DetectorTest measureDetector(const Device& device, int channels, const StaticFit& curve, const TimeFit& time, double sampleRate, double levelDbfs = 0.0,
+                             double latencySamples = 0.0);
+
+// The side chain's frequency response (4.4): per frequency the input level of a sine at which the gain reduction reaches reductionDb (a staircase
+// of sines in 1 dB steps, interpolated); a level above the staircase's top when it never does (NaN)
+double measureThresholdAt(const Device& device, int channels, double frequencyHz, double sampleRate, double reductionDb = 1.0, double lowestDbfs = -60.0,
+                          double highestDbfs = 0.0);
+
+// The two-tone test (4.4): a loud tone at f1 (above the threshold) and a quiet probe at f2, against the probe alone; the probe's gain change over f2,
+// the "dynamic transfer function": the same at every f2 for a single band, a plateau ending at a crossover for multiband, a bell for a dynamic EQ
+enum class BandKind
+{
+    None,          // the loud tone changes no probe (not level dependent there)
+    SingleBand,
+    Multiband,
+    DynamicEq
+};
+
+const char* getBandKindName(BandKind kind);
+
+struct DynamicTransfer
+{
+    std::vector<double> frequencies;      // the probes (those within 1/6 octave of the tone left out: the beating of the two tones moves the gain)
+    std::vector<double> reductionDb;      // positive: the probe is turned down by the loud tone
+    BandKind kind = BandKind::None;
+    double plateauOctaves = 0.0;          // the width of the region within 3 dB of the largest reduction: a band of a multiband is at least an
+                                          // octave wide, a bell narrower (a dynamic shelf would look like a band)
+};
+
+DynamicTransfer measureDynamicTransfer(const Device& device, int channels, double sampleRate, double toneHz, double toneDbfs, double probeDbfs,
+                                       const std::vector<double>& probeFrequencies);
+
+// The stereo link (4.6): left above the threshold, right below it; the right channel's gain reduction relative to the left's (0: independent, 1:
+// fully linked; between: what the device's link law gives at these levels)
+double measureStereoLink(const Device& device, double sampleRate, double highDbfs = 0.0, double lowDbfs = -30.0);
 }

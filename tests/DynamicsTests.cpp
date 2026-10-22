@@ -1,4 +1,5 @@
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -6,6 +7,7 @@
 
 #include "pluginlab/measure/Device.h"
 #include "pluginlab/measure/Dynamics.h"
+#include "pluginlab/reference/BandDynamics.h"
 #include "pluginlab/reference/Compressor.h"
 
 namespace
@@ -113,9 +115,94 @@ public:
             expect(fit.compresses);
         }
         testTimeBehaviour();
+        testDetectorAndBands();
     }
 
 private:
+    // W11.3d: peak and RMS told apart, the side chain's high-pass, single band / multiband / dynamic EQ, the stereo link
+    void testDetectorAndBands()
+    {
+        beginTest("the detector: peak and RMS told apart (a 4 kHz square with every second period zero)");
+        for (const ref::Detector detector : {ref::Detector::Peak, ref::Detector::Rms})
+        {
+            ref::CompressorSettings settings = makeSettings();
+            settings.kneeDb = 0.0;
+            settings.makeupDb = 0.0;
+            settings.detector = detector;
+            const measure::Device device = makeDevice(settings);
+            const measure::StaticFit curve = measure::fitStaticCurve(measure::measureStaticCurve(device, 1, {}).rising);
+            const measure::StepResponse step = measure::measureStepResponse(device, 1, curve, {});
+            const measure::DetectorTest test = measure::measureDetector(device, 1, curve, step.best, kSampleRate);
+            logMessage(juce::String(measure::getDetectorKindName(test.kind)) + ": the pulses change the gain by " + juce::String(test.crestChangeDb, 3) + " dB (peak: "
+                       + juce::String(test.peakChangeDb, 3) + " dB); the zeros by " + juce::String(test.gainChangeDb, 3) + " dB (RMS: " + juce::String(test.rmsChangeDb, 3) + " dB, the time model as a peak detector: "
+                       + juce::String(test.peakModelChangeDb, 3) + " dB)");
+            measure::DetectorKind expected = measure::DetectorKind::Peak;
+            if (detector == ref::Detector::Rms)
+            {
+                expected = measure::DetectorKind::Rms;
+            }
+            expect(test.kind == expected, "the detector");
+        }
+
+        beginTest("the side chain's high-pass (1 kHz): the threshold rises towards low frequencies");
+        {
+            ref::CompressorSettings settings = makeSettings();
+            settings.kneeDb = 0.0;
+            settings.sidechainHighPassHz = 1000.0;
+            const measure::Device device = makeDevice(settings);
+            const double at100 = measure::measureThresholdAt(device, 1, 100.0, kSampleRate);
+            const double at1k = measure::measureThresholdAt(device, 1, 1000.0, kSampleRate);
+            const double at10k = measure::measureThresholdAt(device, 1, 10000.0, kSampleRate);
+            logMessage("1 dB of reduction at 100 Hz: " + juce::String(at100, 2) + ", 1 kHz: " + juce::String(at1k, 2) + ", 10 kHz: " + juce::String(at10k, 2) + " dBFS");
+            expect(std::isnan(at100) || at100 > at10k + 20.0, "100 Hz: 40 dB down in the side chain");
+            expectWithinAbsoluteError(at1k - at10k, 3.0, 1.0, "1 kHz: the high-pass's -3 dB");
+        }
+
+        std::vector<double> probes;
+        for (double frequency = 50.0; frequency <= 15000.0; frequency *= std::pow(2.0, 1.0 / 6.0))
+        {
+            probes.push_back(frequency); // a sixth of an octave: a bell is resolved
+        }
+        struct Case
+        {
+            juce::String name;
+            std::function<std::unique_ptr<ref::Processor>(double)> factory;
+            double toneHz;
+            measure::BandKind kind;
+        };
+        ref::CompressorSettings bandSettings = makeSettings();
+        bandSettings.kneeDb = 0.0;
+        bandSettings.makeupDb = 0.0;
+        for (const Case& item : {Case{"a compressor: single band", [bandSettings](double rate) { ref::CompressorSettings copy = bandSettings; copy.sampleRate = rate; return std::unique_ptr<ref::Processor>(std::make_unique<ref::Compressor>(copy)); }, 300.0, measure::BandKind::SingleBand},
+                                 Case{"two bands, crossover 2 kHz: multiband", [bandSettings](double rate) { ref::CompressorSettings copy = bandSettings; copy.sampleRate = rate; return std::unique_ptr<ref::Processor>(std::make_unique<ref::TwoBandCompressor>(copy, 2000.0)); }, 300.0, measure::BandKind::Multiband},
+                                 Case{"a dynamic EQ band at 1 kHz: dynamic EQ", [bandSettings](double rate) { ref::CompressorSettings copy = bandSettings; copy.sampleRate = rate; return std::unique_ptr<ref::Processor>(std::make_unique<ref::DynamicEq>(copy, 1000.0, 2.0)); }, 1000.0, measure::BandKind::DynamicEq}})
+        {
+            beginTest("the two-tone test: " + item.name);
+            const measure::DynamicTransfer transfer = measure::measureDynamicTransfer(measure::makeProcessorDevice(item.factory), 1, kSampleRate, item.toneHz, 0.0, -40.0, probes);
+            juce::String curve;
+            for (size_t index = 0; index < transfer.frequencies.size(); ++index)
+            {
+                curve << juce::String(juce::roundToInt(transfer.frequencies[index])) << ": " << juce::String(transfer.reductionDb[index], 1) << "  ";
+            }
+            logMessage(juce::String(measure::getBandKindName(transfer.kind)) + " (within 3 dB of the largest over " + juce::String(transfer.plateauOctaves, 2) + " octaves): " + curve);
+            expect(transfer.kind == item.kind, "the kind");
+        }
+
+        beginTest("the stereo link: 0, 50 and 100 %");
+        for (const double link : {0.0, 0.5, 1.0})
+        {
+            ref::CompressorSettings settings = makeSettings();
+            settings.kneeDb = 0.0;
+            settings.stereoLink = link;
+            const ref::Compressor reference(settings);
+            // the quiet channel (-30 dBFS) hears (1 - link) (-30) + link (0); the loud one 0 dBFS
+            const double expected = (reference.getSettings().makeupDb - reference.getStaticGainDb((1.0 - link) * -30.0))
+                                    / (reference.getSettings().makeupDb - reference.getStaticGainDb(0.0));
+            const double measured = measure::measureStereoLink(makeDevice(settings), kSampleRate);
+            expectWithinAbsoluteError(measured, expected, 0.02, "link " + juce::String(link, 1));
+        }
+    }
+
     // W11.3c: every model variant of the reference recognised with its time constants within 2 %; hold, look-ahead, the standards' convention
     void testTimeBehaviour()
     {

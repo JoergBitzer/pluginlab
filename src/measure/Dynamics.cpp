@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <functional>
+#include <limits>
 
 namespace pluginlab::measure
 {
@@ -767,5 +769,334 @@ int measureLookahead(const Device& device, int channels, double sampleRate, doub
         }
     }
     return bestLag;
+}
+
+const char* getDetectorKindName(DetectorKind kind)
+{
+    if (kind == DetectorKind::Peak)
+    {
+        return "peak";
+    }
+    if (kind == DetectorKind::Rms)
+    {
+        return "RMS";
+    }
+    return "unclear";
+}
+
+const char* getBandKindName(BandKind kind)
+{
+    if (kind == BandKind::SingleBand)
+    {
+        return "single band";
+    }
+    if (kind == BandKind::Multiband)
+    {
+        return "multiband";
+    }
+    if (kind == BandKind::DynamicEq)
+    {
+        return "dynamic EQ";
+    }
+    return "not level dependent";
+}
+
+namespace
+{
+// the device's output (channel 0) for a signal on all inputs
+std::vector<double> renderThrough(const Device& device, int channels, const std::vector<float>& signal, double sampleRate, int rightChannelFrom = -1,
+                                  const std::vector<float>* right = nullptr)
+{
+    juce::AudioBuffer<float> buffer(channels, static_cast<int>(signal.size()));
+    for (int channel = 0; channel < channels; ++channel)
+    {
+        if (channel == rightChannelFrom && right != nullptr)
+        {
+            buffer.copyFrom(channel, 0, right->data(), static_cast<int>(right->size()));
+            continue;
+        }
+        buffer.copyFrom(channel, 0, signal.data(), static_cast<int>(signal.size()));
+    }
+    const juce::AudioBuffer<float> output = device(buffer, sampleRate);
+    std::vector<double> out;
+    for (int sample = 0; sample < output.getNumSamples(); ++sample)
+    {
+        out.push_back(output.getSample(0, sample));
+    }
+    return out;
+}
+
+// the mean gain in dB over the last quarter where the input is not zero
+double getSteadyGainDb(const std::vector<float>& input, const std::vector<double>& output, int lag)
+{
+    double sum = 0.0;
+    int count = 0;
+    const size_t from = input.size() * 3 / 4;
+    for (size_t sample = from; sample < input.size(); ++sample)
+    {
+        const size_t at = sample + static_cast<size_t>(lag);
+        if (std::abs(input[sample]) > 0.0f && at < output.size())
+        {
+            sum += 20.0 * std::log10(std::max(std::abs(output[at] / input[sample]), 1.0e-15));
+            ++count;
+        }
+    }
+    return sum / std::max(1, count);
+}
+
+// the amplitude of a sine at a frequency over the last second (an integer number of periods for whole hertz)
+double getToneAmplitude(const std::vector<double>& signal, double frequencyHz, double sampleRate)
+{
+    const size_t length = static_cast<size_t>(sampleRate);
+    const size_t from = signal.size() - std::min(signal.size(), length);
+    std::complex<double> sum;
+    for (size_t sample = from; sample < signal.size(); ++sample)
+    {
+        sum += signal[sample] * std::polar(1.0, -2.0 * kPi * frequencyHz * static_cast<double>(sample) / sampleRate);
+    }
+    return 2.0 * std::abs(sum) / static_cast<double>(signal.size() - from);
+}
+
+std::vector<float> makeSine(double frequencyHz, double levelDbfs, int length, double sampleRate)
+{
+    std::vector<float> signal(static_cast<size_t>(length));
+    const double amplitude = std::pow(10.0, levelDbfs / 20.0);
+    for (int sample = 0; sample < length; ++sample)
+    {
+        signal[static_cast<size_t>(sample)] = static_cast<float>(amplitude * std::sin(2.0 * kPi * frequencyHz * sample / sampleRate));
+    }
+    return signal;
+}
+}
+
+DetectorTest measureDetector(const Device& device, int channels, const StaticFit& curve, const TimeFit& time, double sampleRate, double levelDbfs,
+                             double latencySamples)
+{
+    DetectorTest result;
+    const int lag = static_cast<int>(std::lround(latencySamples));
+    StaircaseSettings staircase;
+    staircase.sampleRate = sampleRate;
+    staircase.stepSeconds = 1.0;
+
+    // the decision: the same RMS, the peak 12 dB higher
+    constexpr double kCrestDb = 12.0;
+    constexpr int kPulseSpacing = 16; // 16 = 10^(12/20)^2 within 0.1 dB: the pulses have the square's RMS
+    staircase.levelsDbfs = {levelDbfs - kCrestDb};
+    const std::vector<float> square = makeStaircase(staircase);
+    std::vector<float> pulses(square.size(), 0.0f);
+    const float height = static_cast<float>(std::pow(10.0, levelDbfs / 20.0));
+    for (size_t sample = 0; sample < pulses.size(); sample += kPulseSpacing)
+    {
+        pulses[sample] = height;
+        if ((sample / kPulseSpacing) % 2 == 1)
+        {
+            pulses[sample] = -height;
+        }
+    }
+    const double squareGain = getSteadyGainDb(square, renderThrough(device, channels, square, sampleRate), lag);
+    const double pulseGain = getSteadyGainDb(pulses, renderThrough(device, channels, pulses, sampleRate), lag);
+    result.crestChangeDb = pulseGain - squareGain;
+    result.peakChangeDb = getModelGainDb(curve, levelDbfs) - getModelGainDb(curve, levelDbfs - kCrestDb);
+
+    // the decision: the paper's first test with short gaps: a 4 kHz square, every second period zero (0.25 ms: a peak detector's release barely
+    // moves in it, an RMS window of a millisecond or more halves the power)
+    constexpr double kGapSquareHz = 4000.0;
+    staircase.levelsDbfs = {levelDbfs};
+    staircase.frequencyHz = kGapSquareHz;
+    const std::vector<float> full = makeStaircase(staircase);
+    const int period = 2 * std::max(1, static_cast<int>(std::lround(sampleRate / staircase.frequencyHz / 2.0)));
+    std::vector<float> gapped = full;
+    for (size_t sample = 0; sample < gapped.size(); ++sample)
+    {
+        if ((sample / static_cast<size_t>(period)) % 2 == 1)
+        {
+            gapped[sample] = 0.0f;
+        }
+    }
+    result.gainChangeDb = getSteadyGainDb(gapped, renderThrough(device, channels, gapped, sampleRate), lag)
+                          - getSteadyGainDb(full, renderThrough(device, channels, full, sampleRate), lag);
+    result.rmsChangeDb = getModelGainDb(curve, levelDbfs - 3.0103) - getModelGainDb(curve, levelDbfs);
+    // the time model as a peak detector: the level of every sample (silence in the gaps), its gain, the change of the mean over the non-zero
+    // samples of the last quarter
+    const auto modelGain = [&](const std::vector<float>& signal)
+    {
+        std::vector<double> levels(signal.size());
+        for (size_t sample = 0; sample < signal.size(); ++sample)
+        {
+            levels[sample] = kSilence;
+            if (std::abs(signal[sample]) > 0.0f)
+            {
+                levels[sample] = 20.0 * std::log10(std::abs(static_cast<double>(signal[sample])));
+            }
+        }
+        const std::vector<double> gain = simulateGainDb(levels, curve, time.model, time.parameters, sampleRate);
+        double sum = 0.0;
+        int count = 0;
+        for (size_t sample = signal.size() * 3 / 4; sample < signal.size(); ++sample)
+        {
+            if (std::abs(signal[sample]) > 0.0f)
+            {
+                sum += gain[sample];
+                ++count;
+            }
+        }
+        return sum / std::max(1, count);
+    };
+    result.peakModelChangeDb = modelGain(gapped) - modelGain(full);
+    constexpr double kApartDb = 0.3;
+    if (std::abs(result.rmsChangeDb - result.peakModelChangeDb) >= kApartDb)
+    {
+        result.kind = DetectorKind::Peak;
+        if (std::abs(result.gainChangeDb - result.rmsChangeDb) < std::abs(result.gainChangeDb - result.peakModelChangeDb))
+        {
+            result.kind = DetectorKind::Rms;
+        }
+    }
+    return result;
+}
+
+double measureThresholdAt(const Device& device, int channels, double frequencyHz, double sampleRate, double reductionDb, double lowestDbfs, double highestDbfs)
+{
+    std::vector<double> levels;
+    for (double level = lowestDbfs; level <= highestDbfs + 1.0e-9; level += 1.0)
+    {
+        levels.push_back(level);
+    }
+    StaircaseSettings staircase;
+    staircase.sampleRate = sampleRate;
+    staircase.frequencyHz = frequencyHz;
+    staircase.shape = StaircaseShape::Sine;
+    staircase.stepSeconds = 0.3;
+    staircase.levelsDbfs = levels;
+    const std::vector<float> signal = makeStaircase(staircase);
+    const std::vector<double> output = renderThrough(device, channels, signal, sampleRate);
+    // per step: the output's amplitude over the step's last 0.1 s against the input's, relative to the lowest step
+    const int step = static_cast<int>(std::lround(staircase.stepSeconds * sampleRate));
+    const int tail = static_cast<int>(0.1 * sampleRate);
+    std::vector<double> gains;
+    for (size_t index = 0; index < levels.size(); ++index)
+    {
+        const size_t end = (index + 1) * static_cast<size_t>(step);
+        double input = 0.0;
+        double out = 0.0;
+        for (size_t sample = end - static_cast<size_t>(tail); sample < end; ++sample)
+        {
+            input += static_cast<double>(signal[sample]) * signal[sample];
+            out += output[sample] * output[sample];
+        }
+        gains.push_back(10.0 * std::log10(std::max(out, 1.0e-30) / std::max(input, 1.0e-30)));
+    }
+    for (size_t index = 1; index < gains.size(); ++index)
+    {
+        const double reduction = gains.front() - gains[index];
+        if (reduction >= reductionDb)
+        {
+            const double previous = gains.front() - gains[index - 1];
+            const double fraction = (reductionDb - previous) / std::max(reduction - previous, 1.0e-9);
+            return levels[index - 1] + fraction * (levels[index] - levels[index - 1]);
+        }
+    }
+    return std::numeric_limits<double>::quiet_NaN();
+}
+
+DynamicTransfer measureDynamicTransfer(const Device& device, int channels, double sampleRate, double toneHz, double toneDbfs, double probeDbfs,
+                                       const std::vector<double>& probeFrequencies)
+{
+    DynamicTransfer result;
+    const int length = static_cast<int>(1.5 * sampleRate);
+    const std::vector<float> tone = makeSine(std::round(toneHz), toneDbfs, length, sampleRate);
+    for (const double requested : probeFrequencies)
+    {
+        const double frequency = std::round(requested); // whole hertz: an integer number of periods in the analysed second
+        if (std::abs(std::log2(frequency / toneHz)) < 1.0 / 6.0)
+        {
+            continue; // the two tones beat; the gain follows the beating and its sidebands fall on the probe
+        }
+        const std::vector<float> probe = makeSine(frequency, probeDbfs, length, sampleRate);
+        std::vector<float> both(probe.size());
+        for (size_t sample = 0; sample < both.size(); ++sample)
+        {
+            both[sample] = probe[sample] + tone[sample];
+        }
+        const double alone = getToneAmplitude(renderThrough(device, channels, probe, sampleRate), frequency, sampleRate);
+        const double together = getToneAmplitude(renderThrough(device, channels, both, sampleRate), frequency, sampleRate);
+        result.frequencies.push_back(frequency);
+        result.reductionDb.push_back(20.0 * std::log10(std::max(alone, 1.0e-15) / std::max(together, 1.0e-15)));
+    }
+    if (result.reductionDb.empty())
+    {
+        return result;
+    }
+    const double largest = *std::max_element(result.reductionDb.begin(), result.reductionDb.end());
+    const double smallest = *std::min_element(result.reductionDb.begin(), result.reductionDb.end());
+    constexpr double kNoneDb = 0.5;
+    constexpr double kPlateauDb = 3.0;
+    constexpr double kBandOctaves = 1.0;
+    if (largest < kNoneDb)
+    {
+        result.kind = BandKind::None;
+        return result;
+    }
+    if (smallest > 0.5 * largest)
+    {
+        result.kind = BandKind::SingleBand;
+        return result;
+    }
+    // the region within 3 dB of the largest reduction: its width in octaves (lowest to highest probe in it)
+    double lowest = 1.0e300;
+    double highest = 0.0;
+    for (size_t index = 0; index < result.frequencies.size(); ++index)
+    {
+        if (result.reductionDb[index] >= largest - kPlateauDb)
+        {
+            lowest = std::min(lowest, result.frequencies[index]);
+            highest = std::max(highest, result.frequencies[index]);
+        }
+    }
+    result.plateauOctaves = std::log2(highest / lowest);
+    result.kind = BandKind::DynamicEq;
+    if (result.plateauOctaves >= kBandOctaves)
+    {
+        result.kind = BandKind::Multiband;
+    }
+    return result;
+}
+
+double measureStereoLink(const Device& device, double sampleRate, double highDbfs, double lowDbfs)
+{
+    StaircaseSettings staircase;
+    staircase.sampleRate = sampleRate;
+    staircase.stepSeconds = 1.0;
+    staircase.levelsDbfs = {highDbfs};
+    const std::vector<float> loud = makeStaircase(staircase);
+    staircase.levelsDbfs = {lowDbfs};
+    const std::vector<float> quiet = makeStaircase(staircase);
+    // each channel alone at its level (no reduction for the quiet one: the reference), then both together
+    const auto gainOf = [&](const std::vector<float>& left, const std::vector<float>& right, int channel)
+    {
+        juce::AudioBuffer<float> buffer(2, static_cast<int>(left.size()));
+        buffer.copyFrom(0, 0, left.data(), static_cast<int>(left.size()));
+        buffer.copyFrom(1, 0, right.data(), static_cast<int>(right.size()));
+        const juce::AudioBuffer<float> output = device(buffer, sampleRate);
+        std::vector<double> out;
+        for (int sample = 0; sample < output.getNumSamples(); ++sample)
+        {
+            out.push_back(output.getSample(channel, sample));
+        }
+        if (channel == 0)
+        {
+            return getSteadyGainDb(left, out, 0);
+        }
+        return getSteadyGainDb(right, out, 0);
+    };
+    const double quietAlone = gainOf(quiet, quiet, 1);
+    const double loudAlone = gainOf(loud, loud, 0);
+    const double quietTogether = gainOf(loud, quiet, 1);
+    const double loudReduction = quietAlone - loudAlone;
+    if (loudReduction < 0.1)
+    {
+        return 0.0;
+    }
+    return (quietAlone - quietTogether) / loudReduction;
 }
 }

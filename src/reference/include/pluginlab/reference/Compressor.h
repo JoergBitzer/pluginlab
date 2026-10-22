@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <vector>
 
 #include "pluginlab/reference/Processor.h"
@@ -48,6 +49,7 @@ struct CompressorSettings
     double detectorAttackSeconds = 0.002;  // TwoStage: the detector's power smoothing
     double detectorReleaseSeconds = 0.02;
     double holdSeconds = 0.0;          // after the target reduction falls, the smoothed value stays this long before the release starts
+    double sidechainHighPassHz = 0.0;  // a second-order Butterworth high-pass before the detector (0: none; W11.3d)
 };
 
 class Compressor : public Processor
@@ -78,6 +80,8 @@ private:
     double m_detectorRelease = 0.0;
     int m_hold = 0;
     std::vector<double> m_detector;              // per channel: the smoothed level (LevelLog: dB) or power (TwoStage)
+    std::vector<double> m_sidechainFilter;       // the high-pass: b0, b1, b2, a1, a2 (empty: none)
+    std::vector<std::array<double, 2>> m_sidechainState; // per channel: its two registers
     std::vector<int> m_holding;                  // per channel: samples of hold left
     int m_lookahead = 0;
     int m_rmsLength = 1;

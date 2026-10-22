@@ -4,6 +4,7 @@
 # noise, tremolo). No GUI, no hosting.
 add_library(pluginlab_reference STATIC
     Analog.cpp
+    BandDynamics.cpp
     Biquad.cpp
     Compressor.cpp
     Delays.cpp

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "pluginlab/reference/Designs.h"
+
 namespace pluginlab::reference
 {
 namespace
@@ -20,6 +22,11 @@ Compressor::Compressor(const CompressorSettings& settings)
     m_detectorAttack = std::exp(-1.0 / (std::max(settings.detectorAttackSeconds, 1.0e-9) * settings.sampleRate));
     m_detectorRelease = std::exp(-1.0 / (std::max(settings.detectorReleaseSeconds, 1.0e-9) * settings.sampleRate));
     m_hold = static_cast<int>(std::lround(settings.holdSeconds * settings.sampleRate));
+    if (settings.sidechainHighPassHz > 0.0)
+    {
+        const BiquadCoefficients section = designButterworth(Pass::High, 2, settings.sampleRate, settings.sidechainHighPassHz).front();
+        m_sidechainFilter = {section.b0, section.b1, section.b2, section.a1, section.a2};
+    }
 }
 
 const CompressorSettings& Compressor::getSettings() const
@@ -79,6 +86,7 @@ void Compressor::reset()
 {
     std::fill(m_smoothed.begin(), m_smoothed.end(), 0.0);
     std::fill(m_detector.begin(), m_detector.end(), getDetectorStart());
+    std::fill(m_sidechainState.begin(), m_sidechainState.end(), std::array<double, 2>{0.0, 0.0});
     std::fill(m_holding.begin(), m_holding.end(), 0);
     for (std::vector<double>& line : m_delay)
     {
@@ -101,6 +109,7 @@ void Compressor::process(juce::AudioBuffer<float>& buffer)
     {
         m_smoothed.assign(channels, 0.0);
         m_detector.assign(channels, getDetectorStart());
+        m_sidechainState.assign(channels, {0.0, 0.0});
         m_holding.assign(channels, 0);
         m_delay.assign(channels, std::vector<double>(static_cast<size_t>(m_lookahead) + 1, 0.0));
         m_squares.assign(channels, std::vector<double>(static_cast<size_t>(m_rmsLength), 0.0));
@@ -115,7 +124,16 @@ void Compressor::process(juce::AudioBuffer<float>& buffer)
         double loudest = kSilenceDb;
         for (size_t channel = 0; channel < channels; ++channel)
         {
-            const double input = buffer.getSample(static_cast<int>(channel), sample);
+            double input = buffer.getSample(static_cast<int>(channel), sample);
+            if (! m_sidechainFilter.empty())
+            {
+                // the detector hears the high-passed signal (transposed direct form II)
+                std::array<double, 2>& state = m_sidechainState[channel];
+                const double filtered = m_sidechainFilter[0] * input + state[0];
+                state[0] = m_sidechainFilter[1] * input - m_sidechainFilter[3] * filtered + state[1];
+                state[1] = m_sidechainFilter[2] * input - m_sidechainFilter[4] * filtered;
+                input = filtered;
+            }
             double level = kSilenceDb;
             if (m_settings.detector == Detector::Peak)
             {

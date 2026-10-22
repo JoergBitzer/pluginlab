@@ -192,6 +192,26 @@ switchable to the paper's two-stage model (detector and gain smoothing in the li
 - Not yet: the linear attack and the level-dependent and program-dependent release (the step size and the burst length), the block size and
   sample rate dependence.
 
+### W11.3d detector, side chain, bands, stereo link (0.91.0, done)
+- References: `reference::Compressor` with a side-chain high-pass (second-order Butterworth before the detector); `TwoBandCompressor` (a
+  Linkwitz-Riley crossover of order 4, a compressor per band); `DynamicEq` (a band-pass feeds the detector, the reduction sets the gain of a
+  peak filter at the same frequency and Q).
+- `measure::measureDetector`: the paper's first test with a 4 kHz square, every second period zero (the RMS -3 dB, the peak stays). **A smoothed
+  peak detector (Giannoulis' gain smoothing) is not an ideal one**: in the gaps its release runs, its reduction settles at c / (1 + tau_a / tau_r)
+  whatever the gap length (the reference: 1.36 dB of the RMS detector's 2.26 dB). The decision compares the measured change with both
+  predictions, the RMS one (the static curve at -3 dB) and the time model of W11.3c simulated as a peak detector (1.26 dB); the nearer wins.
+  The paper's cross-check (the same RMS, a peak 12 dB higher: a pulse every 16 samples) is reported but does not decide: an attack slower than
+  the pulses averages them (here by chance exactly the square's reduction).
+- `measureThresholdAt`: the sine level for 1 dB of reduction (a 1 dB staircase); the side-chain high-pass at 1 kHz: -18.05 dBFS at 10 kHz,
+  -15.08 at 1 kHz (its -3 dB), none at 100 Hz.
+- `measureDynamicTransfer` (the two-tone test): a loud tone, quiet probes on a sixth-octave grid (whole hertz, those within a sixth of an
+  octave of the tone left out: the two tones beat, the gain follows the beating and its sidebands fall on the probe); single band if every
+  probe is reduced by more than half the largest reduction, else the width of the region within 3 dB of the largest: at least an octave a band
+  of a multiband, narrower a dynamic EQ (a dynamic shelf would look like a band). Classified: the compressor (13.8 dB everywhere), the two-band
+  compressor (4.5 octaves), the dynamic EQ (0.5 octaves).
+- `measureStereoLink`: left at 0 dBFS, right at -30 dBFS: the right channel's reduction re the left's; 0, 0.5 and 1 within 0.02 of the link law.
+- Not yet: the external side chain (a key input in the rig), program-dependent release.
+
 ## 9. Questions for the author
 1. **Test set**: which free compressors, limiters and gates (a clean digital compressor, an 1176- or LA-2A-style model, a limiter, a gate)?
 Answer: I will collect a list of free dynamics processors. We should have at least a feed-forward compressor (the reference), a feedback compressor (1176 style), a tube compressor (LA-2A style), a limiter and a gate in our own reference plugins. Perhaps we will find source code for other designs as well.
