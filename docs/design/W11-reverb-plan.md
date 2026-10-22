@@ -121,6 +121,9 @@ each port gets a test against an analytic case (a synthetic stereo response with
   value is overwritten by the wrap-around sector and part of it lost; the angle axis labels do not match the sector centres.
 - **STH.m**: the direct sound and the pre-delay are found by absolute thresholds (0.004, the mean of |h|) that depend on the level; the histogram
   range is fixed (+-0.05) although the EDC normalization changes the scale; the port uses relative thresholds and a range from the data.
+- **IACC.m** (found while porting, 2026-10-22): `if MaxVal > MinVal` is always true, so the negative correlation was never chosen; meant:
+  the value of the larger magnitude (`abs(MaxVal) > abs(MinVal)`). The port returns the signed value of the largest |r|.
+- **IAD_TimeFreq.m**: `mode` has no default although the comment says "default 0" (a call with two arguments fails).
 - **AnalyseTime.m**: T60 counted instead of regressed (4.2); the EDC start found by an absolute energy difference (`Edc_Dif > -1`); the output
   names in the comment are swapped (Edt_vek / RT_vek).
 
@@ -225,6 +228,15 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
 - Found: the modulation shortens the broadband decay (1.41 s for 1.5 s): the interpolation in the loop damps the highs on every circulation
   (the same mark of the interpolation as in the delay's loop filter, W11.1b). A modulated reverb's T60 at high frequencies is shorter than its
   fixed version's: worth a line in the report of a real modulated reverb.
+
+### W11.2g stereo, part 1 (0.84.0, done)
+- `measure::getIacc` (with the corrected sign; with and without the direct sound by the window), `getCoherence` (Welch, Hann, 50 %),
+  `getInterauralDifference` (per octave, 40 ms RMS, normalized and the author's unnormalized version), `getSpatialDistribution` (the
+  time-angle phase scope: 50 ms blocks, 50 % overlap, 32 sectors centred on k 2 pi / N, so that C, L, R, nL, nR lie in the middle of sectors).
+- Tests (synthetic): IACC 1 for identical channels, 1 at +0.5 ms for a delayed copy, -1 for an inverted one (IACC.m would not have found it),
+  about 0 for independent noise; coherence 1 and about 0; IAD +3.01 dB for L = -R, 0 dB for independent noise, the floor for L = R; the
+  SDM puts a centred direct sound at C, a left reflection at L, a negatively correlated one at -pi/2.
+- Part 2: LEDT (both definitions), RLE (with and without the direct sound; question 6: the convention for tau_0), the paper's six examples.
 
 ## 9. Questions for the author
 1. **Test set**: which free reverbs (an FDN algorithm, a plate, a spring, a convolution reverb with a known IR)?

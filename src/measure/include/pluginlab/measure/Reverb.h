@@ -176,4 +176,53 @@ TimeVariance analyseTimeVariance(const std::vector<double>& output, int count, i
 // bursts averaged in energy (10 ms blocks), the line from -5 to -35 dB below the steady level
 std::vector<float> makeInterruptedNoise(int bursts, int burstSamples, int periodSamples, float level, int seed);
 double getInterruptedNoiseT30(const std::vector<double>& output, int bursts, int burstSamples, int periodSamples, double sampleRate);
+
+// Stereo (W11.2g, docs/design/W11-reverb-plan.md 4.4; the author's AES 121 stereo toolbox, ported with the corrections of 4.7). left, right: the
+// two outputs' responses to the same input.
+// IACC: the normalized cross-correlation of L and R within +-1 ms over [fromSeconds, toSeconds) after `start`; the value of the largest
+// magnitude with its sign (IACC.m compared max > min, which is always true: a negative correlation was never chosen) and its lag (positive:
+// R later than L)
+struct CrossCorrelation
+{
+    double value = 0.0;
+    double lagSeconds = 0.0;
+};
+
+CrossCorrelation getIacc(const std::vector<double>& left, const std::vector<double>& right, int start, double fromSeconds, double toSeconds, double sampleRate);
+
+// The magnitude-squared coherence of L and R over frequency (Welch: Hann frames, 50 % overlap) on [start, end)
+struct Coherence
+{
+    std::vector<double> frequencies;
+    std::vector<double> coherence;
+};
+
+Coherence getCoherence(const std::vector<double>& left, const std::vector<double>& right, int start, int end, double sampleRate, int frameSize = 4096);
+
+// The interaural difference (Griesinger) per octave band over time: 10 lg(<(l - r)^2> / <l^2 + r^2>) with 40 ms RMS smoothing (normalized), and
+// 10 lg(<(l - r)^2>) without the normalization (the author's version, easier to read); every stepSeconds
+struct InterauralDifference
+{
+    std::vector<Band> bands;
+    std::vector<double> times;
+    std::vector<std::vector<double>> normalizedDb;   // [band][time]
+    std::vector<std::vector<double>> differenceDb;   // [band][time]
+};
+
+InterauralDifference getInterauralDifference(const std::vector<double>& left, const std::vector<double>& right, double sampleRate,
+                                             double lowestCentreHz = 125.0, double highestCentreHz = 8000.0, double stepSeconds = 0.005);
+
+// The time-angle phase scope, the Spatial Distribution Meter (TimePhaseScope.m): blocks of blockSeconds with 50 % overlap; per sample the angle
+// atan2(R, L) - pi/4 (C at 0, L at -pi/4, R at +pi/4, the negative correlations nR and nL at -+3 pi/4) and the squared radius L^2 + R^2; per
+// block and sector the mean squared radius in dB. The sectors are centred on k 2 pi / N (corrected: TimePhaseScope.m started them a quarter sector
+// off, so C, L and R were not in the middle of a sector and the last sector was overwritten by the wrap-around)
+struct SpatialDistribution
+{
+    std::vector<double> sectorCentres;   // radians
+    std::vector<double> times;           // block centres
+    std::vector<std::vector<double>> levelsDb; // [sector][block], floorDb where a sector is empty
+};
+
+SpatialDistribution getSpatialDistribution(const std::vector<double>& left, const std::vector<double>& right, double sampleRate, double blockSeconds = 0.05,
+                                           int sectors = 32, double floorDb = -90.0);
 }

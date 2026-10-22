@@ -137,7 +137,7 @@ class ReverbTests : public juce::UnitTest
 {
 public:
     ReverbTests()
-        : juce::UnitTest("Reverb decay and texture (W11.2a, b, c)", "pluginlab")
+        : juce::UnitTest("Reverb (W11.2)", "pluginlab")
     {
     }
 
@@ -246,6 +246,7 @@ public:
         }
         testTexture();
         testVariance();
+        testStereo();
 
     }
 
@@ -380,6 +381,123 @@ public:
             const double interrupted = measure::getInterruptedNoiseT30(noiseOutput, 4, burst, burstPeriod, kSampleRate);
             logMessage("interrupted noise: T30 " + juce::String(interrupted, 3) + " s");
             expectWithinAbsoluteError(interrupted, variance.t30Mean, variance.t30Mean * 0.05, "the interrupted noise's T30 as the impulse responses' (four bursts: within 5 %)");
+        }
+    }
+
+    // W11.2g: synthetic stereo responses with known correlations, levels and angles
+    void testStereo()
+    {
+        const int length = static_cast<int>(0.5 * kSampleRate);
+        juce::Random random(7);
+        const auto noise = [&random, length]()
+        {
+            std::vector<double> values(static_cast<size_t>(length));
+            for (double& value : values)
+            {
+                value = random.nextFloat() - 0.5f;
+            }
+            return values;
+        };
+
+        beginTest("IACC: identical, delayed by 0.5 ms, inverted (the corrected sign), independent");
+        {
+            const std::vector<double> a = noise();
+            std::vector<double> delayed(a.size(), 0.0);
+            std::vector<double> inverted(a.size());
+            for (size_t sample = 0; sample < a.size(); ++sample)
+            {
+                inverted[sample] = -a[sample];
+                if (sample >= 24)
+                {
+                    delayed[sample] = a[sample - 24];
+                }
+            }
+            const measure::CrossCorrelation same = measure::getIacc(a, a, 0, 0.0, 0.1, kSampleRate);
+            expectWithinAbsoluteError(same.value, 1.0, 1.0e-9);
+            expectWithinAbsoluteError(same.lagSeconds, 0.0, 1.0e-12);
+            const measure::CrossCorrelation late = measure::getIacc(a, delayed, 0, 0.0, 0.1, kSampleRate);
+            expectWithinAbsoluteError(late.value, 1.0, 0.02, "delayed: nearly 1 (the window cuts 24 samples)");
+            expectWithinAbsoluteError(late.lagSeconds, 0.0005, 1.0e-9, "R 0.5 ms later");
+            const measure::CrossCorrelation negative = measure::getIacc(a, inverted, 0, 0.0, 0.1, kSampleRate);
+            expectWithinAbsoluteError(negative.value, -1.0, 1.0e-9, "inverted: -1 (IACC.m would have said a small positive value)");
+            const measure::CrossCorrelation independent = measure::getIacc(a, noise(), 0, 0.0, 0.1, kSampleRate);
+            expectLessThan(std::abs(independent.value), 0.1, "independent noise");
+        }
+
+        beginTest("coherence: 1 for identical channels, near 0 for independent ones");
+        {
+            const std::vector<double> a = noise();
+            const std::vector<double> b = noise();
+            const measure::Coherence same = measure::getCoherence(a, a, 0, length, kSampleRate);
+            const measure::Coherence independent = measure::getCoherence(a, b, 0, length, kSampleRate);
+            double sameMean = 0.0;
+            double independentMean = 0.0;
+            for (size_t bin = 1; bin < same.coherence.size(); ++bin)
+            {
+                sameMean += same.coherence[bin] / static_cast<double>(same.coherence.size() - 1);
+                independentMean += independent.coherence[bin] / static_cast<double>(same.coherence.size() - 1);
+            }
+            expectWithinAbsoluteError(sameMean, 1.0, 1.0e-6);
+            expectLessThan(independentMean, 0.15, "independent (about 1 / frames)");
+        }
+
+        beginTest("IAD: L = -R gives +3 dB, independent equal noise 0 dB, L = R the floor");
+        {
+            const std::vector<double> a = noise();
+            std::vector<double> inverted(a.size());
+            for (size_t sample = 0; sample < a.size(); ++sample)
+            {
+                inverted[sample] = -a[sample];
+            }
+            const auto middle = [](const measure::InterauralDifference& iad)
+            {
+                double mean = 0.0;
+                int count = 0;
+                for (const std::vector<double>& band : iad.normalizedDb)
+                {
+                    for (size_t index = band.size() / 4; index < 3 * band.size() / 4; ++index)
+                    {
+                        mean += band[index];
+                        ++count;
+                    }
+                }
+                return mean / std::max(1, count);
+            };
+            expectWithinAbsoluteError(middle(measure::getInterauralDifference(a, inverted, kSampleRate)), 10.0 * std::log10(2.0), 0.01, "L = -R");
+            expectWithinAbsoluteError(middle(measure::getInterauralDifference(a, noise(), kSampleRate)), 0.0, 0.5, "independent");
+            expectLessThan(middle(measure::getInterauralDifference(a, a, kSampleRate)), -200.0, "L = R");
+        }
+
+        beginTest("the Spatial Distribution Meter: a direct sound in the centre, a reflection on the left, one in negative correlation");
+        {
+            // C at 0 ms (L = R), L only at 100 ms, L = -R at 200 ms; blocks of 50 ms with 25 ms hop
+            std::vector<double> left(static_cast<size_t>(length), 0.0);
+            std::vector<double> right(static_cast<size_t>(length), 0.0);
+            left[0] = right[0] = 1.0;
+            left[static_cast<size_t>(0.1 * kSampleRate)] = 0.5;
+            left[static_cast<size_t>(0.2 * kSampleRate)] = 0.3;
+            right[static_cast<size_t>(0.2 * kSampleRate)] = -0.3;
+            const measure::SpatialDistribution sdm = measure::getSpatialDistribution(left, right, kSampleRate);
+            const auto loudestAngle = [&sdm](double time)
+            {
+                size_t block = 0;
+                while (block + 1 < sdm.times.size() && std::abs(sdm.times[block + 1] - time) < std::abs(sdm.times[block] - time))
+                {
+                    ++block;
+                }
+                size_t best = 0;
+                for (size_t sector = 0; sector < sdm.sectorCentres.size(); ++sector)
+                {
+                    if (sdm.levelsDb[sector][block] > sdm.levelsDb[best][block])
+                    {
+                        best = sector;
+                    }
+                }
+                return sdm.sectorCentres[best];
+            };
+            expectWithinAbsoluteError(loudestAngle(0.025), 0.0, 1.0e-9, "C");
+            expectWithinAbsoluteError(loudestAngle(0.1), -kPi / 4.0, 1.0e-9, "L");
+            expectWithinAbsoluteError(loudestAngle(0.2), -kPi / 2.0, 1.0e-9, "L = -R: atan2(-1, 1) - pi/4");
         }
     }
 
