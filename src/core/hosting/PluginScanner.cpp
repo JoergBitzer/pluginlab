@@ -1,5 +1,7 @@
 #include "pluginlab/hosting/PluginScanner.h"
 
+#include <set>
+
 #include "pluginlab/hosting/PluginScanXml.h"
 
 namespace pluginlab::hosting
@@ -131,10 +133,53 @@ PluginScanResult PluginScanner::scanFile(const juce::File& pluginFile) const
     return result;
 }
 
+namespace
+{
+// The shared library inside a plugin file: a VST3 bundle holds it in Contents/<architecture>, a VST2 plugin is the library itself
+juce::File getPluginBinary(const juce::File& pluginFile)
+{
+    if (! pluginFile.isDirectory())
+    {
+        return pluginFile;
+    }
+    const juce::String stem = pluginFile.getFileNameWithoutExtension();
+    for (const juce::String& folder : {"Contents/x86_64-linux", "Contents/aarch64-linux", "Contents/x86_64-win", "Contents/arm64-win", "Contents/MacOS"})
+    {
+        for (const juce::String& extension : {".so", ".vst3", ""})
+        {
+            const juce::File binary = pluginFile.getChildFile(folder).getChildFile(stem + extension);
+            if (binary.existsAsFile())
+            {
+                return binary;
+            }
+        }
+    }
+    return {};
+}
+}
+
+void PluginScanner::keepLibraryLoaded(const juce::File& pluginFile)
+{
+    static std::set<juce::String> kept;
+    const juce::File binary = getPluginBinary(pluginFile);
+    if (binary == juce::File() || kept.count(binary.getFullPathName()) > 0)
+    {
+        return;
+    }
+    kept.insert(binary.getFullPathName());
+    // deliberately never closed: one more reference keeps the library in memory when the host lets go of its last instance
+    auto* library = new juce::DynamicLibrary();
+    if (! library->open(binary.getFullPathName()))
+    {
+        delete library;
+    }
+}
+
 PluginScanResult PluginScanner::scanFileInProcess(juce::AudioPluginFormatManager& formatManager, const juce::File& pluginFile)
 {
     PluginScanResult result;
     result.file = pluginFile;
+    keepLibraryLoaded(pluginFile);
 
     juce::OwnedArray<juce::PluginDescription> found;
     for (int formatIndex = 0; formatIndex < formatManager.getNumFormats(); ++formatIndex)

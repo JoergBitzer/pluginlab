@@ -730,14 +730,27 @@ void applyValues(const juce::var& values, std::vector<float>& setting)
     }
 }
 
-std::optional<juce::PluginDescription> scanFirst(juce::AudioPluginFormatManager& formatManager, const juce::String& path)
+// the plugin of a job: the one of the file with the identifier (a file such as lsp-plugins.vst3 holds many), the first one without an identifier
+std::optional<juce::PluginDescription> scanPlugin(juce::AudioPluginFormatManager& formatManager, const juce::var& entry)
 {
-    const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(formatManager, juce::File(path));
+    const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(formatManager, juce::File(entry.getProperty("plugin", "").toString()));
     if (scan.descriptions.isEmpty())
     {
         return std::nullopt;
     }
-    return scan.descriptions[0];
+    const juce::String identifier = entry.getProperty("identifier", "").toString();
+    if (identifier.isEmpty())
+    {
+        return scan.descriptions[0];
+    }
+    for (const juce::PluginDescription& description : scan.descriptions)
+    {
+        if (description.matchesIdentifierString(identifier))
+        {
+            return description;
+        }
+    }
+    return std::nullopt;
 }
 }
 
@@ -779,7 +792,7 @@ bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
         }
         master.curve = model;
     }
-    else if (const std::optional<juce::PluginDescription> plugin = scanFirst(formatManager, masterJob.getProperty("plugin", "").toString()))
+    else if (const std::optional<juce::PluginDescription> plugin = scanPlugin(formatManager, masterJob))
     {
         master.plugin = plugin;
         master.setting = pluginlab::engine::getDefaultSetting(formatManager, *plugin, getMeasurementRate());
@@ -802,7 +815,7 @@ bool writeMatchReport(const juce::File& jobFile, const juce::File& reportFile)
     {
         for (const juce::var& entry : *list)
         {
-            const std::optional<juce::PluginDescription> plugin = scanFirst(formatManager, entry.getProperty("plugin", "").toString());
+            const std::optional<juce::PluginDescription> plugin = scanPlugin(formatManager, entry);
             if (! plugin)
             {
                 std::fprintf(stderr, "cannot scan %s\n", entry.getProperty("plugin", "").toString().toRawUTF8());
@@ -996,7 +1009,7 @@ bool writeExpertReport(const juce::File& jobFile, const juce::File& reportFile)
         const juce::String path = entry.getProperty("plugin", "").toString();
         if (path.isNotEmpty())
         {
-            item.plugin = scanFirst(formatManager, path);
+            item.plugin = scanPlugin(formatManager, entry);
             if (! item.plugin)
             {
                 std::fprintf(stderr, "cannot scan %s\n", path.toRawUTF8());

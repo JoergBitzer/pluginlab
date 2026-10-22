@@ -74,7 +74,7 @@ HostShell::HostShell(const StartupOptions& options)
     addTab(kEasyTabName, background, m_easyPage, true);
     addTab(kExpertTabName, background, m_expertPage, true);
     setSize(kWindowWidth, kWindowHeight);
-    m_comparePage->slotsChanged();
+    slotsChanged(); // the dry slot on every page (saves nothing: the session is saved after the questions of the start)
 
     if (options.compareAudioFile != juce::File())
     {
@@ -225,19 +225,18 @@ void HostShell::changeEngineRate(double sampleRate)
     juce::String error;
     m_engine.addSlot(nullptr, kDryName, error);
     m_pluginsPage->refresh();
-    m_comparePage->slotsChanged();
-    m_developerPage->refresh();
-    m_matcherPage->slotsChanged();
-    m_easyPage->slotsChanged();
-    m_expertPage->slotsChanged();
-    saveSession();
+    slotsChanged();
 }
 
+// every page that shows the slots (the one place that lists them: the Expert and Easy pages were missing here until 0.95.0, so plugins loaded
+// on page 1 did not reach them)
 void HostShell::slotsChanged()
 {
     m_comparePage->slotsChanged();
     m_developerPage->refresh();
     m_matcherPage->slotsChanged();
+    m_easyPage->slotsChanged();
+    m_expertPage->slotsChanged();
     saveSession();
 }
 
@@ -350,9 +349,7 @@ void HostShell::restorePluginSet()
     pluginlab::engine::loadPluginSet(m_engine, m_formatManager, m_settings.getLastSessionPluginSet(), report);
     marker.deleteFile();
     m_pluginsPage->refresh();
-    m_comparePage->slotsChanged();
-    m_developerPage->refresh();
-    m_matcherPage->slotsChanged();
+    slotsChanged(); // saves nothing yet: the session is saved from endRestore on
     endRestore();
 }
 

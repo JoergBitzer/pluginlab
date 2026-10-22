@@ -475,6 +475,7 @@ juce::String MatcherPanel::writeJob(const juce::File& jobFile) const
     {
         hosting::HostedPlugin* plugin = m_engine.getPlugin(masterSlot);
         spec.masterPlugin = plugin->getDescription().fileOrIdentifier;
+        spec.masterIdentifier = plugin->getDescription().createIdentifierString();
         spec.masterValues = engine::getSetting(plugin->getInstance());
     }
     else
@@ -500,7 +501,8 @@ juce::String MatcherPanel::writeJob(const juce::File& jobFile) const
             problem = hosting::getDisplayName(plugin->getDescription()) + ": no parameter released";
             continue;
         }
-        spec.targets.push_back({plugin->getDescription().fileOrIdentifier, engine::getSetting(plugin->getInstance()), row.released, m_modelStart.getToggleState()});
+        spec.targets.push_back({plugin->getDescription().fileOrIdentifier, engine::getSetting(plugin->getInstance()), row.released, m_modelStart.getToggleState(),
+                                    plugin->getDescription().createIdentifierString()});
     }
     spec.tolerance = kToleranceNames[std::max(0, m_toleranceBox.getSelectedItemIndex())].upToFirstOccurrenceOf(" ", false, false);
     spec.seconds = m_seconds.getValue();

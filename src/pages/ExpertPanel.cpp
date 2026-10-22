@@ -373,6 +373,7 @@ void ExpertPanel::startMeasurement()
         if (hosting::HostedPlugin* plugin = m_engine.getPlugin(slot))
         {
             entry->setProperty("plugin", plugin->getDescription().fileOrIdentifier);
+            entry->setProperty("identifier", plugin->getDescription().createIdentifierString()); // a file may hold several plugins
             juce::Array<juce::var> values;
             for (const float value : engine::getSetting(plugin->getInstance()))
             {

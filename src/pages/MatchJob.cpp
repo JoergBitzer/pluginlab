@@ -41,6 +41,7 @@ juce::String writeMatchJob(const MatchJobSpec& spec, const juce::File& jobFile)
     if (spec.masterPlugin.isNotEmpty())
     {
         master->setProperty("plugin", spec.masterPlugin);
+        master->setProperty("identifier", spec.masterIdentifier);
         master->setProperty("values", toArray(spec.masterValues));
     }
     else
@@ -53,6 +54,7 @@ juce::String writeMatchJob(const MatchJobSpec& spec, const juce::File& jobFile)
     {
         auto target = std::make_unique<juce::DynamicObject>();
         target->setProperty("plugin", entry.plugin);
+        target->setProperty("identifier", entry.identifier);
         target->setProperty("values", toArray(entry.values));
         juce::Array<juce::var> released;
         for (const int index : entry.released)

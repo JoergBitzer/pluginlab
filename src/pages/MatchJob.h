@@ -22,12 +22,14 @@ struct MatchJobTarget
     std::vector<float> values;    // the current setting (the start)
     std::vector<int> released;    // the parameters the match may move
     bool modelStart = true;
+    juce::String identifier;      // PluginDescription::createIdentifierString (a file may hold several plugins)
 };
 
 struct MatchJobSpec
 {
     juce::String masterPlugin;    // a loaded plugin as the master (with masterValues), or
     std::vector<float> masterValues;
+    juce::String masterIdentifier; // createIdentifierString of the master plugin
     juce::var masterCurve;        // a band curve (the Matcher page), used when masterPlugin is empty
     std::vector<MatchJobTarget> targets;
     juce::String tolerance = "strict";

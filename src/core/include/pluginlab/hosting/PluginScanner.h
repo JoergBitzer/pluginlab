@@ -24,7 +24,13 @@ public:
 
     // The work of the scanner process: examines one file in this process. A crashing plugin crashes this process.
     // The format that can read the file is taken from the manager.
+    // It keeps the plugin's library loaded until the process ends (keepLibraryLoaded).
     static PluginScanResult scanFileInProcess(juce::AudioPluginFormatManager& formatManager, const juce::File& pluginFile);
+
+    // A plugin's shared library stays in memory until the process ends. JUCE unloads a VST3 library when its last instance (or scan) is gone
+    // and loads it again for the next one; a measuring process creates an instance per render, so a library is loaded and unloaded many times.
+    // Some plugins crash when they are unloaded (LSP 1.2: its factory is destroyed twice); a host that keeps its plugins never sees that.
+    static void keepLibraryLoaded(const juce::File& pluginFile);
 
     // The scanner executable: the file named by the environment variable PLUGINLAB_SCANNER if it is set, else PluginLabScanner next to
     // the module that contains this code (the host program, or inside the plugin bundle of the loader).

@@ -351,6 +351,7 @@ void EasyPanel::startMatch()
     hosting::HostedPlugin* master = m_engine.getPlugin(getMasterSlot());
     MatchJobSpec spec;
     spec.masterPlugin = master->getDescription().fileOrIdentifier;
+    spec.masterIdentifier = master->getDescription().createIdentifierString();
     spec.masterValues = engine::getSetting(master->getInstance());
     spec.tolerance = kTolerance;
     spec.seconds = kMatchSeconds;
@@ -365,7 +366,8 @@ void EasyPanel::startMatch()
         }
         if (! released.empty())
         {
-            spec.targets.push_back({plugin->getDescription().fileOrIdentifier, engine::getSetting(plugin->getInstance()), released, mapped});
+            spec.targets.push_back({plugin->getDescription().fileOrIdentifier, engine::getSetting(plugin->getInstance()), released, mapped,
+                                    plugin->getDescription().createIdentifierString()});
         }
     }
     const juce::File folder = m_settings.getMatcherFolder();
