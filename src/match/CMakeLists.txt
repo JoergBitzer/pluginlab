@@ -2,6 +2,7 @@
 # the match problem with its cache and budget), which knows nothing about EQs; the domains (the EQ of W9.2 first) supply probe and objective. No GUI, no
 # hosting.
 add_library(pluginlab_match STATIC
+    DynamicsDomain.cpp
     EqDomain.cpp
     Match.cpp
     ReverbDomain.cpp)

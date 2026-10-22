@@ -25,6 +25,10 @@ bool writeEchoComparison(const juce::File& pluginFileA, const juce::File& plugin
 // Command line mode --compare-reverbs <plugin file A> <plugin file B> <report file> (W11.2f): two reverbs at their defaults compared per band
 bool writeReverbComparison(const juce::File& pluginFileA, const juce::File& pluginFileB, const juce::File& reportFile);
 
+// Command line mode --compare-dynamics <plugin file A> <plugin file B> <report file> (W11.3g): two compressors at their defaults compared (the
+// fitted parameters with verdicts, the static curves, the step's gain curves; B gets A's quiet level) with overlay views
+bool writeDynamicsComparison(const juce::File& pluginFileA, const juce::File& pluginFileB, const juce::File& reportFile);
+
 // Command line mode --gain-curves <audio file> <report file> <plugin file> [<plugin file> ...] (W11.3f, docs/design/W11-dynamics-plan.md 4.8):
 // the file through every plugin at its defaults; their gain curves in one picture over the input's level, and the loudness (ITU-R BS.1770-5),
 // loudness range, peaks and crest factor of the input and of every output

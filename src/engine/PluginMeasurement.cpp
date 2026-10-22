@@ -1011,6 +1011,94 @@ const MeasurementRow* findRowStartingWith(const MeasurementSummary& summary, con
     return nullptr;
 }
 
+measure::DynamicsMeasurement measurePluginDynamics(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
+                                                   const std::vector<float>& setting, double sampleRate, double quietDbfs)
+{
+    measure::DynamicsMeasurementSettings settings;
+    settings.sampleRate = sampleRate;
+    settings.channels = std::max(1, std::min(2, getPluginChannels(formatManager, description, sampleRate)));
+    settings.latencySamples = getReportedLatency(formatManager, description, setting, sampleRate);
+    settings.quietDbfs = quietDbfs;
+    return measure::measureDynamicsResponse(makePluginDevice(formatManager, description, setting), settings);
+}
+
+juce::String createDynamicsComparisonReport(const measure::DynamicsMeasurement& a, const measure::DynamicsMeasurement& b, const juce::String& nameA,
+                                            const juce::String& nameB)
+{
+    juce::String text;
+    text << "# Dynamics comparison: " << nameA << " (A, the master) and " << nameB << " (B)\n\n";
+    text << "Each at its setting, measured as in the unit \"dynamics\" (docs/design/W11-dynamics-plan.md 4 and 5); B with the same quiet level as A ("
+         << juce::String(a.quietDbfs, 1) << " dBFS), so that both see the same step. The verdicts use provisional limits (no standard gives a just "
+            "noticeable difference for a compressor): levels the same within 0.5 dB, close within 1 dB; times the same within 10 %, close within 25 %.\n\n";
+    if (! a.levelDependent || ! b.levelDependent)
+    {
+        text << "No comparison: a level-dependent gain was not found (A: " << juce::String(static_cast<int>(a.levelDependent)) << ", B: "
+             << juce::String(static_cast<int>(b.levelDependent)) << ").\n";
+        return text;
+    }
+    const measure::DynamicsComparison comparison = measure::compareDynamics(a, b);
+    const auto timeModel = [](const measure::DynamicsMeasurement& m)
+    {
+        juce::String name = measure::getTimeModelName(m.step.best.model);
+        if (measure::isAtypicalTimeModel(m.step.best.model))
+        {
+            name << " (atypical)";
+        }
+        return name;
+    };
+    const auto ms = [](double seconds) { return juce::String(seconds * 1000.0, 2) + " ms"; };
+    text << "| Quantity | A | B | B against A |\n|---|---|---|---|\n";
+    text << "| static curve | " << juce::String(a.fit.thresholdDb, 1) << " dBFS, " << juce::String(a.fit.ratio, 2) << " : 1, knee " << juce::String(a.fit.kneeDb, 1)
+         << " dB | " << juce::String(b.fit.thresholdDb, 1) << " dBFS, " << juce::String(b.fit.ratio, 2) << " : 1, knee " << juce::String(b.fit.kneeDb, 1)
+         << " dB | largest difference " << juce::String(comparison.largestCurveDifferenceDb, 2) << " dB at " << juce::String(juce::roundToInt(comparison.largestAtDbfs))
+         << " dBFS: " << measure::getDynamicsVerdictName(comparison.curve) << " |\n";
+    text << "| makeup | " << juce::String(std::round(a.fit.makeupDb * 10.0) / 10.0 + 0.0, 1) << " dB | " << juce::String(std::round(b.fit.makeupDb * 10.0) / 10.0 + 0.0, 1)
+         << " dB | |\n";
+    if (a.compressor && b.compressor)
+    {
+        text << "| time model | " << timeModel(a) << " | " << timeModel(b) << " | ";
+        if (comparison.sameTimeModel)
+        {
+            text << "the same variant |\n";
+        }
+        else
+        {
+            text << "another variant |\n";
+        }
+        text << "| attack | " << ms(a.step.best.parameters.attackSeconds) << " | " << ms(b.step.best.parameters.attackSeconds) << " | x "
+             << juce::String(comparison.attackRatio, 2) << ": " << measure::getDynamicsVerdictName(comparison.attack) << " |\n";
+        text << "| release | " << ms(a.step.best.parameters.releaseSeconds) << " | " << ms(b.step.best.parameters.releaseSeconds) << " | x "
+             << juce::String(comparison.releaseRatio, 2) << ": " << measure::getDynamicsVerdictName(comparison.release) << " |\n";
+        text << "| hold | " << ms(a.step.best.parameters.holdSeconds) << " | " << ms(b.step.best.parameters.holdSeconds) << " | |\n";
+        text << "| attack / release within 3 / 4 dB (ANSI S3.22) | " << ms(a.step.attackSettleSeconds) << " / " << ms(a.step.releaseSettleSeconds) << " | "
+             << ms(b.step.attackSettleSeconds) << " / " << ms(b.step.releaseSettleSeconds) << " | |\n";
+        text << "| the step's gain curves | | | RMS difference " << juce::String(comparison.stepRmsDifferenceDb, 2) << " dB |\n";
+        text << "| look-ahead | " << juce::String(a.step.leadSamples) << " samples | " << juce::String(b.step.leadSamples) << " samples | |\n";
+        text << "| detector | " << measure::getDetectorKindName(a.detector.kind) << " | " << measure::getDetectorKindName(b.detector.kind) << " | |\n";
+        text << "| bands | " << measure::getBandKindName(a.transfer.kind) << " | " << measure::getBandKindName(b.transfer.kind) << " | |\n";
+        if (a.stereo && b.stereo)
+        {
+            text << "| stereo link | " << juce::String(juce::roundToInt(100.0 * a.stereoLink)) << " % | " << juce::String(juce::roundToInt(100.0 * b.stereoLink))
+                 << " % | |\n";
+        }
+    }
+    text << "\n## The static curves: gain of B minus gain of A\n\n| input | ";
+    juce::String values = "| B - A | ";
+    juce::String separator = "|---|";
+    for (size_t index = 0; index < comparison.levelsDbfs.size(); ++index)
+    {
+        if (juce::roundToInt(comparison.levelsDbfs[index]) % 6 != 0)
+        {
+            continue;
+        }
+        text << juce::String(juce::roundToInt(comparison.levelsDbfs[index])) << " dBFS | ";
+        values << juce::String(comparison.gainDifferenceDb[index], 2) << " dB | ";
+        separator << "---|";
+    }
+    text << "\n" << separator << "\n" << values << "\n";
+    return text;
+}
+
 double getPluginLatency(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, const std::vector<float>& setting,
                         double sampleRate)
 {

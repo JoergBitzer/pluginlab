@@ -10,6 +10,7 @@
 #include "pluginlab/engine/PluginMeasurement.h"
 #include "pluginlab/hosting/FormatManager.h"
 #include "pluginlab/hosting/PluginScanner.h"
+#include "pluginlab/match/DynamicsDomain.h"
 #include "pluginlab/measure/Device.h"
 #include "pluginlab/measure/Dynamics.h"
 #include "pluginlab/reference/BandDynamics.h"
@@ -126,6 +127,7 @@ public:
         testDetectorAndBands();
         testDistortionAndLimiter();
         testReportUnit();
+        testComparisonAndMatch();
     }
 
 private:
@@ -403,6 +405,115 @@ private:
         const pluginlab::engine::MeasurementRow* lead = pluginlab::engine::findRow(plugin, "look-ahead (the gain moves before the audio)");
         expect(lead != nullptr && juce::roundToInt(lead->value) == 96, "the look-ahead: 96 samples");
     }
+
+    // W11.3g: two compressors compared
+    void testComparisonAndMatch()
+    {
+        const auto measureSettings = [](const ref::CompressorSettings& settings)
+        {
+            measure::DynamicsMeasurementSettings dynamics;
+            dynamics.channels = 1;
+            dynamics.bands = false;
+            dynamics.quietDbfs = -50.0;
+            return measure::measureDynamicsResponse(makeDevice(settings), dynamics);
+        };
+        const ref::CompressorSettings base = makeSettings();
+        const measure::DynamicsMeasurement master = measureSettings(base);
+        beginTest("the comparison: a compressor against itself is the same; 6 : 1 against 4 : 1 differs in the curve; 6 ms against 5 ms attack is close");
+        {
+            const measure::DynamicsComparison same = measure::compareDynamics(master, master);
+            expect(same.curve == measure::DynamicsVerdict::Same && same.attack == measure::DynamicsVerdict::Same && same.release == measure::DynamicsVerdict::Same,
+                   "itself");
+            expectWithinAbsoluteError(same.stepRmsDifferenceDb, 0.0, 1.0e-9, "the step's gain curves");
+            ref::CompressorSettings steeper = base;
+            steeper.ratio = 6.0;
+            const measure::DynamicsComparison ratio = measure::compareDynamics(master, measureSettings(steeper));
+            // at 0 dBFS: 20 dB over the threshold, 15 dB against 16.7 dB of reduction
+            logMessage("6 : 1 against 4 : 1: largest " + juce::String(ratio.largestCurveDifferenceDb, 2) + " dB at " + juce::String(ratio.largestAtDbfs, 0) + " dBFS");
+            expect(ratio.curve == measure::DynamicsVerdict::Different, "the curve differs");
+            expectWithinAbsoluteError(ratio.largestCurveDifferenceDb, -(20.0 * (1.0 - 1.0 / 6.0) - 20.0 * (1.0 - 1.0 / 4.0)), 0.01, "1.67 dB at 0 dBFS");
+            ref::CompressorSettings slower = base;
+            slower.attackSeconds = 0.006;
+            const measure::DynamicsComparison attack = measure::compareDynamics(master, measureSettings(slower));
+            expectWithinAbsoluteError(attack.attackRatio, 1.2, 0.024, "x 1.2");
+            expect(attack.attack == measure::DynamicsVerdict::Close, "close");
+            expect(attack.release == measure::DynamicsVerdict::Same, "the release the same");
+            const juce::String report = pluginlab::engine::createDynamicsComparisonReport(master, measureSettings(slower), "A", "B");
+            for (const juce::String expected : {"# Dynamics comparison", "| attack | 5.00 ms | 6.00 ms | x 1.20: close |", "## The static curves"})
+            {
+                expect(report.contains(expected), "the report contains " + expected);
+            }
+        }
+
+    }
 };
 
 static DynamicsTests dynamicsTests;
+
+// W11.3g: the Reference Compressor plugin matched to itself from its defaults (the dynamics domain of the matcher); a group of its own (about
+// 160 s in Debug), so that "Dynamics (W11.3)" stays within its time limit when the tests run side by side
+class DynamicsMatchTests : public juce::UnitTest
+{
+public:
+    DynamicsMatchTests()
+        : juce::UnitTest("Dynamics matcher (W11.3g)", "pluginlab")
+    {
+    }
+
+    void runTest() override
+    {
+        beginTest("the dynamics domain of the matcher: the Reference Compressor plugin matched to itself (-30 dBFS, 6 : 1, 10 / 100 ms from the defaults)");
+        juce::AudioPluginFormatManager formatManager;
+        pluginlab::hosting::addHeadlessFormats(formatManager);
+        const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, testpaths::getReferencePlugin("Compressor"));
+        expect(! scan.descriptions.isEmpty(), "the Reference Compressor plugin");
+        if (scan.descriptions.isEmpty())
+        {
+            return;
+        }
+        const juce::PluginDescription description = scan.descriptions[0];
+        // the normalised values of the linear ranges: threshold -60 ... 0 dBFS, ratio 1 ... 20, attack 0.1 ... 200 ms, release 5 ... 2000 ms
+        constexpr size_t kThreshold = 0;
+        constexpr size_t kRatio = 1;
+        constexpr size_t kAttack = 4;
+        constexpr size_t kRelease = 5;
+        const std::vector<float> defaults = pluginlab::engine::getDefaultSetting(formatManager, description, kSampleRate);
+        std::vector<float> masterSetting = defaults;
+        masterSetting[kThreshold] = static_cast<float>((-30.0 + 60.0) / 60.0);
+        masterSetting[kRatio] = static_cast<float>((6.0 - 1.0) / 19.0);
+        masterSetting[kAttack] = static_cast<float>((10.0 - 0.1) / 199.9);
+        masterSetting[kRelease] = static_cast<float>((100.0 - 5.0) / 1995.0);
+        const auto probe = std::make_shared<pluginlab::match::DynamicsProbe>();
+        const std::vector<double> masterFeatures = probe->measure(pluginlab::engine::makePluginDevice(formatManager, description, masterSetting));
+        pluginlab::match::ParameterSpace space;
+        space.base = defaults;
+        for (const size_t index : {kThreshold, kRatio, kAttack, kRelease})
+        {
+            space.released.push_back({static_cast<int>(index), "parameter " + juce::String(static_cast<int>(index)), 0.0, 1.0, defaults[index]});
+        }
+        pluginlab::match::MatchProblem problem(
+            masterFeatures, [&formatManager, description](const std::vector<float>& setting) { return pluginlab::engine::makePluginDevice(formatManager, description, setting); },
+            probe, pluginlab::match::makeDynamicsObjective(masterFeatures.size()), space);
+        pluginlab::match::Budget budget;
+        budget.evaluations = 150;
+        budget.seconds = 600.0;
+        const int scanned = problem.scanStart(9);
+        const pluginlab::match::OptimizerResult result = problem.solve(budget);
+        logMessage("the start scan: " + juce::String(scanned) + " renders");
+        const double threshold = -60.0 + 60.0 * result.values[0];
+        const double ratio = 1.0 + 19.0 * result.values[1];
+        const double attack = 0.1 + 199.9 * result.values[2];
+        const double release = 5.0 + 1995.0 * result.values[3];
+        logMessage("matched: " + juce::String(threshold, 2) + " dBFS, " + juce::String(ratio, 3) + " : 1, attack " + juce::String(attack, 3) + " ms, release "
+                   + juce::String(release, 2) + " ms; largest residual " + juce::String(result.largest, 3) + " units, " + juce::String(result.evaluations) + " renders, "
+                   + pluginlab::match::getStopReasonName(result.reason));
+        expect(result.withinTolerance, "within 0.5 dB in every feature");
+        expectWithinAbsoluteError(threshold, -30.0, 0.2, "the threshold");
+        // the match stops within 0.5 dB in every feature: a ratio of 5.85 instead of 6 moves the gain at 0 dBFS (30 dB over the threshold) by 0.13 dB
+        expectWithinAbsoluteError(ratio, 6.0, 0.15, "the ratio");
+        expectWithinAbsoluteError(attack, 10.0, 0.5, "the attack");
+        expectWithinAbsoluteError(release, 100.0, 5.0, "the release");
+    }
+};
+
+static DynamicsMatchTests dynamicsMatchTests;

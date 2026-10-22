@@ -26,6 +26,7 @@ juce::File resolveFile(const juce::String& text)
 //   --expert <job file> <file>                       the measurement units and null tests of the page Expert (see HostFingerprint.h)
 //   --compare-echoes <plugin A> <plugin B> <file>    two delays compared echo by echo (see HostFingerprint.h)
 //   --compare-reverbs <plugin A> <plugin B> <file>   two reverbs compared per band (see HostFingerprint.h)
+//   --compare-dynamics <plugin A> <plugin B> <file>  two compressors compared (see HostFingerprint.h)
 //   --gain-curves <audio file> <file> <plugin>...    the gain curves of compressors on music, with loudness (see HostFingerprint.h)
 //   --map <plugin file> <file> [<plugin id>]          parameter survey and mapping proposal (see HostFingerprint.h); JSON into the user's mapping folder
 //   --gui-snapshot <plugin file> <folder> [<plugin id>] captures the plugin's editor and writes the GUI review (see HostGuiSnapshot.h); in a virtual display
@@ -41,6 +42,7 @@ const juce::String kMatchOption = "--match";             // --match <job file> <
 const juce::String kExpertOption = "--expert";           // --expert <job file> <report file>
 const juce::String kCompareEchoesOption = "--compare-echoes"; // --compare-echoes <plugin file A> <plugin file B> <report file>
 const juce::String kCompareReverbsOption = "--compare-reverbs"; // --compare-reverbs <plugin file A> <plugin file B> <report file>
+const juce::String kCompareDynamicsOption = "--compare-dynamics"; // --compare-dynamics <plugin file A> <plugin file B> <report file>
 const juce::String kGainCurvesOption = "--gain-curves"; // --gain-curves <audio file> <report file> <plugin file> [<plugin file> ...]
 const juce::String kGuiSnapshotOption = "--gui-snapshot"; // --gui-snapshot <plugin file> <folder>
 const juce::String kScanOption = "--scan";
@@ -229,6 +231,16 @@ public:
         {
             const bool written = pluginlab::host::writeReverbComparison(resolveFile(arguments[compareReverbsIndex + 1]),
                                                                         resolveFile(arguments[compareReverbsIndex + 2]), resolveFile(arguments[compareReverbsIndex + 3]));
+            setApplicationReturnValue(getReportExitCode(written));
+            quit();
+            return;
+        }
+
+        const int compareDynamicsIndex = arguments.indexOf(kCompareDynamicsOption);
+        if (compareDynamicsIndex >= 0 && compareDynamicsIndex + kArgumentsOfEchoComparison < arguments.size())
+        {
+            const bool written = pluginlab::host::writeDynamicsComparison(resolveFile(arguments[compareDynamicsIndex + 1]),
+                                                                          resolveFile(arguments[compareDynamicsIndex + 2]), resolveFile(arguments[compareDynamicsIndex + 3]));
             setApplicationReturnValue(getReportExitCode(written));
             quit();
             return;

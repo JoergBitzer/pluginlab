@@ -280,6 +280,27 @@ switchable to the paper's two-stage model (detector and gain smoothing in the li
 - Tests: the reference with the linear level recognised (error 0.0000 dB, the other three 0.04 ... 0.60 dB), attack and release exact; only
   this variant is flagged. SocaLabs Compressor now fits exactly (0.50 / 2.5 ms, 0.00 dB).
 
+### W11.3g comparison and the dynamics domain of the matcher (0.95.0, done)
+- `measure::compareDynamics`: the static curves at the same input levels (B - A), the fitted parameters, attack and release as ratios, the RMS
+  difference of the step's gain curves, whether time model, detector and bands agree. Verdicts with **provisional limits** (question 6 below):
+  levels the same within 0.5 dB, close within 1 dB; times the same within 10 %, close within 25 %. For a fair overlay B is measured with A's
+  quiet level (`DynamicsMeasurementSettings::quietDbfs`), so both see the same step.
+- `engine::measurePluginDynamics`, `engine::createDynamicsComparisonReport`, `ui::writeDynamicsComparisonViews` (static curves, attack and
+  release overlaid) and `PluginLabHost --compare-dynamics <A> <B> <report>`.
+- `match::DynamicsProbe`: a short stimulus (a 3 dB staircase of 0.25 s steps and one step -50 / 0 dBFS, 7 s of audio instead of the report's
+  60 s), features: the steady gain per level and the gain at 0.1 ... 400 ms after the rise and the fall, in units of 0.5 dB.
+  `makeDynamicsObjective`: within the tolerance when every feature is within one unit.
+- **A start without a model**: Levenberg-Marquardt from the defaults (-20 dBFS, 4 : 1, 5 / 50 ms) stopped in a valley where threshold and
+  ratio trade off (-27.1 dBFS, 14.7 : 1, 2 dB off at middle levels). `MatchProblem::scanStart(points)` (domain-independent): one pass over the
+  released parameters on a grid of 9 values each, the best kept, then Levenberg-Marquardt. The Reference Compressor plugin matched to itself
+  (-30 dBFS, 6 : 1, 10 / 100 ms): -30.04 dBFS, 5.92 : 1, 9.88 / 99.3 ms, largest feature 0.09 dB, 37 renders for the scan and 10 for the fit.
+  A mapping of compressor parameters (as the EQ's of W8.5) would give a model start instead.
+- Two real compressors compared (`W11Plugins/dynamics_reports/compare_CTAGDRC_ZL.md`): at their defaults CTAGDRC (-10 dBFS, 2 : 1) and ZL
+  Compressor (-32 dBFS, 3 : 1) differ by up to 16.3 dB at 0 dBFS; attack x 8.0, release x 0.57, the same time model (gain in dB), the same
+  detector and bands.
+- Not yet: the comparison on music (the difference of the gain traces and of the short-term loudness after a loudness match), the fast path's
+  determinism check, a Matcher page for dynamics.
+
 ## 9. Questions for the author
 1. **Test set**: which free compressors, limiters and gates (a clean digital compressor, an 1176- or LA-2A-style model, a limiter, a gate)?
 Answer: I will collect a list of free dynamics processors. We should have at least a feed-forward compressor (the reference), a feedback compressor (1176 style), a tube compressor (LA-2A style), a limiter and a gate in our own reference plugins. Perhaps we will find source code for other designs as well.
@@ -291,6 +312,10 @@ Answer lets start with your suggestion.
 Answer: Yes, the MusicRadar samples are a good start. The loudness match should be done with BS.1770-5, since this is the current standard.
 5. **Multiband and dynamic EQ**: in W11.3 or later (proposal: later; they combine the EQ work and this package)?
 Answer: Later: And again, you could start the planning in your spare time. Multi-band is one class and dynamic EQ another one. 
+6. **Limits of "the same" for compressors** (W11.3g): no standard gives just noticeable differences for a compressor. Provisional: levels
+the same within 0.5 dB and audibly close within 1 dB, attack and release the same within 10 % and close within 25 %; the matcher's unit is
+0.5 dB. Are these right, or do you know of listening tests (e.g. on attack and release discrimination)?
+
 ## 10. References
 - U. Simmer, D. Schmidt, J. Bitzer, "Parameter estimation of dynamic range compressors: models, procedures and test signals," AES 120th
   Convention, Paris, 2006 (the two-stage model, the test signals, the fit; the author is a co-author).

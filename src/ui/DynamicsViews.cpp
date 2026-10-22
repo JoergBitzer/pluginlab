@@ -268,6 +268,135 @@ juce::String writeDynamicsViews(const measure::DynamicsMeasurement& dynamics, do
     return text;
 }
 
+juce::String writeDynamicsComparisonViews(const measure::DynamicsMeasurement& a, const measure::DynamicsMeasurement& b, double sampleRate, const juce::File& folder,
+                                          const juce::String& stem, const juce::String& nameA, const juce::String& nameB)
+{
+    if (a.curve.rising.empty() || b.curve.rising.empty())
+    {
+        return {};
+    }
+    const double fs = sampleRate;
+    juce::String text = "## Views: A and B overlaid\n\n";
+    const std::vector<std::pair<const measure::DynamicsMeasurement*, juce::String>> devices{{&a, "A: " + nameA}, {&b, "B: " + nameB}};
+
+    // the static curves
+    {
+        std::vector<ChartSeries> series;
+        ChartSeries unity;
+        unity.name = "1 : 1";
+        unity.colour = juce::Colours::grey;
+        unity.thickness = 1.0f;
+        unity.x = {kLowestDbfs, 0.0};
+        unity.y = {kLowestDbfs, 0.0};
+        series.push_back(unity);
+        std::vector<double> outputs;
+        int colour = 0;
+        for (const auto& [device, label] : devices)
+        {
+            ChartSeries curve;
+            curve.name = label;
+            curve.colour = getChartColour(colour++);
+            curve.thickness = 2.5f;
+            for (const measure::StaticPoint& point : device->curve.rising)
+            {
+                curve.x.push_back(point.inputDbfs);
+                curve.y.push_back(point.outputDbfs);
+                outputs.push_back(point.outputDbfs);
+            }
+            series.push_back(curve);
+        }
+        double low = kLowestDbfs;
+        double high = 0.0;
+        getRange(outputs, 6.0, low, high);
+        ChartOptions options;
+        options.title = "static curves";
+        options.xLabel = "input level in dBFS";
+        options.yLabel = "output level in dBFS";
+        options.xMinimum = kLowestDbfs;
+        options.xMaximum = 0.0;
+        options.yMinimum = low;
+        options.yMaximum = high;
+        options.height = 520;
+        options.legendAtBottom = true;
+        text << writeView(renderChart(series, options), folder, stem, "static_curves", "static curves of A and B");
+    }
+    if (! a.compressor || ! b.compressor || a.step.gainDb.empty() || b.step.gainDb.empty())
+    {
+        return text;
+    }
+
+    // the attack and the release phase, each curve from its step
+    for (const bool attack : {true, false})
+    {
+        std::vector<ChartSeries> series;
+        std::vector<double> gains;
+        double shown = kShortestShownSeconds;
+        for (const auto& [device, label] : devices)
+        {
+            const measure::TimeParameters& parameters = device->step.best.parameters;
+            if (attack)
+            {
+                shown = std::max(shown, kTimeConstants * std::max(parameters.attackSeconds, parameters.detectorAttackSeconds));
+            }
+            else
+            {
+                shown = std::max(shown, parameters.holdSeconds + kTimeConstants * parameters.releaseSeconds);
+            }
+        }
+        shown = std::min(shown, (a.step.releaseStart - a.step.attackStart) / fs);
+        int colour = 0;
+        for (const auto& [device, label] : devices)
+        {
+            const measure::StepResponse& step = device->step;
+            int start = step.releaseStart;
+            if (attack)
+            {
+                start = step.attackStart;
+            }
+            ChartSeries curve;
+            curve.name = label;
+            curve.colour = getChartColour(colour++);
+            curve.thickness = 2.0f;
+            const int count = static_cast<int>(shown * fs);
+            const int stride = std::max(1, count / 1500);
+            for (int offset = -count / 20; offset < count; offset += stride)
+            {
+                const int sample = start + offset;
+                if (sample < 0 || sample >= static_cast<int>(step.gainDb.size()))
+                {
+                    continue;
+                }
+                curve.x.push_back(1000.0 * offset / fs);
+                curve.y.push_back(step.gainDb[static_cast<size_t>(sample)]);
+                gains.push_back(step.gainDb[static_cast<size_t>(sample)]);
+            }
+            series.push_back(curve);
+        }
+        double low = 0.0;
+        double high = 0.0;
+        getRange(gains, 3.0, low, high);
+        ChartOptions options;
+        options.xLabel = "time in ms";
+        options.yLabel = "gain in dB";
+        options.xMinimum = -shown * 1000.0 / 20.0;
+        options.xMaximum = shown * 1000.0;
+        options.yMinimum = low;
+        options.yMaximum = std::max(high, low + 3.0);
+        if (attack)
+        {
+            options.title = "attack: the level steps from " + juce::String(juce::roundToInt(a.quietDbfs)) + " to 0 dBFS at 0 ms";
+            text << writeView(renderChart(series, options), folder, stem, "attack", "attack of A and B");
+        }
+        else
+        {
+            options.title = "release: the level falls back at 0 ms";
+            options.legendAtBottom = true;
+            text << writeView(renderChart(series, options), folder, stem, "release", "release of A and B");
+        }
+    }
+    return text;
+}
+
 juce::Image renderMusicGainCurves(const std::vector<MusicGainTrace>& traces, const juce::String& title)
 {
     std::vector<ChartSeries> series;

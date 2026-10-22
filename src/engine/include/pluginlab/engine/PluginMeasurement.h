@@ -83,6 +83,16 @@ measure::ReverbMeasurement measurePluginReverb(juce::AudioPluginFormatManager& f
 juce::String compareReverbResponses(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& descriptionA, const std::vector<float>& settingA,
                                     const juce::PluginDescription& descriptionB, const std::vector<float>& settingB, double sampleRate = 48000.0);
 
+// The dynamics measurement of a plugin at a setting (W11.3g; the plugin device, its reported latency at the setting); quietDbfs < 0 fixes the
+// step's quiet level (a comparison gives B the level of A)
+measure::DynamicsMeasurement measurePluginDynamics(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description,
+                                                   const std::vector<float>& setting, double sampleRate = 48000.0, double quietDbfs = 0.0);
+
+// Two dynamics processors compared (W11.3g, docs/design/W11-dynamics-plan.md 5) as Markdown: the fitted parameters side by side with the
+// verdicts, the static curves' difference per 6 dB, the time constants as ratios, the step's gain curves (their RMS difference)
+juce::String createDynamicsComparisonReport(const measure::DynamicsMeasurement& a, const measure::DynamicsMeasurement& b, const juce::String& nameA,
+                                            const juce::String& nameB);
+
 // The latency a plugin reports at a setting (prepared, the setting delivered, one block of silence processed): a look-ahead may depend on the setting
 double getPluginLatency(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, const std::vector<float>& setting,
                         double sampleRate);

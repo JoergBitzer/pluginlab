@@ -252,6 +252,8 @@ struct DynamicsMeasurementSettings
     int channels = 2;
     double latencySamples = 0.0;
     bool bands = true;                    // the two-tone test (a sixth-octave grid of probes: the slowest part)
+    double quietDbfs = 0.0;               // the quiet level of the step, link and two-tone tests; 0: from the fitted threshold (a comparison
+                                          // gives the second device the first one's, so that both get the same step)
 };
 
 struct DynamicsMeasurement
@@ -261,6 +263,7 @@ struct DynamicsMeasurement
     StaticCurve curve;
     StaticFit fit;
     bool compressor = false;              // level dependent and the fit's ratio above 1.01 (expanders and gates: later)
+    double quietDbfs = 0.0;               // the quiet level used
     StepResponse step;
     int audioDelaySamples = 0;            // the lag of the largest cross-correlation of noise below the threshold: the look-ahead and any latency
     DetectorTest detector;
@@ -274,4 +277,44 @@ struct DynamicsMeasurement
 };
 
 DynamicsMeasurement measureDynamicsResponse(const Device& device, const DynamicsMeasurementSettings& settings);
+
+// Two dynamics processors compared (W11.3g, docs/design/W11-dynamics-plan.md 5): the static curves at the same input levels, the fitted
+// parameters, the time constants as ratios, the gain curves of the same step overlaid. The verdicts use provisional limits (no standard gives a
+// just noticeable difference for a compressor; a question for the author): levels the same within 0.5 dB and audibly close within 1 dB, times
+// the same within 10 % and close within 25 %.
+enum class DynamicsVerdict
+{
+    Same,
+    Close,
+    Different
+};
+
+const char* getDynamicsVerdictName(DynamicsVerdict verdict);
+
+struct DynamicsComparisonLimits
+{
+    double sameDb = 0.5;
+    double closeDb = 1.0;
+    double sameShare = 0.10;
+    double closeShare = 0.25;
+};
+
+struct DynamicsComparison
+{
+    std::vector<double> levelsDbfs;       // the input levels both static curves have
+    std::vector<double> gainDifferenceDb; // B - A at each
+    double largestCurveDifferenceDb = 0.0;
+    double largestAtDbfs = 0.0;
+    DynamicsVerdict curve = DynamicsVerdict::Same;
+    double attackRatio = 1.0;             // B / A of the best time models
+    double releaseRatio = 1.0;
+    DynamicsVerdict attack = DynamicsVerdict::Same;
+    DynamicsVerdict release = DynamicsVerdict::Same;
+    double stepRmsDifferenceDb = 0.0;     // the gain curves of the step (the first one, both phases), the steady gain removed
+    bool sameTimeModel = true;
+    bool sameDetector = true;
+    bool sameBands = true;
+};
+
+DynamicsComparison compareDynamics(const DynamicsMeasurement& a, const DynamicsMeasurement& b, const DynamicsComparisonLimits& limits = {});
 }

@@ -282,6 +282,31 @@ bool writeReverbComparison(const juce::File& pluginFileA, const juce::File& plug
     return reportFile.replaceWithText(pluginlab::engine::signReport(report, "PluginLabHost, reverb comparison"));
 }
 
+bool writeDynamicsComparison(const juce::File& pluginFileA, const juce::File& pluginFileB, const juce::File& reportFile)
+{
+    juce::AudioPluginFormatManager formatManager;
+    hosting::addHeadlessFormats(formatManager);
+    const hosting::PluginScanResult scanA = hosting::PluginScanner::scanFileInProcess(formatManager, pluginFileA);
+    const hosting::PluginScanResult scanB = hosting::PluginScanner::scanFileInProcess(formatManager, pluginFileB);
+    if (scanA.descriptions.isEmpty() || scanB.descriptions.isEmpty())
+    {
+        return false;
+    }
+    const juce::PluginDescription& a = scanA.descriptions[0];
+    const juce::PluginDescription& b = scanB.descriptions[0];
+    const double rate = getMeasurementRate();
+    const pluginlab::measure::DynamicsMeasurement measuredA =
+        pluginlab::engine::measurePluginDynamics(formatManager, a, pluginlab::engine::getDefaultSetting(formatManager, a, rate), rate);
+    // B with A's quiet level: both see the same step
+    const pluginlab::measure::DynamicsMeasurement measuredB =
+        pluginlab::engine::measurePluginDynamics(formatManager, b, pluginlab::engine::getDefaultSetting(formatManager, b, rate), rate, measuredA.quietDbfs);
+    juce::String report = pluginlab::engine::createDynamicsComparisonReport(measuredA, measuredB, a.name, b.name) + "\n";
+    report += pluginlab::ui::writeDynamicsComparisonViews(measuredA, measuredB, rate, reportFile.getParentDirectory(),
+                                                          reportFile.getFileNameWithoutExtension(), a.name, b.name);
+    pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
+    return reportFile.replaceWithText(pluginlab::engine::signReport(report, "PluginLabHost, dynamics comparison"));
+}
+
 bool writeMusicGainCurves(const juce::File& audioFile, const juce::Array<juce::File>& pluginFiles, const juce::File& reportFile)
 {
     juce::AudioFormatManager audioFormats;

@@ -140,6 +140,11 @@ public:
 
     OptimizerResult solve(const Budget& budget, const LevenbergMarquardtSettings& settings = {}, const MatchProgress& progress = {});
 
+    // A start without a model (W11.3g: no mapping of a compressor yet): one pass over the released parameters, each on `points` evenly spaced
+    // values of its range (the others where the pass left them), the best kept; it becomes the start of solve(). Returns the renders it took.
+    // It gets Levenberg-Marquardt out of valleys where two parameters trade off (a compressor's threshold and ratio)
+    int scanStart(int points);
+
 private:
     std::vector<double> m_master;
     DeviceFactory m_target;

@@ -404,4 +404,40 @@ OptimizerResult MatchProblem::solve(const Budget& budget, const LevenbergMarquar
     result.evaluations = m_measurements - before; // renders, without the ones the cache answered
     return result;
 }
+
+int MatchProblem::scanStart(int points)
+{
+    const int before = m_measurements;
+    std::vector<double> best = m_space.getStart();
+    const auto cost = [this](const std::vector<double>& values)
+    {
+        double squares = 0.0;
+        for (const double value : getResidual(values))
+        {
+            squares += value * value;
+        }
+        return squares;
+    };
+    double bestCost = cost(best);
+    for (size_t index = 0; index < m_space.released.size(); ++index)
+    {
+        const ReleasedParameter& parameter = m_space.released[index];
+        for (int point = 0; point < points; ++point)
+        {
+            std::vector<double> trial = best;
+            trial[index] = parameter.lower + (parameter.upper - parameter.lower) * point / std::max(1, points - 1);
+            const double trialCost = cost(trial);
+            if (trialCost < bestCost)
+            {
+                bestCost = trialCost;
+                best = trial;
+            }
+        }
+    }
+    for (size_t index = 0; index < m_space.released.size(); ++index)
+    {
+        m_space.released[index].start = best[index];
+    }
+    return m_measurements - before;
+}
 }
