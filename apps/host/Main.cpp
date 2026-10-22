@@ -26,6 +26,7 @@ juce::File resolveFile(const juce::String& text)
 //   --expert <job file> <file>                       the measurement units and null tests of the page Expert (see HostFingerprint.h)
 //   --compare-echoes <plugin A> <plugin B> <file>    two delays compared echo by echo (see HostFingerprint.h)
 //   --compare-reverbs <plugin A> <plugin B> <file>   two reverbs compared per band (see HostFingerprint.h)
+//   --gain-curves <audio file> <file> <plugin>...    the gain curves of compressors on music, with loudness (see HostFingerprint.h)
 //   --map <plugin file> <file> [<plugin id>]          parameter survey and mapping proposal (see HostFingerprint.h); JSON into the user's mapping folder
 //   --gui-snapshot <plugin file> <folder> [<plugin id>] captures the plugin's editor and writes the GUI review (see HostGuiSnapshot.h); in a virtual display
 // Options of the window (manual tests): --scan <folder> scans the folder at startup, --load <plugin name> loads that plugin
@@ -40,6 +41,7 @@ const juce::String kMatchOption = "--match";             // --match <job file> <
 const juce::String kExpertOption = "--expert";           // --expert <job file> <report file>
 const juce::String kCompareEchoesOption = "--compare-echoes"; // --compare-echoes <plugin file A> <plugin file B> <report file>
 const juce::String kCompareReverbsOption = "--compare-reverbs"; // --compare-reverbs <plugin file A> <plugin file B> <report file>
+const juce::String kGainCurvesOption = "--gain-curves"; // --gain-curves <audio file> <report file> <plugin file> [<plugin file> ...]
 const juce::String kGuiSnapshotOption = "--gui-snapshot"; // --gui-snapshot <plugin file> <folder>
 const juce::String kScanOption = "--scan";
 const juce::String kLoadOption = "--load";
@@ -227,6 +229,21 @@ public:
         {
             const bool written = pluginlab::host::writeReverbComparison(resolveFile(arguments[compareReverbsIndex + 1]),
                                                                         resolveFile(arguments[compareReverbsIndex + 2]), resolveFile(arguments[compareReverbsIndex + 3]));
+            setApplicationReturnValue(getReportExitCode(written));
+            quit();
+            return;
+        }
+
+        const int gainCurvesIndex = arguments.indexOf(kGainCurvesOption);
+        if (gainCurvesIndex >= 0 && gainCurvesIndex + 3 < arguments.size())
+        {
+            juce::Array<juce::File> pluginFiles;
+            for (int index = gainCurvesIndex + 3; index < arguments.size() && ! arguments[index].startsWith("--"); ++index)
+            {
+                pluginFiles.add(resolveFile(arguments[index]));
+            }
+            const bool written = pluginlab::host::writeMusicGainCurves(resolveFile(arguments[gainCurvesIndex + 1]), pluginFiles,
+                                                                       resolveFile(arguments[gainCurvesIndex + 2]));
             setApplicationReturnValue(getReportExitCode(written));
             quit();
             return;

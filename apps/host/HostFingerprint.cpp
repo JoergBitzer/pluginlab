@@ -2,6 +2,8 @@
 
 #include <cstdio>
 
+#include <juce_audio_formats/juce_audio_formats.h>
+
 #include "HostSettings.h"
 #include "pluginlab/PluginLabVersion.h"
 #include "pluginlab/engine/Calibration.h"
@@ -13,8 +15,11 @@
 #include "pluginlab/engine/ParameterSurvey.h"
 #include "pluginlab/engine/PluginMeasurement.h"
 #include "pluginlab/engine/ReportText.h"
+#include "pluginlab/measure/Loudness.h"
 #include "pluginlab/measure/NullTest.h"
 #include "pluginlab/measure/Spectrogram.h"
+#include "pluginlab/ui/ChartImage.h"
+#include "pluginlab/ui/DynamicsViews.h"
 #include "pluginlab/ui/Logo.h"
 #include "pluginlab/ui/ResponsePlotImage.h"
 #include "pluginlab/ui/ReverbViews.h"
@@ -225,6 +230,22 @@ juce::String writeReverbViewsFor(juce::AudioPluginFormatManager& formatManager, 
     return pluginlab::ui::writeReverbViews(measurement, rate, reportFile.getParentDirectory(), stem, description.name);
 }
 
+// the views of a compressor (W11.3f) next to the report, if the unit "dynamics" found a level-dependent gain; the Markdown that shows them
+juce::String writeDynamicsViewsFor(const juce::PluginDescription& description, const pluginlab::engine::MeasurementSummary& summary, const juce::File& reportFile,
+                                   int index)
+{
+    if (summary.dynamics == nullptr)
+    {
+        return {};
+    }
+    juce::String stem = reportFile.getFileNameWithoutExtension() + "_dynamics";
+    if (index > 0)
+    {
+        stem << "_" << index;
+    }
+    return pluginlab::ui::writeDynamicsViews(*summary.dynamics, summary.sampleRate, reportFile.getParentDirectory(), stem, description.name);
+}
+
 bool writeEchoComparison(const juce::File& pluginFileA, const juce::File& pluginFileB, const juce::File& reportFile)
 {
     juce::AudioPluginFormatManager formatManager;
@@ -261,6 +282,105 @@ bool writeReverbComparison(const juce::File& pluginFileA, const juce::File& plug
     return reportFile.replaceWithText(pluginlab::engine::signReport(report, "PluginLabHost, reverb comparison"));
 }
 
+bool writeMusicGainCurves(const juce::File& audioFile, const juce::Array<juce::File>& pluginFiles, const juce::File& reportFile)
+{
+    juce::AudioFormatManager audioFormats;
+    audioFormats.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader(audioFormats.createReaderFor(audioFile));
+    if (reader == nullptr || reader->lengthInSamples <= 0)
+    {
+        return false;
+    }
+    const double rate = reader->sampleRate;
+    const int length = static_cast<int>(reader->lengthInSamples);
+    juce::AudioBuffer<float> input(2, length);
+    reader->read(&input, 0, length, 0, true, true); // a mono file fills both channels
+    std::vector<std::vector<double>> inputChannels(2);
+    for (int channel = 0; channel < 2; ++channel)
+    {
+        inputChannels[static_cast<size_t>(channel)].assign(input.getReadPointer(channel), input.getReadPointer(channel) + length);
+    }
+    const pluginlab::measure::LoudnessResult inputLoudness = pluginlab::measure::measureLoudness(inputChannels, rate);
+
+    juce::AudioPluginFormatManager formatManager;
+    hosting::addHeadlessFormats(formatManager);
+    std::vector<pluginlab::ui::MusicGainTrace> traces;
+    juce::String table = "| | integrated loudness | loudness range | true peak | sample peak | crest factor | median gain |\n|---|---|---|---|---|---|---|\n";
+    const auto addRow = [&table](const juce::String& name, const pluginlab::measure::LoudnessResult& loudness, const juce::String& gain)
+    {
+        table << "| " << name << " | " << juce::String(loudness.integratedLufs, 1) << " LUFS | " << juce::String(loudness.loudnessRangeLu, 1) << " LU | "
+              << juce::String(loudness.truePeakDbfs, 2) << " dBTP | " << juce::String(loudness.samplePeakDbfs, 2) << " dBFS | " << juce::String(loudness.crestFactorDb, 1)
+              << " dB | " << gain << " |\n";
+    };
+    addRow("input", inputLoudness, "");
+    for (const juce::File& pluginFile : pluginFiles)
+    {
+        const hosting::PluginScanResult scan = hosting::PluginScanner::scanFileInProcess(formatManager, pluginFile);
+        if (scan.descriptions.isEmpty())
+        {
+            return false;
+        }
+        const juce::PluginDescription& description = scan.descriptions[0];
+        const std::vector<float> setting = pluginlab::engine::getDefaultSetting(formatManager, description, rate);
+        const int lag = juce::roundToInt(pluginlab::engine::getPluginLatency(formatManager, description, setting, rate));
+        // the input, then silence for the latency
+        juce::AudioBuffer<float> padded(2, length + lag);
+        padded.clear();
+        for (int channel = 0; channel < 2; ++channel)
+        {
+            padded.copyFrom(channel, 0, input, channel, 0, length);
+        }
+        const juce::AudioBuffer<float> output = pluginlab::engine::makePluginDevice(formatManager, description, setting)(padded, rate);
+        std::vector<std::vector<double>> outputChannels(2);
+        for (int channel = 0; channel < 2; ++channel)
+        {
+            const int source = std::min(channel, output.getNumChannels() - 1);
+            const int start = std::min(lag, output.getNumSamples());
+            const int end = std::min(lag + length, output.getNumSamples());
+            outputChannels[static_cast<size_t>(channel)].assign(output.getReadPointer(source) + start, output.getReadPointer(source) + end);
+        }
+        // the gain curve of the left channel, the output aligned by the reported latency
+        pluginlab::ui::MusicGainTrace trace;
+        trace.name = description.name;
+        if (! description.name.containsChar(' ') && description.name != description.name.toUpperCase())
+        {
+            trace.name = description.manufacturerName + " " + description.name; // a one-word name like "Compressor" says little alone
+        }
+        trace.curve = pluginlab::measure::getGainCurve(inputChannels[0], outputChannels[0], 0, rate);
+        std::vector<double> finite;
+        for (const double gain : trace.curve.gainDb)
+        {
+            if (std::isfinite(gain))
+            {
+                finite.push_back(gain);
+            }
+        }
+        juce::String median = "-";
+        if (! finite.empty())
+        {
+            std::nth_element(finite.begin(), finite.begin() + static_cast<std::ptrdiff_t>(finite.size() / 2), finite.end());
+            median = juce::String(finite[finite.size() / 2], 1) + " dB";
+        }
+        addRow(trace.name + " (latency " + juce::String(lag) + ")", pluginlab::measure::measureLoudness(outputChannels, rate), median);
+        traces.push_back(trace);
+    }
+    const juce::String imageName = reportFile.getFileNameWithoutExtension() + "_gain_curves.png";
+    const juce::String title = "gain curves on " + audioFile.getFileName() + " (windows of 10 ms, least squares, left channel)";
+    if (! pluginlab::ui::writePng(pluginlab::ui::renderMusicGainCurves(traces, title), reportFile.getParentDirectory().getChildFile(imageName)))
+    {
+        return false;
+    }
+    juce::String report = "# Gain curves on music: " + audioFile.getFileName() + "\n\n";
+    report << "Every plugin at its defaults, the file (" << juce::String(length / rate, 1) << " s, " << juce::String(rate / 1000.0, 1)
+           << " kHz) through it. The gain per window of 10 ms is the least-squares gain sum x y / sum x^2 of the output against the input (aligned "
+              "by the reported latency): a sample-by-sample ratio would glitch at every zero crossing; windows more than 50 dB below the loudest are "
+              "left out (docs/design/W11-dynamics-plan.md 4.8). Loudness after ITU-R BS.1770-5 (K-weighting, gates of -70 LUFS and -10 LU), "
+              "the loudness range after EBU Tech 3342.\n\n";
+    report << "![gain curves](" << imageName << ")\n\n" << table << "\n";
+    pluginlab::ui::writeLogo(reportFile.getParentDirectory(), pluginlab::engine::kLogoFileName);
+    return reportFile.replaceWithText(pluginlab::engine::signReport(report, "PluginLabHost, gain curves on music"));
+}
+
 bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& reportFile, const juce::String& pluginIdentifier)
 {
     juce::AudioPluginFormatManager formatManager;
@@ -279,7 +399,8 @@ bool writeMeasurementReport(const juce::File& pluginFile, const juce::File& repo
         results.add(pluginlab::engine::createMeasurementJson(summary));
         report += pluginlab::engine::signReport("# Measurements: " + description.name + " " + description.version + "\n\n"
                                                     + pluginlab::engine::createMeasurementReport(summary)
-                                                    + writeReverbViewsFor(formatManager, description, summary, reportFile, results.size() - 1),
+                                                    + writeReverbViewsFor(formatManager, description, summary, reportFile, results.size() - 1)
+                                                    + writeDynamicsViewsFor(description, summary, reportFile, results.size() - 1),
                                                 "PluginLabHost, measurement")
                   + "\n";
     }
@@ -341,6 +462,7 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
                 formatManager, description, pluginlab::engine::getDefaultSetting(formatManager, description, getMeasurementRate()), {});
             report += pluginlab::engine::createMeasurementReport(summary) + "\n";
             report += writeReverbViewsFor(formatManager, description, summary, reportFile, measured);
+            report += writeDynamicsViewsFor(description, summary, reportFile, measured);
             fingerprint.echoes = pluginlab::engine::summarizeEchoes(summary);
             juce::StringArray rows;
             for (const pluginlab::engine::MeasurementRow& row : summary.rows)
@@ -361,6 +483,16 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
                 }
             }
             fingerprint.reverbDetail = reverbRows.joinIntoString("; ");
+            fingerprint.dynamics = pluginlab::engine::summarizeDynamics(summary);
+            juce::StringArray dynamicsRows;
+            for (const pluginlab::engine::MeasurementRow& row : summary.rows)
+            {
+                if (row.unit == "dynamics")
+                {
+                    dynamicsRows.add(row.quantity + ": " + row.text);
+                }
+            }
+            fingerprint.dynamicsDetail = dynamicsRows.joinIntoString("; ");
         }
         // the single results for programs (the Developer page): <report>.json, or <report>.<n>.json for further plugins of the file
         juce::String jsonPath = reportFile.getFullPathName() + ".json";

@@ -131,6 +131,7 @@ struct StepResponse
     std::vector<double> gainDb;            // the measured gain curve
     int attackStart = 0;                   // the samples where the level rises and falls (the first step)
     int releaseStart = 0;
+    int leadSamples = 0;                   // the look-ahead: the gain moves this long before the audio it acts on reaches the output (within the lag)
     std::vector<TimeFit> fits;             // per model
     TimeFit best;
     double holdSeconds = 0.0;              // after the fall, until the gain has moved by 0.01 dB (an upper bound: a smoothed detector delays the
@@ -234,4 +235,36 @@ struct LimiterTest
 };
 
 LimiterTest measureLimiter(const Device& device, int channels, double sampleRate, double driveDbfs = 6.0);
+
+// Everything of W11.3a ... e on one device (W11.3f: the unit "dynamics" of the reports): the static curve and its fit; for a compressor (the fit's
+// ratio above 1.01) the time behaviour, the look-ahead, the detector, the two-tone test, the stereo link, the distortion and the limiter test, with
+// their levels chosen from the fitted threshold (the low step and the quiet channel 10 dB below the knee, the loud ones at 0 dBFS)
+struct DynamicsMeasurementSettings
+{
+    double sampleRate = 48000.0;
+    int channels = 2;
+    double latencySamples = 0.0;
+    bool bands = true;                    // the two-tone test (a sixth-octave grid of probes: the slowest part)
+};
+
+struct DynamicsMeasurement
+{
+    bool levelDependent = false;          // the steady gain varies by more than 0.5 dB over the staircase
+    double gainRangeDb = 0.0;             // the largest minus the smallest steady gain
+    StaticCurve curve;
+    StaticFit fit;
+    bool compressor = false;              // level dependent and the fit's ratio above 1.01 (expanders and gates: later)
+    StepResponse step;
+    int audioDelaySamples = 0;            // the lag of the largest cross-correlation of noise below the threshold: the look-ahead and any latency
+    DetectorTest detector;
+    DynamicTransfer transfer;
+    double toneHz = 1000.0;               // the loud tone of the two-tone test
+    bool stereo = false;
+    double stereoLink = 0.0;
+    DynamicsDistortion distortion;
+    double distortionLevelDbfs = 0.0;
+    LimiterTest limiter;
+};
+
+DynamicsMeasurement measureDynamicsResponse(const Device& device, const DynamicsMeasurementSettings& settings);
 }

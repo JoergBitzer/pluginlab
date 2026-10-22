@@ -110,7 +110,11 @@ the kind and a first guess what processing it is in the detail, and the class at
 48 kHz reported / measured, all rates in the detail (`latency`); reported latency = measured at all rates (`latencyAgrees`); output before the peak (`outputBeforePeak`, never
 bold: it is a property, not a fault); output before the impulse (`ownSignal`); delivery: how many of the four ways work, the most careful one in the detail (`delivery`);
 block size independent, the largest steady-state difference in the detail (`blockSizes`); deterministic (`deterministic`); output stays finite (`finite`); recovers
-(`recovers`); digital silence in gives silence out, the idle peak in the detail (`silence`).
+(`recovers`); digital silence in gives silence out, the idle peak in the detail (`silence`). With the measurement units (W7.11) three rows of properties follow,
+never bold: the echo response of a delay (`echoes`, W11.1), the reverb (`reverb`: T30, pre-delay, late IACC; W11.2) and the dynamics (`dynamics`, W11.3f:
+threshold, ratio and knee of the static curve, the time model with attack and release, the detector, single band / multiband / dynamic EQ; "none" for a
+device whose steady gain varies by less than 0.5 dB from -60 to 0 dBFS); each with all its rows in the detail. A compressor's report also gets the
+section "Dynamics views" (static curve, gain curve, the attack and release phases with the fitted model, the two-tone test).
 The same rows are written as JSON next to the report (`<report>.json`: plugin, identifier, date, and the list of items with key, test, result, detail, good). The Developer
 page reads it and shows the results as columns, one row per plugin, orange where a result is worth a look, the detail as tooltip.
 

@@ -292,7 +292,11 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
   not of the port). For noise-like early responses the 2 ms correlations scatter (about 10 independent samples after the 800 Hz low-pass).
 - The author's example responses (`AES_121_Stereo/matlab/Tools/Data`, 44.1 kHz), RLE without / with the direct sound: Waves -1.3 / -14.7 dB,
   AcousticVerb -4.5 / -21.7 dB, ClassicReverb -10.4 / -19.3 dB, CSR none (its early part is almost centred: the channels differ by 12 % of the
-  energy). Not compared with the paper's figure yet: a run of the corrected RLE.m in Matlab on the same signals would check the port.
+  energy). Not compared with the paper's figure yet.
+- Cross-check in Matlab (2026-10-22): RLE.m with the corrections of 4.7 (and a second output without the direct sound) on the synthetic
+  signals and on the four examples gives the port's values to the last printed digit (lateral reflections 0.35 / 0.71 ms: -2.476 / +1.192 dB;
+  with the direct sound -2.408 dB; noise -1.084 / -1.083 dB; ClassicReverb -19.302 / -10.348, AcousticVerb -21.725 / -4.539, Waves -14.665 /
+  -1.290 dB; CSR none, NaN in Matlab; centred reflections: none). The port is the corrected original.
 
 ### The views of section 6 (0.87.0, done)
 - `ui::renderChart` (lines or stems, linear or log x, markers, legend) and `ui::renderHeatmap` (plasma, log or linear rows, colour bar), the

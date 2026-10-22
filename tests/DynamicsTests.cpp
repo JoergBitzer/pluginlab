@@ -5,9 +5,17 @@
 
 #include <juce_core/juce_core.h>
 
+#include "TestPluginPaths.h"
+#include "pluginlab/engine/PluginDevice.h"
+#include "pluginlab/engine/PluginMeasurement.h"
+#include "pluginlab/hosting/FormatManager.h"
+#include "pluginlab/hosting/PluginScanner.h"
 #include "pluginlab/measure/Device.h"
 #include "pluginlab/measure/Dynamics.h"
 #include "pluginlab/reference/BandDynamics.h"
+#include "pluginlab/reference/Biquad.h"
+#include "pluginlab/reference/Designs.h"
+#include "pluginlab/ui/DynamicsViews.h"
 #include "pluginlab/reference/Compressor.h"
 
 namespace
@@ -117,6 +125,7 @@ public:
         testTimeBehaviour();
         testDetectorAndBands();
         testDistortionAndLimiter();
+        testReportUnit();
     }
 
 private:
@@ -314,6 +323,83 @@ private:
             settings.lookaheadSeconds = 0.002;
             expectEquals(measure::measureLookahead(makeDevice(settings), 1, kSampleRate), 96);
         }
+    }
+
+    // W11.3f: the unit "dynamics" of the reports on the reference as a device, none for a filter, and the Reference Compressor plugin through the host
+    void testReportUnit()
+    {
+        beginTest("the unit 'dynamics' of the reports: the reference compressor's curve, times, detector, bands and link; none for a filter");
+        pluginlab::engine::MeasurementOptions options;
+        options.units = {"dynamics"};
+        ref::CompressorSettings settings = makeSettings();
+        const pluginlab::engine::MeasurementSummary summary = pluginlab::engine::measureDevice(makeDevice(settings), 2, "compressor", options);
+        for (const pluginlab::engine::MeasurementRow& row : summary.rows)
+        {
+            logMessage(row.quantity + ": " + row.text);
+        }
+        const pluginlab::engine::MeasurementRow* curve = pluginlab::engine::findRow(summary, "static curve: threshold, ratio, knee, makeup");
+        expect(curve != nullptr && std::abs(curve->value - settings.thresholdDb) < kParameterDb, "the threshold");
+        const pluginlab::engine::MeasurementRow* time = pluginlab::engine::findRow(summary, "time model (the best of three variants)");
+        expect(time != nullptr && std::abs(time->value - settings.attackSeconds * 1000.0) < 0.02 * settings.attackSeconds * 1000.0, "the attack");
+        const juce::String line = pluginlab::engine::summarizeDynamics(summary);
+        logMessage(line);
+        expect(line.startsWith("-20.0 dBFS, 4.00 : 1, knee 6.0 dB; gain reduction smoothed in dB"), line);
+        expect(line.endsWith("; peak; single band"), line);
+        const pluginlab::engine::MeasurementRow* link = pluginlab::engine::findRow(summary, "stereo link (the quiet channel's reduction re the loud one's)");
+        expect(link != nullptr && std::abs(link->value - 1.0) < 0.02, "fully linked");
+
+        beginTest("the views of a compressor: five pictures and their Markdown; the gain curves on music in one picture");
+        {
+            expect(summary.dynamics != nullptr, "the measurement kept for the views");
+            const juce::TemporaryFile folder;
+            folder.getFile().createDirectory();
+            if (summary.dynamics != nullptr)
+            {
+                const juce::String markdown = pluginlab::ui::writeDynamicsViews(*summary.dynamics, kSampleRate, folder.getFile(), "comp", "compressor");
+                for (const juce::String view : {"static_curve", "gain_reduction", "attack", "release", "two_tone"})
+                {
+                    expect(folder.getFile().getChildFile("comp_" + view + ".png").existsAsFile(), view);
+                    expect(markdown.contains("comp_" + view + ".png"), view + " in the Markdown");
+                }
+            }
+            folder.getFile().deleteRecursively();
+            measure::GainCurve curve;
+            curve.times = {0.005, 0.015, 0.025};
+            curve.gainDb = {0.0, -3.0, std::nan("")};
+            curve.inputLevelDbfs = {-20.0, -10.0, -90.0};
+            const juce::Image image = pluginlab::ui::renderMusicGainCurves({{"A", curve}, {"B", curve}}, "two");
+            expectEquals(image.getWidth(), 1000);
+        }
+
+        const measure::Device filter = measure::makeProcessorDevice([](double rate)
+        {
+            return std::make_unique<ref::BiquadCascade>(ref::designButterworthBandPass(3, rate, 500.0, 2000.0), rate);
+        });
+        expect(pluginlab::engine::summarizeDynamics(pluginlab::engine::measureDevice(filter, 2, "band-pass", options)) == "none", "a filter has no dynamics");
+
+        beginTest("the Reference Compressor plugin through the host with a look-ahead of 2 ms: the latency reported, the curve and times recovered");
+        juce::AudioPluginFormatManager formatManager;
+        pluginlab::hosting::addHeadlessFormats(formatManager);
+        const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, testpaths::getReferencePlugin("Compressor"));
+        expect(! scan.descriptions.isEmpty(), "the Reference Compressor plugin");
+        if (scan.descriptions.isEmpty())
+        {
+            return;
+        }
+        constexpr size_t kLookahead = 8;
+        std::vector<float> setting = pluginlab::engine::getDefaultSetting(formatManager, scan.descriptions[0], kSampleRate);
+        setting[kLookahead] = 0.2f; // 2 ms of 0 ... 10 ms
+        const pluginlab::engine::MeasurementSummary plugin = pluginlab::engine::measurePlugin(formatManager, scan.descriptions[0], setting, options);
+        for (const pluginlab::engine::MeasurementRow& row : plugin.rows)
+        {
+            logMessage(row.quantity + ": " + row.text);
+        }
+        const juce::String pluginLine = pluginlab::engine::summarizeDynamics(plugin);
+        expect(pluginLine.startsWith("-20.0 dBFS, 4.00 : 1, knee 6.0 dB; gain reduction smoothed in dB"), pluginLine);
+        const pluginlab::engine::MeasurementRow* pluginTime = pluginlab::engine::findRow(plugin, "time model (the best of three variants)");
+        expect(pluginTime != nullptr && std::abs(pluginTime->value - 5.0) < 0.1, "the attack 5 ms");
+        const pluginlab::engine::MeasurementRow* lead = pluginlab::engine::findRow(plugin, "look-ahead (the gain moves before the audio)");
+        expect(lead != nullptr && juce::roundToInt(lead->value) == 96, "the look-ahead: 96 samples");
     }
 };
 

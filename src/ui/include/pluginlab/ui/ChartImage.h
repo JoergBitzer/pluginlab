@@ -34,6 +34,7 @@ struct ChartOptions
     double yMinimum = 0.0;
     double yMaximum = 1.0;
     std::vector<std::pair<double, juce::String>> markers; // vertical lines at x with a label
+    bool legendAtBottom = false;       // the legend in the lower right corner (where the curves leave it free)
 };
 
 juce::Image renderChart(const std::vector<ChartSeries>& series, const ChartOptions& options);

@@ -25,6 +25,11 @@ bool writeEchoComparison(const juce::File& pluginFileA, const juce::File& plugin
 // Command line mode --compare-reverbs <plugin file A> <plugin file B> <report file> (W11.2f): two reverbs at their defaults compared per band
 bool writeReverbComparison(const juce::File& pluginFileA, const juce::File& pluginFileB, const juce::File& reportFile);
 
+// Command line mode --gain-curves <audio file> <report file> <plugin file> [<plugin file> ...] (W11.3f, docs/design/W11-dynamics-plan.md 4.8):
+// the file through every plugin at its defaults; their gain curves in one picture over the input's level, and the loudness (ITU-R BS.1770-5),
+// loudness range, peaks and crest factor of the input and of every output
+bool writeMusicGainCurves(const juce::File& audioFile, const juce::Array<juce::File>& pluginFiles, const juce::File& reportFile);
+
 // Command line mode --map <plugin file> <report file> [<plugin identifier>]: the parameter survey (W8.4) and the mapping proposal (W8.5) of every
 // plugin of the file (or the one with the identifier). The report (Markdown) has both; the proposal goes as JSON into the user's mapping folder
 // (HostSettings::getMappingFolder). A confirmed mapping there is never overwritten: the proposal is then written next to it

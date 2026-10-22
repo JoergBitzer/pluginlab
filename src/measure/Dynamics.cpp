@@ -674,17 +674,34 @@ StepResponse measureStepResponse(const Device& device, int channels, const Stati
     }
     const int lag = static_cast<int>(std::lround(settings.latencySamples));
     const std::vector<double> envelope = getGainEnvelopeDb(std::vector<double>(signal.begin(), signal.end()), out, lag);
-    // the gain at time n belongs to the detector's level at n (the input of n, the output of n + lag): the envelope shifted back by the lag
+    // the gain at time n belongs to the detector's level at n (the input of n, the output of n + lag): the envelope shifted back by the lag, less
+    // the look-ahead
     const size_t length = signal.size();
     step.gainDb.assign(length, 0.0);
     step.levelsDb.assign(length, 0.0);
     const int phase = static_cast<int>(std::lround(settings.phaseSeconds * fs));
+    // the look-ahead: a gain that moves before the level reaches the output leads the audio it acts on (a plain latency does not); the first
+    // sample that moved by more than 0.001 dB before the rise, seen through the lag
+    constexpr double kMovedDb = 0.001;
+    if (phase - lag - 1 >= 0 && static_cast<size_t>(phase) < envelope.size())
+    {
+        const double before = envelope[static_cast<size_t>(phase - 1)];
+        for (int sample = phase - lag; sample < phase; ++sample)
+        {
+            if (std::abs(envelope[static_cast<size_t>(sample + lag)] - before) > kMovedDb)
+            {
+                step.leadSamples = phase - sample;
+                break;
+            }
+        }
+    }
+    const int shift = lag - step.leadSamples;
     for (size_t sample = 0; sample < length; ++sample)
     {
         step.levelsDb[sample] = 20.0 * std::log10(std::max(std::abs(static_cast<double>(signal[sample])), 1.0e-15));
-        if (sample + static_cast<size_t>(lag) < envelope.size())
+        if (sample + static_cast<size_t>(shift) < envelope.size())
         {
-            step.gainDb[sample] = envelope[sample + static_cast<size_t>(lag)];
+            step.gainDb[sample] = envelope[sample + static_cast<size_t>(shift)];
         }
     }
     step.attackStart = phase;

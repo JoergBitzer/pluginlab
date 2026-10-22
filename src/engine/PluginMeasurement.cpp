@@ -6,6 +6,7 @@
 #include "pluginlab/measure/Crosstalk.h"
 #include "pluginlab/measure/Delay.h"
 #include "pluginlab/measure/Distortion.h"
+#include "pluginlab/measure/Dynamics.h"
 #include "pluginlab/measure/EchoResponse.h"
 #include "pluginlab/measure/Reverb.h"
 #include "pluginlab/measure/FrequencyResponse.h"
@@ -164,8 +165,10 @@ void addEchoRows(Rows& rows, const measure::Device& device, int channels, const 
     rows.add("echoes", "delay modulation (impulse train)", modulationValue, modulation, kClause);
 }
 
-// the plugin's reported latency after prepare (where the dry path of its echo response arrives); 0 if it cannot be created
-double getReportedLatency(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, double sampleRate)
+// the latency the plugin reports at a setting (where the dry path of its echo response arrives; a look-ahead may depend on the setting): prepared,
+// the setting delivered, one block of silence processed; 0 if it cannot be created
+double getReportedLatency(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, const std::vector<float>& setting,
+                          double sampleRate)
 {
     juce::String error;
     std::unique_ptr<juce::AudioPluginInstance> instance = formatManager.createPluginInstance(description, sampleRate, kLatencyBlock, error);
@@ -174,6 +177,15 @@ double getReportedLatency(juce::AudioPluginFormatManager& formatManager, const j
         return 0.0;
     }
     instance->prepareToPlay(sampleRate, kLatencyBlock);
+    const juce::Array<juce::AudioProcessorParameter*>& parameters = instance->getParameters();
+    for (int index = 0; index < std::min(parameters.size(), static_cast<int>(setting.size())); ++index)
+    {
+        parameters[index]->setValueNotifyingHost(setting[static_cast<size_t>(index)]);
+    }
+    juce::AudioBuffer<float> silence(std::max(1, std::max(instance->getTotalNumInputChannels(), instance->getTotalNumOutputChannels())), kLatencyBlock);
+    silence.clear();
+    juce::MidiBuffer midi;
+    instance->processBlock(silence, midi);
     const double latency = instance->getLatencySamples();
     instance->releaseResources();
     return latency;
@@ -240,6 +252,89 @@ void addReverbRows(Rows& rows, const measure::Device& device, int channels, cons
     }
 }
 
+// the dynamics (W11.3f): rows only for a level-dependent device; the time behaviour and the rest only for a compressor
+void addDynamicsRows(Rows& rows, const measure::Device& device, int channels, const MeasurementOptions& options, MeasurementSummary& summary)
+{
+    const juce::String kClause = "W11.3";
+    measure::DynamicsMeasurementSettings settings;
+    settings.sampleRate = options.sampleRate;
+    settings.channels = channels;
+    settings.latencySamples = std::max(0.0, options.latencySamples);
+    const std::shared_ptr<const measure::DynamicsMeasurement> result = std::make_shared<const measure::DynamicsMeasurement>(measure::measureDynamicsResponse(device, settings));
+    summary.dynamics = result;
+    const measure::DynamicsMeasurement& dynamics = *result;
+    if (! dynamics.levelDependent)
+    {
+        rows.add("dynamics", "dynamics (a level-dependent gain, channel 1)", 0.0,
+                 "none (the steady gain varies by " + juce::String(dynamics.gainRangeDb, 2) + " dB from -60 to 0 dBFS)", kClause);
+        return;
+    }
+    rows.add("dynamics", "dynamics (a level-dependent gain, channel 1)", 1.0, "yes (" + juce::String(dynamics.gainRangeDb, 1) + " dB of gain change)", kClause);
+    const measure::StaticFit& fit = dynamics.fit;
+    rows.add("dynamics", "static curve: threshold, ratio, knee, makeup", fit.thresholdDb,
+             juce::String(fit.thresholdDb, 1) + " dBFS, " + juce::String(fit.ratio, 2) + " : 1, knee " + juce::String(fit.kneeDb, 1) + " dB, makeup "
+                 + juce::String(std::round(fit.makeupDb * 10.0) / 10.0 + 0.0, 1) + " dB (the model's error " + juce::String(fit.rmsErrorDb, 2) + " dB)",
+             "W11.3b, Giannoulis et al. 2012");
+    rows.add("dynamics", "hysteresis (rising against falling staircase)", dynamics.curve.hysteresisDb,
+             juce::String(dynamics.curve.hysteresisDb, 2) + " dB; " + juce::String(dynamics.curve.unsettledSteps) + " steps of 0.5 s not settled", kClause);
+    if (! dynamics.compressor)
+    {
+        rows.add("dynamics", "dynamics: kind", kNotApplicable, "level dependent, but not a compressor (an expander or gate: not measured yet)", kClause);
+        return;
+    }
+    const measure::TimeFit& time = dynamics.step.best;
+    juce::String timing = juce::String(measure::getTimeModelName(time.model)) + ": attack " + juce::String(time.parameters.attackSeconds * 1000.0, 2) + " ms, release "
+                          + juce::String(time.parameters.releaseSeconds * 1000.0, 1) + " ms";
+    if (time.model == measure::TimeModel::TwoStage)
+    {
+        timing << ", detector " << juce::String(time.parameters.detectorAttackSeconds * 1000.0, 2) << " / "
+               << juce::String(time.parameters.detectorReleaseSeconds * 1000.0, 1) << " ms";
+    }
+    timing << ", hold " << juce::String(time.parameters.holdSeconds * 1000.0, 1) << " ms (the model's error " << juce::String(time.rmsErrorDb, 2) << " dB)";
+    rows.add("dynamics", "time model (the best of three variants)", time.parameters.attackSeconds * 1000.0, timing, "W11.3c, Simmer, Schmidt, Bitzer 2006");
+    rows.add("dynamics", "attack and release (within 3 / 4 dB of the final value)", dynamics.step.attackSettleSeconds * 1000.0,
+             juce::String(dynamics.step.attackSettleSeconds * 1000.0, 1) + " ms, " + juce::String(dynamics.step.releaseSettleSeconds * 1000.0, 1) + " ms",
+             "ANSI S3.22");
+    rows.add("dynamics", "look-ahead (the gain moves before the audio)", dynamics.step.leadSamples,
+             juce::String(dynamics.step.leadSamples) + " samples (" + juce::String(dynamics.step.leadSamples * 1000.0 / options.sampleRate, 2) + " ms); the audio delayed by "
+                 + juce::String(dynamics.audioDelaySamples) + " samples (the cross-correlation)",
+             kClause);
+    rows.add("dynamics", "detector", static_cast<double>(dynamics.detector.kind),
+             juce::String(measure::getDetectorKindName(dynamics.detector.kind)) + " (zeros test " + juce::String(dynamics.detector.gainChangeDb, 2) + " dB; RMS "
+                 + juce::String(dynamics.detector.rmsChangeDb, 2) + ", peak model " + juce::String(dynamics.detector.peakModelChangeDb, 2) + ")",
+             "W11.3d");
+    if (! dynamics.transfer.frequencies.empty())
+    {
+        juce::String bands = measure::getBandKindName(dynamics.transfer.kind);
+        if (dynamics.transfer.kind == measure::BandKind::Multiband || dynamics.transfer.kind == measure::BandKind::DynamicEq)
+        {
+            bands << " (within 3 dB of the largest reduction over " << juce::String(dynamics.transfer.plateauOctaves, 1) << " octaves)";
+        }
+        rows.add("dynamics", "bands (the two-tone test, " + juce::String(juce::roundToInt(dynamics.toneHz)) + " Hz loud)", static_cast<double>(dynamics.transfer.kind), bands,
+                 "W11.3d");
+    }
+    if (dynamics.stereo)
+    {
+        rows.add("dynamics", "stereo link (the quiet channel's reduction re the loud one's)", dynamics.stereoLink, juce::String(juce::roundToInt(dynamics.stereoLink * 100.0)) + " %",
+                 "W11.3d");
+    }
+    juce::StringArray thd;
+    for (size_t index = 0; index < dynamics.distortion.frequencies.size(); ++index)
+    {
+        thd.add(juce::String(juce::roundToInt(dynamics.distortion.frequencies[index])) + " Hz: " + juce::String(dynamics.distortion.thdDb[index], 1) + " dB");
+    }
+    double lowThd = kNotApplicable;
+    if (! dynamics.distortion.thdDb.empty())
+    {
+        lowThd = dynamics.distortion.thdDb.front();
+    }
+    rows.add("dynamics", "THD of the dynamics (" + juce::String(juce::roundToInt(dynamics.distortionLevelDbfs)) + " dBFS)", lowThd, thd.joinIntoString(", "), "W11.3e, IEC 60268-3");
+    rows.add("dynamics", "limiter test (+6 dBFS at fs/4): sample peak, true peak, overshoot", dynamics.limiter.truePeakDbfs,
+             juce::String(dynamics.limiter.samplePeakDbfs, 2) + " dBFS, true peak " + juce::String(dynamics.limiter.truePeakDbfs, 2) + " dBTP, overshoot "
+                 + juce::String(dynamics.limiter.overshootDb, 2) + " dB",
+             "W11.3e, ITU-R BS.1770-5");
+}
+
 // the number of units a run measures: the chosen ones, or all if none is chosen
 int getUnitCount(const MeasurementOptions& options)
 {
@@ -253,7 +348,7 @@ int getUnitCount(const MeasurementOptions& options)
 
 const juce::StringArray& getMeasurementUnitKeys()
 {
-    static const juce::StringArray keys{"gain", "response", "delay", "phase", "distortion", "imd", "noise", "crosstalk", "maximum", "linearity", "echoes", "reverb"};
+    static const juce::StringArray keys{"gain", "response", "delay", "phase", "distortion", "imd", "noise", "crosstalk", "maximum", "linearity", "echoes", "reverb", "dynamics"};
     return keys;
 }
 
@@ -262,7 +357,7 @@ juce::String getMeasurementUnitTitle(const juce::String& key)
     static const juce::StringArray titles{"level and gain",       "frequency response", "delay and polarity", "phase",
                                           "THD and THD+N",        "intermodulation",    "noise",              "crosstalk",
                                           "maximum input level",  "gain linearity (slow)", "echo response (delays)",
-                                          "reverb (decay, texture, stereo)"};
+                                          "reverb (decay, texture, stereo)", "dynamics (static curve, time, detector)"};
     const int index = getMeasurementUnitKeys().indexOf(key);
     if (index >= 0)
     {
@@ -521,6 +616,11 @@ MeasurementSummary measureDevice(const measure::Device& device, int channels, co
         announce("reverb");
         addReverbRows(rows, device, used, options);
     }
+    if (wants("dynamics"))
+    {
+        announce("dynamics");
+        addDynamicsRows(rows, device, used, options, summary);
+    }
     summary.seconds = (juce::Time::getMillisecondCounterHiRes() - startMs) / 1000.0;
     return summary;
 }
@@ -532,7 +632,7 @@ MeasurementSummary measurePlugin(juce::AudioPluginFormatManager& formatManager, 
     MeasurementOptions withLatency = options;
     if (withLatency.latencySamples < 0.0)
     {
-        withLatency.latencySamples = getReportedLatency(formatManager, description, options.sampleRate); // the dry path of the echo response
+        withLatency.latencySamples = getReportedLatency(formatManager, description, setting, options.sampleRate); // the dry path of the echo response
     }
     return measureDevice(makePluginDevice(formatManager, description, setting), channels, description.name, withLatency);
 }
@@ -623,7 +723,7 @@ measure::EchoMeasurement measurePluginEchoes(juce::AudioPluginFormatManager& for
     measure::EchoMeasurementSettings settings;
     settings.sampleRate = sampleRate;
     settings.channels = std::max(1, std::min(2, getPluginChannels(formatManager, description, sampleRate)));
-    settings.latencySamples = getReportedLatency(formatManager, description, sampleRate);
+    settings.latencySamples = getReportedLatency(formatManager, description, setting, sampleRate);
     return measure::measureEchoResponse(makePluginDevice(formatManager, description, setting), settings);
 }
 
@@ -735,7 +835,7 @@ measure::ReverbMeasurement measurePluginReverb(juce::AudioPluginFormatManager& f
     measure::ReverbMeasurementSettings settings;
     settings.sampleRate = sampleRate;
     settings.channels = std::max(1, std::min(2, getPluginChannels(formatManager, description, sampleRate)));
-    settings.latencySamples = getReportedLatency(formatManager, description, sampleRate);
+    settings.latencySamples = getReportedLatency(formatManager, description, setting, sampleRate);
     return measure::measureReverbResponse(makePluginDevice(formatManager, description, setting), settings);
 }
 
@@ -851,6 +951,61 @@ juce::String summarizeReverb(const MeasurementSummary& summary)
         parts.add("IACC late " + juce::String(iacc->value, 2));
     }
     return parts.joinIntoString(", ");
+}
+
+juce::String summarizeDynamics(const MeasurementSummary& summary)
+{
+    const MeasurementRow* dynamics = findRow(summary, "dynamics (a level-dependent gain, channel 1)");
+    if (dynamics == nullptr)
+    {
+        return {};
+    }
+    if (dynamics->value <= 0.0)
+    {
+        return "none";
+    }
+    juce::StringArray parts;
+    const MeasurementRow* curve = findRow(summary, "static curve: threshold, ratio, knee, makeup");
+    const MeasurementRow* time = findRow(summary, "time model (the best of three variants)");
+    if (curve != nullptr)
+    {
+        parts.add(curve->text.upToFirstOccurrenceOf(", makeup", false, false));
+    }
+    if (time != nullptr)
+    {
+        parts.add(time->text.upToFirstOccurrenceOf(", hold", false, false));
+    }
+    else if (findRow(summary, "dynamics: kind") != nullptr)
+    {
+        parts.add("not a compressor");
+    }
+    if (const MeasurementRow* detector = findRow(summary, "detector"))
+    {
+        parts.add(detector->text.upToFirstOccurrenceOf(" (", false, false));
+    }
+    if (const MeasurementRow* bands = findRowStartingWith(summary, "bands (the two-tone test"))
+    {
+        parts.add(bands->text.upToFirstOccurrenceOf(" (", false, false));
+    }
+    return parts.joinIntoString("; ");
+}
+
+const MeasurementRow* findRowStartingWith(const MeasurementSummary& summary, const juce::String& start)
+{
+    for (const MeasurementRow& row : summary.rows)
+    {
+        if (row.quantity.startsWith(start))
+        {
+            return &row;
+        }
+    }
+    return nullptr;
+}
+
+double getPluginLatency(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, const std::vector<float>& setting,
+                        double sampleRate)
+{
+    return getReportedLatency(formatManager, description, setting, sampleRate);
 }
 
 const MeasurementRow* findRow(const MeasurementSummary& summary, const juce::String& quantity)

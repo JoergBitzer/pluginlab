@@ -212,7 +212,28 @@ juce::Image renderChart(const std::vector<ChartSeries>& series, const ChartOptio
         g.drawText(text, juce::roundToInt(px) + 4, plot.getY() + 2, 200, juce::roundToInt(kFontHeight), juce::Justification::centredLeft, false);
     }
     g.restoreState();
-    // the legend, top right
+    // the legend, top right (or bottom right)
+    const int rowHeight = juce::roundToInt(kFontHeight + 4);
+    int named = 0;
+    for (const ChartSeries& one : series)
+    {
+        if (one.name.isNotEmpty())
+        {
+            ++named;
+        }
+    }
+    // as wide as the longest name (at most half the plot)
+    float longestName = 0.0f;
+    for (const ChartSeries& one : series)
+    {
+        longestName = std::max(longestName, juce::GlyphArrangement::getStringWidth(g.getCurrentFont(), one.name));
+    }
+    const int nameWidth = std::min(plot.getWidth() / 2, juce::roundToInt(longestName) + 4);
+    int legendTop = plot.getY() + 4;
+    if (options.legendAtBottom)
+    {
+        legendTop = plot.getBottom() - 4 - named * rowHeight;
+    }
     int row = 0;
     for (const ChartSeries& one : series)
     {
@@ -220,11 +241,11 @@ juce::Image renderChart(const std::vector<ChartSeries>& series, const ChartOptio
         {
             continue;
         }
-        const int top = plot.getY() + 4 + row * juce::roundToInt(kFontHeight + 4);
+        const int top = legendTop + row * rowHeight;
         g.setColour(one.colour);
-        g.fillRect(plot.getRight() - 190, top + 5, 14, 4);
+        g.fillRect(plot.getRight() - nameWidth - 22, top + 5, 14, 4);
         g.setColour(kText);
-        g.drawText(one.name, plot.getRight() - 170, top, 168, juce::roundToInt(kFontHeight), juce::Justification::centredLeft, true);
+        g.drawText(one.name, plot.getRight() - nameWidth - 2, top, nameWidth, juce::roundToInt(kFontHeight), juce::Justification::centredLeft, true);
         ++row;
     }
     return image;

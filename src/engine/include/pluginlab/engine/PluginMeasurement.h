@@ -1,12 +1,14 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <vector>
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "pluginlab/engine/PluginDevice.h"
 #include "pluginlab/measure/Device.h"
+#include "pluginlab/measure/Dynamics.h"
 #include "pluginlab/measure/Reverb.h"
 
 namespace pluginlab::engine
@@ -29,10 +31,11 @@ struct MeasurementSummary
     int channels = 0;
     std::vector<MeasurementRow> rows;
     double seconds = 0.0;                        // wall-clock time of the measurement
+    std::shared_ptr<const measure::DynamicsMeasurement> dynamics; // the whole result of the unit "dynamics" (for its views); not in the JSON
 };
 
 // The units by key (the Expert page chooses them, W10.5); the system class always runs first
-const juce::StringArray& getMeasurementUnitKeys();       // gain, response, delay, phase, distortion, imd, noise, crosstalk, maximum, linearity, echoes, reverb
+const juce::StringArray& getMeasurementUnitKeys();       // gain, response, delay, phase, distortion, imd, noise, crosstalk, maximum, linearity, echoes, reverb, dynamics
 juce::String getMeasurementUnitTitle(const juce::String& key);
 
 struct MeasurementOptions
@@ -63,6 +66,8 @@ MeasurementSummary parseMeasurementJson(const juce::var& json);
 juce::String summarizeEchoes(const MeasurementSummary& summary);
 // The same for the reverb (W11.2e): "none", or T30, pre-delay, the late IACC
 juce::String summarizeReverb(const MeasurementSummary& summary);
+// The same for the dynamics (W11.3f): "none", or threshold, ratio, knee; the time model with attack and release; the detector; the bands
+juce::String summarizeDynamics(const MeasurementSummary& summary);
 
 // Two delays compared echo by echo (W11.1g, docs/design/W11-delay-plan.md 5; no matching): the echo response of each (its unit "echoes") and
 // a Markdown report: the quantities side by side, the echoes paired by their order, the loop filters at octave frequencies
@@ -78,6 +83,12 @@ measure::ReverbMeasurement measurePluginReverb(juce::AudioPluginFormatManager& f
 juce::String compareReverbResponses(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& descriptionA, const std::vector<float>& settingA,
                                     const juce::PluginDescription& descriptionB, const std::vector<float>& settingB, double sampleRate = 48000.0);
 
+// The latency a plugin reports at a setting (prepared, the setting delivered, one block of silence processed): a look-ahead may depend on the setting
+double getPluginLatency(juce::AudioPluginFormatManager& formatManager, const juce::PluginDescription& description, const std::vector<float>& setting,
+                        double sampleRate);
+
 // Finds a row by its quantity (nullptr if there is none)
 const MeasurementRow* findRow(const MeasurementSummary& summary, const juce::String& quantity);
+// The first row whose quantity starts with the text (nullptr if there is none)
+const MeasurementRow* findRowStartingWith(const MeasurementSummary& summary, const juce::String& start);
 }

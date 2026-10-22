@@ -10,6 +10,7 @@ host, the fingerprint and the measurements, and teaching objects ("this is what 
 | **PluginLab Reference Nonlinear** | drive -> curve -> output -> hum -> noise -> quantizer | harmonics of a sine (closed form or numerical), SNR 6.02 N + 1.76 dB, noise and hum levels |
 | **PluginLab Reference Utility** | gain/polarity -> delay -> channel matrix -> tremolo -> DC | all exact |
 | **PluginLab Reference Reverb** (W11.2, 0.85.0) | pre-delay -> feedback delay network (8 lines, Householder) -> mix | T60 exact at every frequency (without LFO), the pre-delay (`reference::FdnReverb`) |
+| **PluginLab Reference Compressor** (W11.3f, 0.93.0) | side-chain high-pass -> detector (peak / RMS, link) -> gain computer -> smoothing (3 variants, hold) -> look-ahead -> makeup | the static curve, the gain curve of every sample (`reference::Compressor`) |
 | **PluginLab Reference Delay** (W11.1, 0.74.0) | delay line -> loop (feedback, low and high cut) -> mix | every echo: time, gain, the loop filter (`reference::FeedbackDelay`) |
 
 All three: latency 0 (no rebuffering; the Reference EQ with the linear-phase algorithm: the FIR's latency), no parameter smoothing (a change acts at the next block: the reference is the exact algorithm, a
@@ -102,6 +103,20 @@ of a parameter keeps the echoes in the line (a jump: the author's "digital" swit
 | Mix | 0 ... 100 % | (1 - mix) dry + mix wet; the measurements want 100 % |
 
 A new setting rebuilds the network (it starts empty).
+
+### PluginLab Reference Compressor
+| Control | Range | Meaning |
+|---|---|---|
+| SC high-pass | 0 ... 1000 Hz | a second-order Butterworth high-pass before the detector; 0 = none |
+| Detector, RMS window | Peak / RMS, 1 ... 100 ms | 20 lg \|x\| per sample, or the moving mean square |
+| Stereo link | 0 ... 100 % | x = (1 - link) x_c + link max(x) |
+| Threshold, Ratio, Knee | -60 ... 0 dBFS, 1 ... 20, 0 ... 24 dB | the gain computer of Giannoulis et al. (2012), quadratic soft knee |
+| Smoothing | Gain (dB) / Level (dB) / Two stages | where attack and release act (the model variants of W11.3c; two stages: the detector power with 2 / 20 ms first) |
+| Attack, Release, Hold | 0.1 ... 200 ms, 5 ... 2000 ms, 0 ... 200 ms | a = exp(-1 / (tau fs)), smooth branching; the hold delays the release |
+| Look-ahead | 0 ... 10 ms | the audio delayed, the detector not; reported as the latency |
+| Makeup | -12 ... 24 dB | a fixed gain after the compression |
+
+A new setting rebuilds the compressor (no reduction at its start).
 
 ## Build, test, install
 They are built with pluginlab (`plugins/reference/CMakeLists.txt`) and copied into `<build>/reference_plugins` (used by

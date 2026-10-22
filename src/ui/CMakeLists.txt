@@ -2,6 +2,7 @@
 # validation, parameter table, formats with editor support), the image variants of the GUI review (W5d) and the spectrogram picture of the reports.
 add_library(pluginlab_hosting_ui STATIC
     ChartImage.cpp
+    DynamicsViews.cpp
     GuiFormats.cpp
     GuiReview.cpp
     Logo.cpp

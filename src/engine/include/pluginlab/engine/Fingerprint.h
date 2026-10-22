@@ -167,6 +167,8 @@ struct PluginFingerprint
     juce::String echoesDetail;
     juce::String reverb;                      // the reverb in one line (summarizeReverb); empty: not measured
     juce::String reverbDetail;
+    juce::String dynamics;                    // the dynamics in one line (summarizeDynamics); empty: not measured
+    juce::String dynamicsDetail;
     bool timeInvariant = true;                // the same noise twice through one instance (with silence between) gives the same output
     Difference timeInvarianceDifference;
     double timeInvarianceGapSeconds = 0.0;    // the silence between the two runs: until the output had decayed (at least the setting's gap)

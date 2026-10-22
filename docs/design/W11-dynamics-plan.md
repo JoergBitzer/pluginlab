@@ -223,6 +223,53 @@ switchable to the paper's two-stage model (detector and gain smoothing in the li
   lets the inter-sample peak through), overshoot 6.65 dB without look-ahead, 0.00 dB with 5 ms.
 - Not yet: a true-peak limiter as a reference, the linear attack.
 
+### W11.3f reports, views, music, loudness (0.93.0, done)
+- **PluginLab Reference Compressor** (plugin): `reference::Compressor` with all its controls (threshold, ratio, knee, makeup, attack, release,
+  hold, detector and RMS window, the three smoothing variants, look-ahead, stereo link, side-chain high-pass). The look-ahead is the reported
+  latency (set again when the parameter changes, on the thread that sets it); bypassed, the input is delayed by it. pluginval 2.0.0, strictness
+  10: passed (it found the two faults first: a log range with whole-hertz snapping for a time in ms, and a bypass without the latency).
+- `measure::measureDynamicsResponse`: everything of W11.3a ... e on one device with the levels chosen from the fitted threshold (the quiet ones
+  10 dB below the knee). The unit **"dynamics"** of the reports (`engine::measureDevice`): the static curve with the fit, hysteresis, the time
+  model, the standards' times, the look-ahead, the detector, the bands, the link, the THD and the limiter test; "none" when the steady gain varies
+  by less than 0.5 dB from -60 to 0 dBFS. `summarizeDynamics` for the summary item `dynamics` and the Developer page's column "Dynamics".
+- **The look-ahead** is now measured from the step: the gain moves before the level reaches the output (seen through the latency); the model is
+  fitted with the gain shifted by it. Without that, a plugin with 2 ms look-ahead fitted an attack of 0.1 ms with 2 dB error; with it 5.00 ms,
+  0.00 dB. (The cross-correlation of noise gives the audio's delay, look-ahead and latency together.)
+- **The reported latency at the setting**: `getReportedLatency` read the latency of a fresh instance at its defaults; now the setting is
+  delivered and a block processed first (a look-ahead parameter changes it). This also concerns the echo and reverb units.
+- `measure::measureLoudness` (ITU-R BS.1770-5): the K-weighting from its analog prototypes (at 48 kHz the standard's coefficients, impulse
+  response identical to 1e-12), 400 ms blocks with 75 % overlap, the gates of -70 LUFS and -10 LU; the loudness range of EBU Tech 3342 (3 s every
+  100 ms, -70 LUFS and -20 LU, 10th to 95th percentile); true peak, sample peak, crest factor. Tests with the cases of EBU Tech 3341 (1 kHz at
+  -23 dBFS stereo: -22.99 / -22.99 / -23.01 LUFS at 44.1 / 48 / 96 kHz; the gates -72/-36/-23/-36/-72 dBFS: -23.01 LUFS) and 3342 (10 and 5 LU
+  exact). The cases need their full lengths: shortened, more blocks lie across the steps and pass the gates (-23.19 LUFS with 1/10 of the length).
+- `measure::getGainCurve`: the gain per 10 ms window as the least-squares gain sum x y / sum x^2 (no glitches at zero crossings), windows more
+  than 50 dB below the loudest left out.
+- Views (`ui::writeDynamicsViews`, next to the report): the static curve (rising and falling staircase, the model, 1 : 1, the threshold), the gain
+  over the input level, the attack and the release phase with the fitted model over the measurement (the standards' times, look-ahead and hold
+  marked), the two-tone test. `ui::renderMusicGainCurves` and `PluginLabHost --gain-curves <audio> <report> <plugin>...`: every plugin's gain
+  curve on one time axis over the input's level, with loudness, loudness range, peaks, crest factor and the median gain of input and outputs.
+  `tools/fetch_music_samples.sh` downloads the MusicRadar real-world drum pack (not in the repository).
+- Real compressors at their defaults (48 kHz):
+
+| Plugin | static curve | time model | look-ahead | detector | bands | link |
+|---|---|---|---|---|---|---|
+| Reference Compressor | -20.0 dBFS, 4.00 : 1, knee 6.0 dB | gain in dB: 5.00 / 50.0 ms | 0 | peak | single | 100 % |
+| CTAGDRC 1.1.0 | -10.0 dBFS, 2.00 : 1, knee 6.0 dB | gain in dB: 1.99 / 139.9 ms (0.00 dB) | 0 | peak | single | 100 % |
+| SocaLabs Compressor 1.1.11 | -30.0 dBFS, 5.00 : 1, knee 5.0 dB | two stages, the gain stage at its floor: detector 0.64 / 1.3 ms (0.03 dB) | 0 | peak | single | 80 % |
+| ZL Compressor 0.6.1 | -32.0 dBFS, 3.00 : 1, knee 16.0 dB | gain in dB: 15.9 / 79.6 ms (0.00 dB) | 0 | peak | single | 126 % |
+| ZeroComp 1.1.7 | none: the steady gain varies by 0.01 dB (no compression at its defaults) | | | | | |
+
+  SocaLabs smooths the linear level (no variant of ours does exactly that; the two-stage model with its gain smoothing at the floor of 0.1 ms
+  comes nearest); its fast release makes 50 Hz distort (THD -15.8 dB at -6 dBFS). CTAGDRC leaves 11 of the 61 rising steps unsettled after
+  0.5 s (0.06 dB of hysteresis). ZL Compressor turns the quiet channel down by 126 % of the loud one's reduction, which no link law of
+  (1 - link) x + link max(x) gives (a mid/side or sum detector would; not examined yet).
+- Gain curves on music (`W11Plugins/dynamics_reports/gain_curves_drums.md`, MusicRadar real-world drums, loop 01, 3.7 s, 44.1 kHz): the four
+  compressors at their defaults on one axis; integrated loudness -13.8 LUFS in, out -19.4 (Reference), -15.5 (CTAGDRC), -27.2 (SocaLabs),
+  -22.3 LUFS (ZL); the crest factor rises from 16.4 dB to 20 ... 22.5 dB for the three with attacks above 1 ms or a fast release (the transients
+  pass, the body is turned down), CTAGDRC keeps it (16.4 dB).
+- Not yet: the family of curves, threshold over frequency, the hysteresis loop (gates), the gain-reduction heat map and the level histograms
+  of 6; a time model that smooths the linear level.
+
 ## 9. Questions for the author
 1. **Test set**: which free compressors, limiters and gates (a clean digital compressor, an 1176- or LA-2A-style model, a limiter, a gate)?
 Answer: I will collect a list of free dynamics processors. We should have at least a feed-forward compressor (the reference), a feedback compressor (1176 style), a tube compressor (LA-2A style), a limiter and a gate in our own reference plugins. Perhaps we will find source code for other designs as well.

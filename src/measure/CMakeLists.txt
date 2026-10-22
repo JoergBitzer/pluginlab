@@ -6,6 +6,8 @@ add_library(pluginlab_measure STATIC
     Delay.cpp
     DelayTrajectory.cpp
     Dynamics.cpp
+    DynamicsMeasurement.cpp
+    Loudness.cpp
     Device.cpp
     Distortion.cpp
     EchoResponse.cpp
