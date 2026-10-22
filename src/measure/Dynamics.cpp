@@ -6,6 +6,8 @@
 #include <functional>
 #include <limits>
 
+#include "pluginlab/measure/Distortion.h"
+
 namespace pluginlab::measure
 {
 namespace
@@ -1098,5 +1100,118 @@ double measureStereoLink(const Device& device, double sampleRate, double highDbf
         return 0.0;
     }
     return (quietAlone - quietTogether) / loudReduction;
+}
+
+DynamicsDistortion measureDynamicsDistortion(const Device& device, int channels, double sampleRate, double levelDbfs, const std::vector<double>& frequencies)
+{
+    DynamicsDistortion result;
+    DistortionSettings settings;
+    settings.sampleRate = sampleRate;
+    settings.levelDbfs = levelDbfs;
+    settings.channels = channels;
+    for (const double frequency : frequencies)
+    {
+        settings.frequencyHz = frequency;
+        const DistortionResult distortion = measureDistortion(device, settings);
+        result.frequencies.push_back(distortion.frequencyHz);
+        result.thdDb.push_back(distortion.channels.front().thdDb);
+    }
+    return result;
+}
+
+double getSamplePeakDbfs(const std::vector<double>& signal)
+{
+    double peak = 0.0;
+    for (const double value : signal)
+    {
+        peak = std::max(peak, std::abs(value));
+    }
+    return 20.0 * std::log10(std::max(peak, 1.0e-15));
+}
+
+double getTruePeakDbfs(const std::vector<double>& signal)
+{
+    constexpr int kFactor = 4;
+    constexpr int kZeroCrossings = 48;
+    // the interpolator's phases: h_p(k) = sinc(k - p/4) w(k - p/4), k = -16 ... 16
+    std::vector<std::vector<double>> phases(kFactor);
+    for (int phase = 1; phase < kFactor; ++phase)
+    {
+        for (int k = -kZeroCrossings; k <= kZeroCrossings; ++k)
+        {
+            const double x = k - static_cast<double>(phase) / kFactor;
+            double sinc = 1.0;
+            if (std::abs(x) > 1.0e-12)
+            {
+                sinc = std::sin(kPi * x) / (kPi * x);
+            }
+            const double position = (x + kZeroCrossings + 1) / (2.0 * kZeroCrossings + 2);
+            const double window = 0.42 - 0.5 * std::cos(2.0 * kPi * position) + 0.08 * std::cos(4.0 * kPi * position);
+            phases[static_cast<size_t>(phase)].push_back(sinc * window);
+        }
+        // unity gain at DC for every phase
+        double sum = 0.0;
+        for (const double tap : phases[static_cast<size_t>(phase)])
+        {
+            sum += tap;
+        }
+        for (double& tap : phases[static_cast<size_t>(phase)])
+        {
+            tap /= sum;
+        }
+    }
+    double peak = 0.0;
+    const long long length = static_cast<long long>(signal.size());
+    for (long long sample = 0; sample < length; ++sample)
+    {
+        peak = std::max(peak, std::abs(signal[static_cast<size_t>(sample)]));
+        // the values between sample and sample + 1, where the interpolator has all its taps inside the signal (outside it the zeros would be
+        // an abrupt edge of their own, ringing by a per cent)
+        if (sample < kZeroCrossings || sample + kZeroCrossings >= length)
+        {
+            continue;
+        }
+        for (int phase = 1; phase < kFactor; ++phase)
+        {
+            double value = 0.0;
+            const std::vector<double>& taps = phases[static_cast<size_t>(phase)];
+            for (int k = -kZeroCrossings; k <= kZeroCrossings; ++k)
+            {
+                value += signal[static_cast<size_t>(sample + k)] * taps[static_cast<size_t>(k + kZeroCrossings)]; // x(n + k) sinc(k - p/4) w
+            }
+            peak = std::max(peak, std::abs(value));
+        }
+    }
+    return 20.0 * std::log10(std::max(peak, 1.0e-15));
+}
+
+LimiterTest measureLimiter(const Device& device, int channels, double sampleRate, double driveDbfs)
+{
+    LimiterTest result;
+    // the sine at fs/4 with 45 degrees: samples +-a/sqrt(2)
+    const int length = static_cast<int>(sampleRate);
+    const double amplitude = std::pow(10.0, driveDbfs / 20.0);
+    std::vector<float> sine(static_cast<size_t>(length));
+    for (int sample = 0; sample < length; ++sample)
+    {
+        sine[static_cast<size_t>(sample)] = static_cast<float>(amplitude * std::sin(kPi / 2.0 * sample + kPi / 4.0));
+    }
+    const std::vector<double> output = renderThrough(device, channels, sine, sampleRate);
+    const std::vector<double> steady(output.begin() + static_cast<std::ptrdiff_t>(output.size() / 2), output.end());
+    result.samplePeakDbfs = getSamplePeakDbfs(steady);
+    result.truePeakDbfs = getTruePeakDbfs(steady);
+
+    // the step: the peak in the first 50 ms after it against the steady peak at its end
+    StaircaseSettings staircase;
+    staircase.sampleRate = sampleRate;
+    staircase.stepSeconds = 0.5;
+    staircase.levelsDbfs = {-40.0, driveDbfs};
+    const std::vector<double> stepOutput = renderThrough(device, channels, makeStaircase(staircase), sampleRate);
+    const size_t step = static_cast<size_t>(0.5 * sampleRate);
+    const size_t early = static_cast<size_t>(0.05 * sampleRate);
+    const std::vector<double> attack(stepOutput.begin() + static_cast<std::ptrdiff_t>(step), stepOutput.begin() + static_cast<std::ptrdiff_t>(step + early));
+    const std::vector<double> settled(stepOutput.end() - static_cast<std::ptrdiff_t>(early), stepOutput.end());
+    result.overshootDb = getSamplePeakDbfs(attack) - getSamplePeakDbfs(settled);
+    return result;
 }
 }

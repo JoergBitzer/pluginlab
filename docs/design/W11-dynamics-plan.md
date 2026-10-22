@@ -212,6 +212,17 @@ switchable to the paper's two-stage model (detector and gain smoothing in the li
 - `measureStereoLink`: left at 0 dBFS, right at -30 dBFS: the right channel's reduction re the left's; 0, 0.5 and 1 within 0.02 of the link law.
 - Not yet: the external side chain (a key input in the rig), program-dependent release.
 
+### W11.3e distortion of the dynamics, limiters (0.92.0, done)
+- `measure::measureDynamicsDistortion`: THD (the unit of W7.5) of a sine above the threshold per frequency. The reference (attack 1 ms):
+  at 50 Hz -49.8 / -31.7 / -17.8 dB for a release of 500 / 50 / 5 ms (at 1 kHz -75.8 / -57.4 / -41.8 dB): the gain follows the waveform.
+- `getTruePeakDbfs` (ITU-R BS.1770 annex 2: 4x oversampling; here a windowed sinc with 48 zero crossings per side, Blackman, every phase at
+  unity DC gain, interpolated only where all taps lie inside the signal: zeros outside would be an edge of their own, ringing by 1 %; with 16
+  zero crossings the ripple at fs/4 was 0.1 dB), `getSamplePeakDbfs`. A sine at fs/4 with 45 degrees: samples -3.01 dBFS, true peak 0.00 dBFS.
+- `measureLimiter`: the fs/4 sine at +6 dBFS (sample peak, true peak), a step from -40 to +6 dBFS (the overshoot in the first 50 ms). The
+  reference as a limiter (ratio 100, threshold -1 dBFS, attack 0.5 ms): sample peak -0.96 dBFS, true peak +2.05 dBFS (a sample-peak limiter
+  lets the inter-sample peak through), overshoot 6.65 dB without look-ahead, 0.00 dB with 5 ms.
+- Not yet: a true-peak limiter as a reference, the linear attack.
+
 ## 9. Questions for the author
 1. **Test set**: which free compressors, limiters and gates (a clean digital compressor, an 1176- or LA-2A-style model, a limiter, a gate)?
 Answer: I will collect a list of free dynamics processors. We should have at least a feed-forward compressor (the reference), a feedback compressor (1176 style), a tube compressor (LA-2A style), a limiter and a gate in our own reference plugins. Perhaps we will find source code for other designs as well.

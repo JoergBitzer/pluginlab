@@ -116,9 +116,67 @@ public:
         }
         testTimeBehaviour();
         testDetectorAndBands();
+        testDistortionAndLimiter();
     }
 
 private:
+    // W11.3e: the distortion grows at low frequencies with a faster release; the true peak; a limiter's ceiling and overshoot
+    void testDistortionAndLimiter()
+    {
+        beginTest("the distortion of the dynamics: at 50 Hz the THD grows when the release gets faster");
+        std::vector<double> thd50;
+        for (const double release : {0.5, 0.05, 0.005})
+        {
+            ref::CompressorSettings settings = makeSettings();
+            settings.kneeDb = 0.0;
+            settings.attackSeconds = 0.001;
+            settings.releaseSeconds = release;
+            const measure::DynamicsDistortion distortion = measure::measureDynamicsDistortion(makeDevice(settings), 1, kSampleRate, -1.0, {50.0, 100.0, 1000.0});
+            logMessage("release " + juce::String(release * 1000.0, 0) + " ms: THD at 50 Hz " + juce::String(distortion.thdDb[0], 1) + " dB, 100 Hz "
+                       + juce::String(distortion.thdDb[1], 1) + " dB, 1 kHz " + juce::String(distortion.thdDb[2], 1) + " dB");
+            thd50.push_back(distortion.thdDb[0]);
+        }
+        expectGreaterThan(thd50[1], thd50[0] + 6.0, "50 ms against 500 ms");
+        expectGreaterThan(thd50[2], thd50[1] + 6.0, "5 ms against 50 ms");
+
+        beginTest("the true peak: a sine at fs/4 with 45 degrees has its samples 3.01 dB below its peak");
+        {
+            std::vector<double> sine;
+            for (int sample = 0; sample < 4800; ++sample)
+            {
+                sine.push_back(std::sin(3.14159265358979323846 / 2.0 * sample + 3.14159265358979323846 / 4.0));
+            }
+            expectWithinAbsoluteError(measure::getSamplePeakDbfs(sine), -3.0103, 0.001);
+            expectWithinAbsoluteError(measure::getTruePeakDbfs(sine), 0.0, 0.05, "the true peak");
+        }
+
+        beginTest("a limiter (ratio 100, threshold -1 dBFS): the sample peak at the ceiling, the true peak 3 dB above; look-ahead takes the overshoot");
+        for (const double lookahead : {0.0, 0.005})
+        {
+            ref::CompressorSettings settings = makeSettings();
+            settings.thresholdDb = -1.0;
+            settings.ratio = 100.0;
+            settings.kneeDb = 0.0;
+            settings.makeupDb = 0.0;
+            settings.attackSeconds = 0.0005;
+            settings.releaseSeconds = 0.1;
+            settings.lookaheadSeconds = lookahead;
+            const measure::LimiterTest limiter = measure::measureLimiter(makeDevice(settings), 1, kSampleRate);
+            logMessage("look-ahead " + juce::String(lookahead * 1000.0, 0) + " ms: sample peak " + juce::String(limiter.samplePeakDbfs, 2) + " dBFS, true peak "
+                       + juce::String(limiter.truePeakDbfs, 2) + " dBFS, overshoot " + juce::String(limiter.overshootDb, 2) + " dB");
+            expectWithinAbsoluteError(limiter.samplePeakDbfs, -1.0 + 7.0 / 100.0, 0.1, "the ceiling (+6 dBFS in: 7 dB over at ratio 100)");
+            expectWithinAbsoluteError(limiter.truePeakDbfs - limiter.samplePeakDbfs, 3.01, 0.1, "the inter-sample peak a sample-peak limiter lets through");
+            if (lookahead > 0.0)
+            {
+                expectLessThan(limiter.overshootDb, 0.5, "with look-ahead (10 attack times): hardly any overshoot");
+            }
+            else
+            {
+                expectGreaterThan(limiter.overshootDb, 3.0, "without: the step overshoots");
+            }
+        }
+    }
+
     // W11.3d: peak and RMS told apart, the side chain's high-pass, single band / multiband / dynamic EQ, the stereo link
     void testDetectorAndBands()
     {

@@ -206,4 +206,32 @@ DynamicTransfer measureDynamicTransfer(const Device& device, int channels, doubl
 // The stereo link (4.6): left above the threshold, right below it; the right channel's gain reduction relative to the left's (0: independent, 1:
 // fully linked; between: what the device's link law gives at these levels)
 double measureStereoLink(const Device& device, double sampleRate, double highDbfs = 0.0, double lowDbfs = -30.0);
+
+// Distortion caused by the dynamics (W11.3e, 4.5): THD (IEC 60268-3, the unit of W7.5) of a sine above the threshold at several frequencies: a
+// fast attack and release follow the waveform and modulate it, so the THD rises towards low frequencies
+struct DynamicsDistortion
+{
+    std::vector<double> frequencies;
+    std::vector<double> thdDb;
+};
+
+DynamicsDistortion measureDynamicsDistortion(const Device& device, int channels, double sampleRate, double levelDbfs, const std::vector<double>& frequencies);
+
+// The true peak (ITU-R BS.1770, annex 2): the largest magnitude after 4x oversampling. Here by a windowed-sinc interpolator (48 zero crossings
+// per side, Blackman window, every phase normalised to unity gain at DC; with 16 the ripple reached 0.1 dB at fs/4); BS.1770 gives its own
+// 48-tap filter, which allows more.
+double getTruePeakDbfs(const std::vector<double>& signal);
+double getSamplePeakDbfs(const std::vector<double>& signal);
+
+// Limiters (4.7): a sine at fs/4 with 45 degrees of phase (its samples 3.01 dB below its true peak) at driveDbfs: the output's sample peak (the
+// ceiling a sample-peak limiter keeps) and its true peak; a step from -40 dBFS to driveDbfs (a square): the overshoot of the output's peak in the
+// first 50 ms over its steady peak
+struct LimiterTest
+{
+    double samplePeakDbfs = 0.0;
+    double truePeakDbfs = 0.0;
+    double overshootDb = 0.0;
+};
+
+LimiterTest measureLimiter(const Device& device, int channels, double sampleRate, double driveDbfs = 6.0);
 }
