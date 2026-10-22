@@ -310,6 +310,16 @@ bool writeFingerprintReport(const juce::File& pluginFile, const juce::File& repo
                 }
             }
             fingerprint.echoesDetail = rows.joinIntoString("; ");
+            fingerprint.reverb = pluginlab::engine::summarizeReverb(summary);
+            juce::StringArray reverbRows;
+            for (const pluginlab::engine::MeasurementRow& row : summary.rows)
+            {
+                if (row.unit == "reverb")
+                {
+                    reverbRows.add(row.quantity + ": " + row.text);
+                }
+            }
+            fingerprint.reverbDetail = reverbRows.joinIntoString("; ");
         }
         // the single results for programs (the Developer page): <report>.json, or <report>.<n>.json for further plugins of the file
         juce::String jsonPath = reportFile.getFullPathName() + ".json";

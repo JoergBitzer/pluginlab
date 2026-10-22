@@ -31,7 +31,7 @@ struct MeasurementSummary
 };
 
 // The units by key (the Expert page chooses them, W10.5); the system class always runs first
-const juce::StringArray& getMeasurementUnitKeys();       // gain, response, delay, phase, distortion, imd, noise, crosstalk, maximum, linearity, echoes
+const juce::StringArray& getMeasurementUnitKeys();       // gain, response, delay, phase, distortion, imd, noise, crosstalk, maximum, linearity, echoes, reverb
 juce::String getMeasurementUnitTitle(const juce::String& key);
 
 struct MeasurementOptions
@@ -60,6 +60,8 @@ MeasurementSummary parseMeasurementJson(const juce::var& json);
 // The echo response in one line for the Developer page (W11.1f): "none", or the delay time, the stereo kind, saturation, modulation; empty if
 // the unit did not run
 juce::String summarizeEchoes(const MeasurementSummary& summary);
+// The same for the reverb (W11.2e): "none", or T30, pre-delay, the late IACC
+juce::String summarizeReverb(const MeasurementSummary& summary);
 
 // Two delays compared echo by echo (W11.1g, docs/design/W11-delay-plan.md 5; no matching): the echo response of each (its unit "echoes") and
 // a Markdown report: the quantities side by side, the echoes paired by their order, the loop filters at octave frequencies

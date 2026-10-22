@@ -238,6 +238,34 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
   SDM puts a centred direct sound at C, a left reflection at L, a negatively correlated one at -pi/2.
 - Part 2: LEDT (both definitions), RLE (with and without the direct sound; question 6: the convention for tau_0), the paper's six examples.
 
+### W11.2g part 2 (LEDT) and W11.2e the report section (0.85.0)
+- `measure::getLateralDecay` (LEDT.m: the direct sound removed by a window, not by zeroing the first sample): both definitions; two independent
+  tails of 2 s with 20 ms pre-delay give 2.12 s by both (counted from the direct sound: T60 + 6 x pre-delay, and 2 s x 0.35 / 0.33).
+- The measurement unit "reverb" (`measure::measureReverbResponse` on the device: an impulse, 8 s): a reverb is there if the echo density
+  reaches 0.95 within 1 s of the onset (an FDN without diffusers mixes late: the reference 0.34 s; a delay's echo train never) and T30 > 0.1 s.
+  Rows: T30 (EDT, T20), T30 per octave, C80, pre-delay, DRR, mixing time, late kurtosis, repetition, coloration, IACC early and late,
+  coherence of the tail, LEDT. The summary item "reverb" and the Developer page's column.
+- **The decay of a plugin with its dry signal**: at their defaults the real reverbs mix the dry signal 12 ... 20 dB above the tail; the EDC from
+  the direct sound then falls by that much in one sample (EDT 0.000 s) and the ranges of ISO 3382-1 (made for rooms) see only a few dB of the
+  tail (Dragonfly Plate: T20 1.39 s, T30 0.56 s). The decay times are now taken from the reverberant part (the direct path cut out before the
+  band filters, the curves from the onset), the clarity, D50 and Ts keep the direct path. Afterwards EDT, T20 and T30 agree.
+- **PluginLab Reference Reverb** (plugins/reference/ReferenceReverb): the FDN with T60, pre-delay, LFO rate and depth, mix. Through the host:
+  T30 1.50 s in every octave, the pre-delay 10 ms + 21.5 ms.
+- Real reverbs at their defaults (`~/AudioDev/W11Plugins/reverb_reports/`):
+
+| plugin | T30 | per octave 125 Hz ... 8 kHz | pre-delay | DRR | mixing | late kurtosis | IACC late |
+|---|---|---|---|---|---|---|---|
+| Dragonfly Hall | 1.31 s | 1.65 ... 0.74 s (darker with frequency) | 15.6 ms | 12.4 dB | 10 ms | 3.0 | -0.05 |
+| Dragonfly Plate | 0.40 s | 0.40 ... 0.39 s (flat) | 56.0 ms | 18.1 dB | 24 ms | 0.8 | 0.20 |
+| TAL-Reverb-4 | 9.7 s | 10.1 ... 9.5 s | 42.5 ms | 15.7 dB | 341 ms | 0.9 | 0.02 |
+| Vital Reverb | 1.21 s | 1.34 ... 1.07 s | 12.9 ms | 11.8 dB | 90 ms | 0.1 | 0.08 |
+| Room Reverb | 0.99 s | 1.06 ... 0.98 s | 5.8 ms | 20.6 dB | 46 ms | 6.1 | 0.33 |
+| Reference Reverb | 1.50 s | 1.50 ... 1.50 s | 31.5 ms | 14.4 dB | 342 ms | 0.2 | 0.03 |
+
+  Room Reverb's late kurtosis (6.1) and late IACC (0.33) stand out: a sparser, less decorrelated tail; Dragonfly Hall's kurtosis of 3 too.
+- Not yet: the views of section 6 (EDC per band, decay over frequency, EDR, echogram, echo density, SDM, ...) in the reports; the 100 % wet
+  guidance of 6b in the products.
+
 ## 9. Questions for the author
 1. **Test set**: which free reverbs (an FDN algorithm, a plate, a spring, a convolution reverb with a known IR)?
 Answer: I will collect a list of free reverbs. We should have at least A Moorer based reverb (Freeverb is a good candidate) in our own referenc plugin). Perhaps we will find source code for Dattoros tank and the coupled allpass from William Gardner. For convolution we can download some IRs from open source libraries. The spring reverb is a special case, since it is strongly dispersive and has a chirp in the impulse response. We will have to find a free example of that as well.

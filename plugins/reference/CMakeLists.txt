@@ -90,3 +90,4 @@ pluginlab_add_reference_plugin(ReferenceEq "PluginLab Reference EQ" Rfeq "Fx;EQ"
 pluginlab_add_reference_plugin(ReferenceNonlinear "PluginLab Reference Nonlinear" Rfnl "Fx;Distortion" 900 400)
 pluginlab_add_reference_plugin(ReferenceUtility "PluginLab Reference Utility" Rfut "Fx;Tools" 900 400)
 pluginlab_add_reference_plugin(ReferenceDelay "PluginLab Reference Delay" Rfdl "Fx;Delay" 900 460)
+pluginlab_add_reference_plugin(ReferenceReverb "PluginLab Reference Reverb" Rfrv "Fx;Reverb" 820 320)

@@ -16,6 +16,7 @@ add_library(pluginlab_measure STATIC
     Gain.cpp
     Phase.cpp
     Reverb.cpp
+    ReverbMeasurement.cpp
     ReverbStereo.cpp
     ReverbTexture.cpp
     ReverbVariance.cpp

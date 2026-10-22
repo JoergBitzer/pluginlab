@@ -6,7 +6,13 @@
 
 #include "pluginlab/measure/Reverb.h"
 #include "pluginlab/reference/Biquad.h"
+#include "TestPluginPaths.h"
+#include "pluginlab/engine/PluginDevice.h"
+#include "pluginlab/engine/PluginMeasurement.h"
+#include "pluginlab/hosting/FormatManager.h"
+#include "pluginlab/hosting/PluginScanner.h"
 #include "pluginlab/measure/DelayTrajectory.h"
+#include "pluginlab/measure/Device.h"
 #include "pluginlab/reference/Designs.h"
 #include "pluginlab/reference/FdnReverb.h"
 #include "pluginlab/reference/SchroederReverb.h"
@@ -247,6 +253,8 @@ public:
         testTexture();
         testVariance();
         testStereo();
+        testLateralDecay();
+        testReportUnit();
 
     }
 
@@ -499,6 +507,75 @@ public:
             expectWithinAbsoluteError(loudestAngle(0.1), -kPi / 4.0, 1.0e-9, "L");
             expectWithinAbsoluteError(loudestAngle(0.2), -kPi / 2.0, 1.0e-9, "L = -R: atan2(-1, 1) - pi/4");
         }
+    }
+
+    // LEDT: two independent tails of T60 2 s (the IAD energy decays as the sum: both definitions give T60); the same tail in both channels: none
+    void testLateralDecay()
+    {
+        beginTest("LEDT: independent tails of 2 s (20 ms pre-delay) by both definitions; identical channels give none");
+        ref::SyntheticReverbSettings settings = makeSettings();
+        settings.directGain = 1.0;
+        const ref::SyntheticReverb leftReverb(settings);
+        settings.seed = 2;
+        const ref::SyntheticReverb rightReverb(settings);
+        const measure::LateralDecay lateral = measure::getLateralDecay(leftReverb.getImpulseResponse(), rightReverb.getImpulseResponse(), 0, kSampleRate);
+        logMessage("LEDT: -10 dB point " + juce::String(lateral.tenDbSeconds, 3) + " s, 350 ms " + juce::String(lateral.at350msSeconds, 3) + " s");
+        // counted from the direct sound: the tail starts after the pre-delay (20 ms), the -10 dB point comes that much later (times 6), the
+        // drop at 350 ms is that of 330 ms of decay
+        const double expectedTenDb = 2.0 + 6.0 * settings.preDelaySeconds;
+        const double expected350 = 2.0 * 0.35 / (0.35 - settings.preDelaySeconds);
+        expectWithinAbsoluteError(lateral.tenDbSeconds, expectedTenDb, expectedTenDb * 0.03, "the -10 dB definition");
+        expectWithinAbsoluteError(lateral.at350msSeconds, expected350, expected350 * 0.03, "Griesinger's 350 ms definition");
+        const measure::LateralDecay none = measure::getLateralDecay(leftReverb.getImpulseResponse(), leftReverb.getImpulseResponse(), 0, kSampleRate);
+        expectEquals(none.tenDbSeconds, 0.0, "no lateral energy");
+    }
+
+    // W11.2e: the unit "reverb" on the FDN reference as a device, and on an EQ (none)
+    void testReportUnit()
+    {
+        beginTest("the unit 'reverb' of the reports: the FDN reference (T30 1.5 s, stereo), and none for a filter");
+        pluginlab::engine::MeasurementOptions options;
+        options.units = {"reverb"};
+        const measure::Device fdn = measure::makeProcessorDevice([](double rate)
+        {
+            ref::FdnReverbSettings settings;
+            settings.sampleRate = rate;
+            return std::make_unique<ref::FdnReverb>(settings);
+        });
+        const pluginlab::engine::MeasurementSummary summary = pluginlab::engine::measureDevice(fdn, 2, "FDN", options);
+        for (const pluginlab::engine::MeasurementRow& row : summary.rows)
+        {
+            logMessage(row.quantity + ": " + row.text);
+        }
+        const pluginlab::engine::MeasurementRow* t30 = pluginlab::engine::findRow(summary, "T30 broadband");
+        expect(t30 != nullptr && std::abs(t30->value - 1.5) < 1.5 * kDecayTolerance, "T30 1.5 s");
+        expect(pluginlab::engine::findRow(summary, "IACC early (0 ... 80 ms, with the direct sound) and late") != nullptr, "the stereo rows");
+        expect(pluginlab::engine::summarizeReverb(summary).startsWith("T30 1.50 s"), pluginlab::engine::summarizeReverb(summary));
+
+        const measure::Device filter = measure::makeProcessorDevice([](double rate)
+        {
+            return std::make_unique<ref::BiquadCascade>(ref::designButterworthBandPass(3, rate, 500.0, 2000.0), rate);
+        });
+        const pluginlab::engine::MeasurementSummary none = pluginlab::engine::measureDevice(filter, 2, "band-pass", options);
+        expect(pluginlab::engine::summarizeReverb(none) == "none", "a filter has no reverb");
+
+        beginTest("the Reference Reverb plugin through the host at 100 % wet: T30 1.5 s, the pre-delay 10 ms + the shortest line");
+        juce::AudioPluginFormatManager formatManager;
+        pluginlab::hosting::addHeadlessFormats(formatManager);
+        const pluginlab::hosting::PluginScanResult scan = pluginlab::hosting::PluginScanner::scanFileInProcess(formatManager, testpaths::getReferencePlugin("Reverb"));
+        expect(! scan.descriptions.isEmpty(), "the Reference Reverb plugin");
+        if (scan.descriptions.isEmpty())
+        {
+            return;
+        }
+        constexpr size_t kMix = 4;
+        std::vector<float> setting = pluginlab::engine::getDefaultSetting(formatManager, scan.descriptions[0], kSampleRate);
+        setting[kMix] = 1.0f;
+        const pluginlab::engine::MeasurementSummary plugin = pluginlab::engine::measurePlugin(formatManager, scan.descriptions[0], setting, options);
+        const pluginlab::engine::MeasurementRow* pluginT30 = pluginlab::engine::findRow(plugin, "T30 broadband");
+        expect(pluginT30 != nullptr && std::abs(pluginT30->value - 1.5) < 1.5 * kDecayTolerance, "T30 1.5 s");
+        const pluginlab::engine::MeasurementRow* preDelay = pluginlab::engine::findRow(plugin, "pre-delay (to the reverb's onset)");
+        expect(preDelay != nullptr && std::abs(preDelay->value - (10.0 + 1031.0 / 48.0)) < 0.1, "the pre-delay");
     }
 
     static std::vector<double> render(ref::Processor& processor, const std::vector<float>& input)

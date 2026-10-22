@@ -292,7 +292,10 @@ double getClarity(const std::vector<double>& response, int start, int end, int s
     return toDb(early / std::max(late, kTinyEnergy));
 }
 
-std::vector<BandDecay> analyseBands(const std::vector<double>& response, int fraction, int start, const ReverbSettings& settings)
+// per band: the decay from the reverberant part (from `decayStart`, the direct path removed before the filter), C80 from the whole response (from
+// `start`, the direct path)
+std::vector<BandDecay> analyseBands(const std::vector<double>& response, const std::vector<double>& reverberant, int fraction, int start, int decayStart,
+                                    const ReverbSettings& settings)
 {
     std::vector<BandDecay> result;
     const int split80 = static_cast<int>(0.08 * settings.sampleRate);
@@ -302,12 +305,20 @@ std::vector<BandDecay> analyseBands(const std::vector<double>& response, int fra
         {
             continue;
         }
-        const std::vector<double> filtered = filterBand(response, band, settings.sampleRate, settings.filterOrder);
+        const std::vector<double> filtered = filterBand(reverberant, band, settings.sampleRate, settings.filterOrder);
         BandDecay decay;
         decay.band = band;
-        const Truncation truncation = findTruncation(filtered, start, settings.sampleRate);
-        decay.times = getDecayTimes(getDecayCurve(filtered, start, truncation), settings.sampleRate);
-        decay.c80Db = getClarity(filtered, start, truncation.sample, split80);
+        const Truncation truncation = findTruncation(filtered, decayStart, settings.sampleRate);
+        decay.times = getDecayTimes(getDecayCurve(filtered, decayStart, truncation), settings.sampleRate);
+        if (&reverberant == &response)
+        {
+            decay.c80Db = getClarity(filtered, start, truncation.sample, split80);
+        }
+        else
+        {
+            const std::vector<double> whole = filterBand(response, band, settings.sampleRate, settings.filterOrder);
+            decay.c80Db = getClarity(whole, start, truncation.sample, split80);
+        }
         result.push_back(decay);
     }
     return result;
@@ -375,13 +386,33 @@ ReverbAnalysis analyseReverb(const std::vector<double>& response, const ReverbSe
         if (std::abs(response[static_cast<size_t>(sample)]) >= onsetLevel && reverbPeak > 0.0)
         {
             result.preDelaySeconds = (sample - result.directSample) / fs;
+            result.onsetSample = sample;
             break;
         }
     }
 
+    // the decay from the reverberant part: with a direct path it is cut out (+-directWindowSeconds) and the curves start at the reverb's onset
+    // (a plugin's dry signal is often 10 ... 20 dB above its tail: the ranges of ISO 3382-1, made for rooms, would see a few dB of the tail only);
+    // the clarity, D50 and Ts keep the direct path, as defined
     const int start = static_cast<int>(result.directSample);
-    result.truncation = findTruncation(response, start, fs);
-    result.broadband = getDecayTimes(getDecayCurve(response, start, result.truncation), fs);
+    std::vector<double> withoutDirect;
+    int decayStart = start;
+    if (result.hasDirect)
+    {
+        withoutDirect = response;
+        for (int sample = std::max(0, peak - window); sample < std::min(length, peak + window + 1); ++sample)
+        {
+            withoutDirect[static_cast<size_t>(sample)] = 0.0;
+        }
+        decayStart = std::max(start, static_cast<int>(result.onsetSample));
+    }
+    const std::vector<double>* reverberant = &response;
+    if (result.hasDirect)
+    {
+        reverberant = &withoutDirect;
+    }
+    result.truncation = findTruncation(*reverberant, decayStart, fs);
+    result.broadband = getDecayTimes(getDecayCurve(*reverberant, decayStart, result.truncation), fs);
     const int end = result.truncation.sample;
     result.c50Db = getClarity(response, start, end, static_cast<int>(0.05 * fs));
     result.c80Db = getClarity(response, start, end, static_cast<int>(0.08 * fs));
@@ -400,8 +431,8 @@ ReverbAnalysis analyseReverb(const std::vector<double>& response, const ReverbSe
     }
     result.d50 = early / std::max(total, kTinyEnergy);
     result.centreTimeSeconds = moment / std::max(total, kTinyEnergy);
-    result.octaves = analyseBands(response, 1, start, settings);
-    result.thirdOctaves = analyseBands(response, 3, start, settings);
+    result.octaves = analyseBands(response, *reverberant, 1, start, decayStart, settings);
+    result.thirdOctaves = analyseBands(response, *reverberant, 3, start, decayStart, settings);
     return result;
 }
 }

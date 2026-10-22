@@ -7,6 +7,7 @@
 #include "pluginlab/measure/Delay.h"
 #include "pluginlab/measure/Distortion.h"
 #include "pluginlab/measure/EchoResponse.h"
+#include "pluginlab/measure/Reverb.h"
 #include "pluginlab/measure/FrequencyResponse.h"
 #include "pluginlab/measure/Gain.h"
 #include "pluginlab/measure/Intermodulation.h"
@@ -178,6 +179,67 @@ double getReportedLatency(juce::AudioPluginFormatManager& formatManager, const j
     return latency;
 }
 
+// the reverb (W11.2e): rows only for a device with a diffuse decaying tail
+void addReverbRows(Rows& rows, const measure::Device& device, int channels, const MeasurementOptions& options)
+{
+    const juce::String kClause = "W11.2, ISO 3382-1";
+    const double fs = options.sampleRate;
+    measure::ReverbMeasurementSettings settings;
+    settings.sampleRate = fs;
+    settings.channels = channels;
+    settings.latencySamples = std::max(0.0, options.latencySamples);
+    const measure::ReverbMeasurement reverb = measure::measureReverbResponse(device, settings);
+    if (! reverb.hasReverb)
+    {
+        rows.add("reverb", "reverb (a diffuse decaying tail, channel 1)", 0.0, "none (no reverb)", kClause);
+        return;
+    }
+    const measure::ReverbAnalysis& decay = reverb.decay;
+    rows.add("reverb", "reverb (a diffuse decaying tail, channel 1)", 1.0, "yes", kClause);
+    juce::String fromWhere = "the whole response";
+    if (decay.hasDirect)
+    {
+        fromWhere = "the reverberant part: the direct path cut out, from the onset";
+    }
+    rows.add("reverb", "T30 broadband", decay.broadband.t30,
+             juce::String(decay.broadband.t30, 3) + " s (EDT " + juce::String(decay.broadband.edt, 3) + " s, T20 " + juce::String(decay.broadband.t20, 3) + " s; from "
+                 + fromWhere + ")",
+             kClause);
+    juce::StringArray octaves;
+    for (const measure::BandDecay& band : decay.octaves)
+    {
+        octaves.add(juce::String(juce::roundToInt(band.band.centreHz)) + " Hz: " + juce::String(band.times.t30, 2));
+    }
+    rows.add("reverb", "T30 per octave (s)", kNotApplicable, octaves.joinIntoString(", "), kClause);
+    rows.addDb("reverb", "C80", decay.c80Db, "dB", kClause);
+    rows.add("reverb", "pre-delay (to the reverb's onset)", decay.preDelaySeconds * 1000.0, juce::String(decay.preDelaySeconds * 1000.0, 2) + " ms", kClause);
+    if (decay.hasDirect)
+    {
+        rows.addDb("reverb", "direct-to-reverberant ratio (DRR)", decay.directToReverberantDb, "dB", kClause);
+    }
+    else
+    {
+        rows.add("reverb", "direct-to-reverberant ratio (DRR)", kNotApplicable, "no direct path (100 % wet)", kClause);
+    }
+    const measure::Texture& texture = reverb.texture;
+    rows.add("reverb", "mixing time (echo density 0.95)", texture.mixingTimeSeconds * 1000.0, juce::String(texture.mixingTimeSeconds * 1000.0, 1) + " ms after the onset", kClause);
+    rows.add("reverb", "late kurtosis (0: Gaussian like a good tail)", texture.lateKurtosis, juce::String(texture.lateKurtosis, 2), kClause);
+    rows.add("reverb", "repetition in the tail (normalized autocorrelation)", texture.repetitionStrength,
+             juce::String(texture.repetitionStrength, 3) + " at " + juce::String(texture.repetitionLagSeconds * 1000.0, 2) + " ms", kClause);
+    rows.add("reverb", "coloration (late spectrum around its third-octave smoothing)", texture.colorationDb,
+             juce::String(texture.colorationDb, 2) + " dB (noise: 5.6 dB)", kClause);
+    if (reverb.stereo)
+    {
+        rows.add("reverb", "IACC early (0 ... 80 ms, with the direct sound) and late", reverb.iaccLate.value,
+                 juce::String(reverb.iaccEarly.value, 3) + ", late " + juce::String(reverb.iaccLate.value, 3) + " (lag " + juce::String(reverb.iaccLate.lagSeconds * 1000.0, 2)
+                     + " ms)",
+                 kClause);
+        rows.add("reverb", "coherence of the tail (200 Hz ... 8 kHz)", reverb.meanCoherence, juce::String(reverb.meanCoherence, 3), kClause);
+        rows.add("reverb", "LEDT (-10 dB point x 6; 350 ms)", reverb.lateral.tenDbSeconds,
+                 juce::String(reverb.lateral.tenDbSeconds, 3) + " s; " + juce::String(reverb.lateral.at350msSeconds, 3) + " s", kClause);
+    }
+}
+
 // the number of units a run measures: the chosen ones, or all if none is chosen
 int getUnitCount(const MeasurementOptions& options)
 {
@@ -191,7 +253,7 @@ int getUnitCount(const MeasurementOptions& options)
 
 const juce::StringArray& getMeasurementUnitKeys()
 {
-    static const juce::StringArray keys{"gain", "response", "delay", "phase", "distortion", "imd", "noise", "crosstalk", "maximum", "linearity", "echoes"};
+    static const juce::StringArray keys{"gain", "response", "delay", "phase", "distortion", "imd", "noise", "crosstalk", "maximum", "linearity", "echoes", "reverb"};
     return keys;
 }
 
@@ -199,7 +261,8 @@ juce::String getMeasurementUnitTitle(const juce::String& key)
 {
     static const juce::StringArray titles{"level and gain",       "frequency response", "delay and polarity", "phase",
                                           "THD and THD+N",        "intermodulation",    "noise",              "crosstalk",
-                                          "maximum input level",  "gain linearity (slow)", "echo response (delays)"};
+                                          "maximum input level",  "gain linearity (slow)", "echo response (delays)",
+                                          "reverb (decay, texture, stereo)"};
     const int index = getMeasurementUnitKeys().indexOf(key);
     if (index >= 0)
     {
@@ -453,6 +516,11 @@ MeasurementSummary measureDevice(const measure::Device& device, int channels, co
         announce("echo response");
         addEchoRows(rows, device, used, options);
     }
+    if (wants("reverb"))
+    {
+        announce("reverb");
+        addReverbRows(rows, device, used, options);
+    }
     summary.seconds = (juce::Time::getMillisecondCounterHiRes() - startMs) / 1000.0;
     return summary;
 }
@@ -643,7 +711,7 @@ juce::String compareEchoResponses(juce::AudioPluginFormatManager& formatManager,
         {
             difference = juce::String(valueB - valueA, 2) + " dB";
         }
-        text << "| " << juce::String(frequency, 0) << " Hz | " << textA << " | " << textB << " | " << difference << " |\n";
+        text << "| " << juce::String(juce::roundToInt(frequency)) << " Hz | " << textA << " | " << textB << " | " << difference << " |\n";
     }
     return text;
 }
@@ -688,6 +756,33 @@ juce::String summarizeEchoes(const MeasurementSummary& summary)
         {
             parts.add("modulated");
         }
+    }
+    return parts.joinIntoString(", ");
+}
+
+juce::String summarizeReverb(const MeasurementSummary& summary)
+{
+    const MeasurementRow* reverb = findRow(summary, "reverb (a diffuse decaying tail, channel 1)");
+    if (reverb == nullptr)
+    {
+        return {};
+    }
+    if (reverb->value <= 0.0)
+    {
+        return "none";
+    }
+    juce::StringArray parts;
+    if (const MeasurementRow* t30 = findRow(summary, "T30 broadband"))
+    {
+        parts.add("T30 " + juce::String(t30->value, 2) + " s");
+    }
+    if (const MeasurementRow* preDelay = findRow(summary, "pre-delay (to the reverb's onset)"))
+    {
+        parts.add("pre-delay " + juce::String(juce::roundToInt(preDelay->value)) + " ms");
+    }
+    if (const MeasurementRow* iacc = findRow(summary, "IACC early (0 ... 80 ms, with the direct sound) and late"))
+    {
+        parts.add("IACC late " + juce::String(iacc->value, 2));
     }
     return parts.joinIntoString(", ");
 }

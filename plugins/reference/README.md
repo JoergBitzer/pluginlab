@@ -9,6 +9,7 @@ host, the fingerprint and the measurements, and teaching objects ("this is what 
 | **PluginLab Reference EQ** | one band: algorithm x type | H(e^jw) of the design (the GUI draws it at 48 kHz) |
 | **PluginLab Reference Nonlinear** | drive -> curve -> output -> hum -> noise -> quantizer | harmonics of a sine (closed form or numerical), SNR 6.02 N + 1.76 dB, noise and hum levels |
 | **PluginLab Reference Utility** | gain/polarity -> delay -> channel matrix -> tremolo -> DC | all exact |
+| **PluginLab Reference Reverb** (W11.2, 0.85.0) | pre-delay -> feedback delay network (8 lines, Householder) -> mix | T60 exact at every frequency (without LFO), the pre-delay (`reference::FdnReverb`) |
 | **PluginLab Reference Delay** (W11.1, 0.74.0) | delay line -> loop (feedback, low and high cut) -> mix | every echo: time, gain, the loop filter (`reference::FeedbackDelay`) |
 
 All three: latency 0 (no rebuffering; the Reference EQ with the linear-phase algorithm: the FIR's latency), no parameter smoothing (a change acts at the next block: the reference is the exact algorithm, a
@@ -91,6 +92,16 @@ of a parameter keeps the echoes in the line (a jump: the author's "digital" swit
 | Time change, Switch time | Jump / Crossfade / Glide, 1 ... 500 ms | how a new time takes over (the author's switch algorithms; a glide or crossfade starts from where the delay is) (0.80.0) |
 | Ping-pong | Off, On | stereo: (L + R) / 2 into the left line only, the feedback goes across: echoes L, R, L, ... (0.75.0) |
 | Mix | 0 ... 100 % | (1 - mix) dry + mix wet |
+
+### PluginLab Reference Reverb
+| Control | Range | Meaning |
+|---|---|---|
+| T60 | 0.2 ... 10 s | every circulation loses 60 dB in this time (the gains of Jot and Chaigne) |
+| Pre-delay | 0 ... 200 ms | before the network (its first output comes one shortest line, 21.5 ms at 48 kHz, later) |
+| Mod rate, Mod depth | 0.05 ... 5 Hz, 0 ... 32 samples | LFOs on the line lengths (rates spread by +-15 %); depth 0 = time-invariant; with an LFO the highs decay faster (the interpolation) |
+| Mix | 0 ... 100 % | (1 - mix) dry + mix wet; the measurements want 100 % |
+
+A new setting rebuilds the network (it starts empty).
 
 ## Build, test, install
 They are built with pluginlab (`plugins/reference/CMakeLists.txt`) and copied into `<build>/reference_plugins` (used by

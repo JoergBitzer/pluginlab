@@ -2,6 +2,8 @@
 
 #include <vector>
 
+#include "pluginlab/measure/Device.h"
+
 namespace pluginlab::measure
 {
 // The decay of a reverb's impulse response (W11.2b, docs/design/W11-reverb-plan.md 4.2; ISO 3382-1): bands, the energy decay curve (Schroeder's
@@ -72,6 +74,9 @@ struct ReverbAnalysis
     double directPathDelaySamples = 0.0;  // DPD: the direct path against the input (the latency included)
     double directToReverberantDb = 0.0;   // DRR
     double preDelaySeconds = 0.0;         // the reverb's onset against the direct path (against the input without one)
+    double onsetSample = 0.0;
+    // The decay times (broadband and per band) come from the reverberant part: with a direct path it is cut out and the curves start at the onset;
+    // C50, C80, D50 and Ts include the direct path
     Truncation truncation;                // broadband
     DecayTimes broadband;
     double c50Db = 0.0;
@@ -225,4 +230,45 @@ struct SpatialDistribution
 
 SpatialDistribution getSpatialDistribution(const std::vector<double>& left, const std::vector<double>& right, double sampleRate, double blockSeconds = 0.05,
                                            int sectors = 32, double floorDb = -90.0);
+
+// The lateral early decay time LEDT (Griesinger 1996; LEDT.m): the Schroeder sum of (l - r)^2 (the IAD decay curve, IADDC) against the sum of
+// the two channels' EDCs at the start, the direct sound removed (+-directWindowSeconds around directSample; LEDT.m zeroed only the first sample).
+// Two definitions, both referred to -60 dB: the -10 dB point of the IADDC times 6, and Griesinger's 60 * 0.35 s / (the IADDC's drop at 350 ms)
+struct LateralDecay
+{
+    double tenDbSeconds = 0.0;     // 0: the IADDC never falls by 10 dB (or starts below -10 dB)
+    double at350msSeconds = 0.0;
+    std::vector<double> differenceCurveDb; // the IADDC re the summed EDC's start
+    std::vector<double> energyCurveDb;     // the summed EDC re its start
+};
+
+LateralDecay getLateralDecay(const std::vector<double>& left, const std::vector<double>& right, int directSample, double sampleRate,
+                             double directWindowSeconds = 0.0025);
+
+// The reverb of a device (W11.2e, the unit "reverb" of the reports): an impulse (-6 dBFS) into both inputs, renderSeconds of silence; a reverb is
+// there if the response has a diffuse tail (the echo density reaches 0.95 within diffuseWithinSeconds of the onset) that decays (T30 above
+// 0.1 s). Then the decay, the texture and, for two channels, the stereo measures.
+struct ReverbMeasurementSettings
+{
+    double sampleRate = 48000.0;
+    int channels = 2;
+    double latencySamples = 0.0;
+    double levelDbfs = -6.0;
+    double renderSeconds = 8.0;
+    double diffuseWithinSeconds = 1.0;  // an FDN without diffusers mixes late (the reference: 0.34 s); a delay's echo train never
+};
+
+struct ReverbMeasurement
+{
+    bool hasReverb = false;
+    ReverbAnalysis decay;               // output channel 1
+    Texture texture;
+    bool stereo = false;
+    CrossCorrelation iaccEarly;         // 0 ... 80 ms after the direct sound, with it
+    CrossCorrelation iaccLate;          // 80 ms ... the truncation: the tail's own width
+    double meanCoherence = 0.0;         // of the tail, 200 Hz ... 8 kHz
+    LateralDecay lateral;
+};
+
+ReverbMeasurement measureReverbResponse(const Device& device, const ReverbMeasurementSettings& settings);
 }

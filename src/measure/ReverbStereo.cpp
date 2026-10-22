@@ -230,4 +230,57 @@ SpatialDistribution getSpatialDistribution(const std::vector<double>& left, cons
     }
     return result;
 }
+
+LateralDecay getLateralDecay(const std::vector<double>& left, const std::vector<double>& right, int directSample, double sampleRate, double directWindowSeconds)
+{
+    LateralDecay result;
+    const int length = static_cast<int>(std::min(left.size(), right.size()));
+    const int window = static_cast<int>(std::lround(directWindowSeconds * sampleRate));
+    const int start = std::clamp(directSample, 0, length);
+    // the backward sums from the direct sound on, the direct sound itself left out
+    std::vector<double> difference(static_cast<size_t>(length - start) + 1, 0.0);
+    std::vector<double> energy(static_cast<size_t>(length - start) + 1, 0.0);
+    for (int sample = length - 1; sample >= start; --sample)
+    {
+        double l = left[static_cast<size_t>(sample)];
+        double r = right[static_cast<size_t>(sample)];
+        if (std::abs(sample - directSample) <= window)
+        {
+            l = 0.0;
+            r = 0.0;
+        }
+        const size_t index = static_cast<size_t>(sample - start);
+        difference[index] = difference[index + 1] + (l - r) * (l - r);
+        energy[index] = energy[index + 1] + l * l + r * r;
+    }
+    const double total = energy.front();
+    if (total <= 0.0)
+    {
+        return result;
+    }
+    for (size_t index = 0; index + 1 < energy.size(); ++index)
+    {
+        result.differenceCurveDb.push_back(toDb(difference[index] / total));
+        result.energyCurveDb.push_back(toDb(energy[index] / total));
+    }
+    // the -10 dB point times 6
+    if (! result.differenceCurveDb.empty() && result.differenceCurveDb.front() > -10.0)
+    {
+        for (size_t index = 0; index < result.differenceCurveDb.size(); ++index)
+        {
+            if (result.differenceCurveDb[index] < -10.0)
+            {
+                result.tenDbSeconds = 6.0 * static_cast<double>(index) / sampleRate;
+                break;
+            }
+        }
+    }
+    // Griesinger: the drop at 350 ms, referred to -60 dB
+    const size_t at350 = static_cast<size_t>(std::lround(0.35 * sampleRate));
+    if (at350 < result.differenceCurveDb.size() && result.differenceCurveDb[at350] < 0.0)
+    {
+        result.at350msSeconds = 60.0 * 0.35 / -result.differenceCurveDb[at350];
+    }
+    return result;
+}
 }

@@ -1507,6 +1507,10 @@ std::vector<SummaryItem> summarize(const PluginFingerprint& fingerprint)
     {
         add("echoes", "echo response at the defaults (delays)", fingerprint.echoes, fingerprint.echoesDetail, true); // a property, never a fault
     }
+    if (fingerprint.reverb.isNotEmpty())
+    {
+        add("reverb", "reverb at the defaults (decay, texture, stereo)", fingerprint.reverb, fingerprint.reverbDetail, true);
+    }
     add("blockSizes", "block size independent (steady state)", yesNo(fingerprint.blockSizeIndependent), worstBlock, fingerprint.blockSizeIndependent);
     add("deterministic", "deterministic (two instances, bit exact)", yesNo(fingerprint.deterministic), expectedNote, fingerprint.deterministic || timeVarying);
     add("finite", "output stays finite after parameter jumps", yesNo(fingerprint.outputStaysFinite), {}, fingerprint.outputStaysFinite);
