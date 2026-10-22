@@ -174,6 +174,24 @@ switchable to the paper's two-stage model (detector and gain smoothing in the li
   0.0000 dB, no hysteresis, every step settled; the fit for knees of 0, 6, 12 dB: threshold -20.000 dB, ratio 4.0000, knee and makeup exact.
 - Not yet: driving a side chain in the rig (W11.3d), the gate and its hysteresis (with the Reference Gate).
 
+### W11.3c the time behaviour (0.90.0, done)
+- `reference::Compressor` with the model variants: GainLog (the gain reduction smoothed in dB), LevelLog (the detector level smoothed in dB,
+  the gain computer after it), TwoStage (the detector power smoothed with its own attack and release, then the gain in dB), and a hold.
+- `measure::measureStepResponse`: the paper's step (below the threshold, 0 dBFS, below again; the square wave) and **a second, lower step**;
+  the gain curve; the three variants simulated with the measured static curve and fitted (time constants in decades: a grid, coordinate
+  descent, then the simplex of Nelder and Mead twice; the hold free between 0 and the measured one); the variant with the smallest error; the
+  hold (after the fall, until the gain moved by 0.01 dB: an upper bound); the convention of ANSI S3.22 (attack within 3 dB, release within 4 dB
+  of the final value; IEC 60268-8 and IEC 60118-2 still to be checked against their text). `measureLookahead`: noise below the threshold,
+  the lag of the largest cross-correlation.
+- Tests: every variant recognised (its error 0.0000 dB, the others 0.2 ... 0.6 dB), attack, release (and the detector's) within 2 % (in fact
+  exact to 0.1 %), a hold of 30 ms found (29.99 ms), the look-ahead of 2 ms = 96 samples.
+- Found: **two smoothers in series cannot be told apart by one step**: their order is (for linear smoothers exactly) interchangeable, only the
+  static curve between them breaks the symmetry; with one step the fit found 3.7 / 5.8 ms for 5 / 2 ms at an error of 0.01 dB. A second step
+  of another height separates them. A measured hold is an upper bound: a smoothed detector delays the start of the release too (2.5 ms for
+  the two-stage reference without hold), so the hold is fitted.
+- Not yet: the linear attack and the level-dependent and program-dependent release (the step size and the burst length), the block size and
+  sample rate dependence.
+
 ## 9. Questions for the author
 1. **Test set**: which free compressors, limiters and gates (a clean digital compressor, an 1176- or LA-2A-style model, a limiter, a gate)?
 Answer: I will collect a list of free dynamics processors. We should have at least a feed-forward compressor (the reference), a feedback compressor (1176 style), a tube compressor (LA-2A style), a limiter and a gate in our own reference plugins. Perhaps we will find source code for other designs as well.

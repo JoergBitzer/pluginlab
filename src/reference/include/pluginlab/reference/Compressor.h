@@ -15,6 +15,16 @@ namespace pluginlab::reference
 // the gain reduction c = x - y >= 0 smoothed in the log domain with smooth branching (attack while it grows, release while it falls):
 //   s(n) = a s(n - 1) + (1 - a) c(n),  a = exp(-1 / (tau fs)), tau the attack or the release time
 // and the gain makeup - s applied to the input delayed by the look-ahead.
+// Where the smoothing is (the model variants of Simmer, Schmidt, Bitzer 2006 and the plan's comments, W11.3c): GainLog smooths the gain
+// reduction in dB (Giannoulis' recommendation); LevelLog smooths the detector level in dB and the gain computer follows it unsmoothed; TwoStage
+// smooths the detector's power (linear, its own attack and release) and then the gain reduction in dB
+enum class Smoothing
+{
+    GainLog,
+    LevelLog,
+    TwoStage
+};
+
 enum class Detector
 {
     Peak,
@@ -34,6 +44,10 @@ struct CompressorSettings
     double rmsSeconds = 0.01;
     double lookaheadSeconds = 0.0;
     double stereoLink = 1.0;           // 0: each channel its own gain, 1: one gain from the louder channel
+    Smoothing smoothing = Smoothing::GainLog;
+    double detectorAttackSeconds = 0.002;  // TwoStage: the detector's power smoothing
+    double detectorReleaseSeconds = 0.02;
+    double holdSeconds = 0.0;          // after the target reduction falls, the smoothed value stays this long before the release starts
 };
 
 class Compressor : public Processor
@@ -55,10 +69,16 @@ public:
 
 private:
     double computeReduction(double levelDb) const;
+    double getDetectorStart() const;
 
     CompressorSettings m_settings;
     double m_attack = 0.0;
     double m_release = 0.0;
+    double m_detectorAttack = 0.0;
+    double m_detectorRelease = 0.0;
+    int m_hold = 0;
+    std::vector<double> m_detector;              // per channel: the smoothed level (LevelLog: dB) or power (TwoStage)
+    std::vector<int> m_holding;                  // per channel: samples of hold left
     int m_lookahead = 0;
     int m_rmsLength = 1;
     std::vector<double> m_smoothed;              // per channel: the smoothed gain reduction in dB

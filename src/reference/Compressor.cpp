@@ -17,11 +17,24 @@ Compressor::Compressor(const CompressorSettings& settings)
     m_release = std::exp(-1.0 / (std::max(settings.releaseSeconds, 1.0e-9) * settings.sampleRate));
     m_lookahead = static_cast<int>(std::lround(settings.lookaheadSeconds * settings.sampleRate));
     m_rmsLength = std::max(1, static_cast<int>(std::lround(settings.rmsSeconds * settings.sampleRate)));
+    m_detectorAttack = std::exp(-1.0 / (std::max(settings.detectorAttackSeconds, 1.0e-9) * settings.sampleRate));
+    m_detectorRelease = std::exp(-1.0 / (std::max(settings.detectorReleaseSeconds, 1.0e-9) * settings.sampleRate));
+    m_hold = static_cast<int>(std::lround(settings.holdSeconds * settings.sampleRate));
 }
 
 const CompressorSettings& Compressor::getSettings() const
 {
     return m_settings;
+}
+
+// the detector's state at the start: the silence floor for a level in dB (LevelLog), no power otherwise
+double Compressor::getDetectorStart() const
+{
+    if (m_settings.smoothing == Smoothing::LevelLog)
+    {
+        return kSilenceDb;
+    }
+    return 0.0;
 }
 
 double Compressor::computeReduction(double levelDb) const
@@ -65,6 +78,8 @@ int Compressor::getLatencySamples() const
 void Compressor::reset()
 {
     std::fill(m_smoothed.begin(), m_smoothed.end(), 0.0);
+    std::fill(m_detector.begin(), m_detector.end(), getDetectorStart());
+    std::fill(m_holding.begin(), m_holding.end(), 0);
     for (std::vector<double>& line : m_delay)
     {
         std::fill(line.begin(), line.end(), 0.0);
@@ -85,6 +100,8 @@ void Compressor::process(juce::AudioBuffer<float>& buffer)
     if (m_smoothed.size() != channels)
     {
         m_smoothed.assign(channels, 0.0);
+        m_detector.assign(channels, getDetectorStart());
+        m_holding.assign(channels, 0);
         m_delay.assign(channels, std::vector<double>(static_cast<size_t>(m_lookahead) + 1, 0.0));
         m_squares.assign(channels, std::vector<double>(static_cast<size_t>(m_rmsLength), 0.0));
         m_squareSum.assign(channels, 0.0);
@@ -125,14 +142,47 @@ void Compressor::process(juce::AudioBuffer<float>& buffer)
         const size_t delayLength = static_cast<size_t>(m_lookahead) + 1;
         for (size_t channel = 0; channel < channels; ++channel)
         {
-            const double level = (1.0 - m_settings.stereoLink) * levels[channel] + m_settings.stereoLink * loudest;
-            const double reduction = computeReduction(level);
-            double coefficient = m_release;
-            if (reduction > m_smoothed[channel])
+            double level = (1.0 - m_settings.stereoLink) * levels[channel] + m_settings.stereoLink * loudest;
+            if (m_settings.smoothing == Smoothing::LevelLog)
             {
-                coefficient = m_attack;
+                // the level in dB smoothed (from the silence floor at the start), the gain computer unsmoothed after it
+                double coefficient = m_release;
+                if (level > m_detector[channel])
+                {
+                    coefficient = m_attack;
+                }
+                m_detector[channel] = coefficient * m_detector[channel] + (1.0 - coefficient) * level;
+                m_smoothed[channel] = computeReduction(m_detector[channel]);
             }
-            m_smoothed[channel] = coefficient * m_smoothed[channel] + (1.0 - coefficient) * reduction;
+            else
+            {
+                if (m_settings.smoothing == Smoothing::TwoStage)
+                {
+                    // the power smoothed (linear), then its level
+                    const double power = std::pow(10.0, level / 10.0);
+                    double coefficient = m_detectorRelease;
+                    if (power > m_detector[channel])
+                    {
+                        coefficient = m_detectorAttack;
+                    }
+                    m_detector[channel] = coefficient * m_detector[channel] + (1.0 - coefficient) * power;
+                    level = 10.0 * std::log10(std::max(m_detector[channel], 1.0e-20));
+                }
+                const double reduction = computeReduction(level);
+                if (reduction > m_smoothed[channel])
+                {
+                    m_smoothed[channel] = m_attack * m_smoothed[channel] + (1.0 - m_attack) * reduction;
+                    m_holding[channel] = m_hold;
+                }
+                else if (m_holding[channel] > 0)
+                {
+                    --m_holding[channel]; // hold: the reduction stays
+                }
+                else
+                {
+                    m_smoothed[channel] = m_release * m_smoothed[channel] + (1.0 - m_release) * reduction;
+                }
+            }
             const double gainDb = m_settings.makeupDb - m_smoothed[channel];
             // the look-ahead: the input of lookahead samples ago gets this gain
             std::vector<double>& line = m_delay[channel];

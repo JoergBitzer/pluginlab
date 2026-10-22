@@ -112,6 +112,63 @@ public:
             expectWithinAbsoluteError(fit.makeupDb, kneeSettings.makeupDb, kParameterDb, "makeup");
             expect(fit.compresses);
         }
+        testTimeBehaviour();
+    }
+
+private:
+    // W11.3c: every model variant of the reference recognised with its time constants within 2 %; hold, look-ahead, the standards' convention
+    void testTimeBehaviour()
+    {
+        constexpr double kTimeShare = 0.02;
+        struct Case
+        {
+            juce::String name;
+            ref::Smoothing smoothing;
+            measure::TimeModel model;
+            double holdSeconds;
+        };
+        for (const Case& item : {Case{"the gain smoothed in dB", ref::Smoothing::GainLog, measure::TimeModel::GainLog, 0.0},
+                                 Case{"the level smoothed in dB", ref::Smoothing::LevelLog, measure::TimeModel::LevelLog, 0.0},
+                                 Case{"two stages", ref::Smoothing::TwoStage, measure::TimeModel::TwoStage, 0.0},
+                                 Case{"the gain smoothed in dB with a hold of 30 ms", ref::Smoothing::GainLog, measure::TimeModel::GainLog, 0.03}})
+        {
+            beginTest("the step response: " + item.name + " recognised, the time constants within 2 %");
+            ref::CompressorSettings settings = makeSettings();
+            settings.kneeDb = 0.0;
+            settings.smoothing = item.smoothing;
+            settings.holdSeconds = item.holdSeconds;
+            const measure::Device device = makeDevice(settings);
+            measure::StaticCurveSettings curveSettings;
+            const measure::StaticFit curve = measure::fitStaticCurve(measure::measureStaticCurve(device, 1, curveSettings).rising);
+            const measure::StepResponse step = measure::measureStepResponse(device, 1, curve, {});
+            juce::String fits;
+            for (const measure::TimeFit& fit : step.fits)
+            {
+                fits << measure::getTimeModelName(fit.model) << ": " << juce::String(fit.rmsErrorDb, 4) << " dB; ";
+            }
+            logMessage(fits + "best: attack " + juce::String(step.best.parameters.attackSeconds * 1000.0, 3) + " ms, release "
+                       + juce::String(step.best.parameters.releaseSeconds * 1000.0, 3) + " ms, detector " + juce::String(step.best.parameters.detectorAttackSeconds * 1000.0, 3)
+                       + " / " + juce::String(step.best.parameters.detectorReleaseSeconds * 1000.0, 3) + " ms, hold " + juce::String(step.best.parameters.holdSeconds * 1000.0, 2)
+                       + " ms; settling (3 / 4 dB) " + juce::String(step.attackSettleSeconds * 1000.0, 2) + " / " + juce::String(step.releaseSettleSeconds * 1000.0, 2) + " ms");
+            expect(step.best.model == item.model, "the variant");
+            expectWithinAbsoluteError(step.best.parameters.attackSeconds, settings.attackSeconds, kTimeShare * settings.attackSeconds, "attack");
+            expectWithinAbsoluteError(step.best.parameters.releaseSeconds, settings.releaseSeconds, kTimeShare * settings.releaseSeconds, "release");
+            if (item.model == measure::TimeModel::TwoStage)
+            {
+                expectWithinAbsoluteError(step.best.parameters.detectorAttackSeconds, settings.detectorAttackSeconds, kTimeShare * settings.detectorAttackSeconds,
+                                          "the detector's attack");
+                expectWithinAbsoluteError(step.best.parameters.detectorReleaseSeconds, settings.detectorReleaseSeconds, kTimeShare * settings.detectorReleaseSeconds,
+                                          "the detector's release");
+            }
+            expectWithinAbsoluteError(step.best.parameters.holdSeconds, item.holdSeconds, 0.0005, "the hold (the model's)");
+        }
+
+        beginTest("the look-ahead from the cross-correlation with noise: 2 ms = 96 samples");
+        {
+            ref::CompressorSettings settings = makeSettings();
+            settings.lookaheadSeconds = 0.002;
+            expectEquals(measure::measureLookahead(makeDevice(settings), 1, kSampleRate), 96);
+        }
     }
 };
 

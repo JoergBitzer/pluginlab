@@ -101,14 +101,14 @@ if(PLUGINLAB_VST2)
     add_dependencies(PluginLabTests PluginLabTestGain_VST)
 endif()
 
-add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)|Fast render path (W9.3)|Plugin matching (W9.4)|Match attribution (W9.5)|Easy page (W10.4)|Expert page (W10.5)|Measurement presets (W10.6)|Crash protection (W10.7)|Jade Benchmark (W10.2)|EQ band identification|Matcher, EQ domain (W9.2)|Measure: system class|Measure: plugins through the host|Measure: null test|Live transfer function display (W10.3)|Echo response (W11.1)|Reverb (W11.2)")
+add_test(NAME PluginLabTests COMMAND PluginLabTests --skip "Parameter survey|PluginFingerprint|Real-time fingerprint|Calibration (W8.6)|Interactions (W8.7)|Fast render path (W9.3)|Plugin matching (W9.4)|Match attribution (W9.5)|Easy page (W10.4)|Expert page (W10.5)|Measurement presets (W10.6)|Crash protection (W10.7)|Jade Benchmark (W10.2)|EQ band identification|Matcher, EQ domain (W9.2)|Measure: system class|Measure: plugins through the host|Measure: null test|Live transfer function display (W10.3)|Echo response (W11.1)|Reverb (W11.2)|Dynamics (W11.3)")
 # a hanging test (a dialog nobody can click, a plugin that never returns) must fail soon, not after the default 25 minutes
 set_tests_properties(PluginLabTests PROPERTIES TIMEOUT 1200 RESOURCE_LOCK display) # about 100 s in Debug since the split of 2026-10-21 (was 580 s)
 
 # the longest groups of PluginLabTests as tests of their own, so that "ctest -j" runs them side by side (PluginLabTests prints the time of each
 # group at its end: split again when one grows); times in Debug on the development machine, 2026-10-21
 foreach(GROUP "Jade Benchmark (W10.2)" "EQ band identification" "Matcher, EQ domain (W9.2)" "Measure: system class"
-              "Measure: plugins through the host" "Measure: null test" "Echo response (W11.1)" "Reverb (W11.2)")
+              "Measure: plugins through the host" "Measure: null test" "Echo response (W11.1)" "Reverb (W11.2)" "Dynamics (W11.3)")
     string(REGEX REPLACE "[^A-Za-z0-9]" "" GROUP_TEST_NAME "${GROUP}")
     add_test(NAME PluginLab_${GROUP_TEST_NAME} COMMAND PluginLabTests --only "${GROUP}") # 150, 109, 63, 50, 46, 39, 38 s
     set_tests_properties(PluginLab_${GROUP_TEST_NAME} PROPERTIES TIMEOUT 900)
