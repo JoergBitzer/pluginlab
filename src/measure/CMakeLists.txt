@@ -5,6 +5,7 @@ add_library(pluginlab_measure STATIC
     Crosstalk.cpp
     Delay.cpp
     DelayTrajectory.cpp
+    Dynamics.cpp
     Device.cpp
     Distortion.cpp
     EchoResponse.cpp

@@ -161,6 +161,19 @@ switchable to the paper's two-stage model (detector and gain smoothing in the li
 | W11.3f | report section "Dynamics", Developer page, views of 6, gain curves of several compressors on music, loudness (BS.1770-5) | readable reports for the references and two real compressors; three compressors' gain curves on a MusicRadar sample in one plot |
 | W11.3g | comparison and the dynamics domain of the matcher | the reference matched to itself with another start; two real compressors compared |
 
+## Progress
+### W11.3a, W11.3b gain envelope, static curve, fit (0.89.0, done)
+- `reference::Compressor`: the feed-forward design of Giannoulis et al. (2012): detector (peak, or RMS as a moving mean square), stereo link,
+  gain computer with hard or soft knee, the gain reduction smoothed in the log domain with smooth branching (attack, release), look-ahead,
+  makeup; its exact static curve; the gain per sample can be recorded.
+- `measure::makeStaircase` (the square wave of Simmer, Schmidt, Bitzer 2006 at 500 Hz, an even half period: no sample is zero; or a sine),
+  `getGainEnvelopeDb` (output / delayed input, sample by sample), `measureStaticCurve` (the rising and the falling staircase, the mean gain of the
+  last quarter of every step, whether it settled, the hysteresis), `fitStaticCurve` (with threshold and knee fixed the gain computer is linear
+  in 1/R - 1 and the makeup: least squares; threshold and knee on a grid of 0.25 / 0.5 dB, then refined).
+- Tests: the envelope equals the reference's gain sample by sample (1e-4 dB, float output); the static curve of -60 ... 0 dBFS within
+  0.0000 dB, no hysteresis, every step settled; the fit for knees of 0, 6, 12 dB: threshold -20.000 dB, ratio 4.0000, knee and makeup exact.
+- Not yet: driving a side chain in the rig (W11.3d), the gate and its hysteresis (with the Reference Gate).
+
 ## 9. Questions for the author
 1. **Test set**: which free compressors, limiters and gates (a clean digital compressor, an 1176- or LA-2A-style model, a limiter, a gate)?
 Answer: I will collect a list of free dynamics processors. We should have at least a feed-forward compressor (the reference), a feedback compressor (1176 style), a tube compressor (LA-2A style), a limiter and a gate in our own reference plugins. Perhaps we will find source code for other designs as well.

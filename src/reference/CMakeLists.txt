@@ -5,6 +5,7 @@
 add_library(pluginlab_reference STATIC
     Analog.cpp
     Biquad.cpp
+    Compressor.cpp
     Delays.cpp
     Designs.cpp
     DirectFormFilter.cpp

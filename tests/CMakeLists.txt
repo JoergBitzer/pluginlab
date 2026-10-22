@@ -44,6 +44,7 @@ target_sources(PluginLabTests
         BrowserTests.cpp
         CatalogTests.cpp
         DelayTrajectoryTests.cpp
+        DynamicsTests.cpp
         EasyTests.cpp
         EchoResponseTests.cpp
         EngineTests.cpp
