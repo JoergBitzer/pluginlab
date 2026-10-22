@@ -183,6 +183,25 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
 | W11.2e | report section "Reverb", Developer page, views of 6 | readable reports for the reference and two real reverbs |
 | W11.2f | comparison with JNDs, the reverb domain of the matcher | the reference matched to itself; two real reverbs compared per band |
 
+## Progress
+### W11.2a, W11.2b the bands, the reference tail, the decay (0.81.0, done)
+- **Bands** (`measure::getBands`): IEC 61260-1, base 10 (centres 1000 * 10^(3x / 10b), edges * 10^(+-3 / 20b)), octaves and third octaves.
+  **Filters** (`reference::designButterworthBandPass`): the Butterworth low-pass prototype of order 3 transformed to the band (edges
+  pre-warped), bilinear, one section per pole pair: exactly 0 dB at the centre's digital image and -3.01 dB at both edges (tested for every
+  band from 31.5 Hz to 16 kHz). A bug found by that test: for a wide band near Nyquist (the 16 kHz octave) the real prototype pole becomes two
+  real band-pass poles, which the first version dropped.
+- **Reference tail** (`reference::SyntheticReverb`): direct path, pre-delay, reflection taps, and noise with a flat magnitude spectrum (random
+  phases) decayed per 1/12-octave sub-band by 10^(-3 t / T60(f)) in a short-time spectrum; optional noise floor. Every band's expected decay is
+  computed from the sub-bands' energies through the band filter (the overlap of neighbouring bands included).
+- **Decay** (`measure::analyseReverb`): the direct path (peak within 1 ms after the latency, within 40 dB of the largest sample), DPD, DRR
+  (+-2.5 ms around it), the onset (first sample within 20 dB of the reverb's peak) and pre-delay; per band and broadband: Lundeby's iteration
+  (a floor only if the last tenth no longer falls), the compensated Schroeder curve, T20, T30, EDT by least squares, C50, C80, D50, Ts.
+- **Tests**: a flat T60 of 2 s and a T60 falling from 2.5 s to 0.8 s: every octave and third octave within 2 % of its expected decay; a floor
+  55 dB down (Lundeby): within 2 %; pre-delay within 0.1 ms; DRR within 0.1 dB; 100 % wet with a reflection. **The 2 % need the mean of
+  several noise decays** (4 seeds): one decay of narrow-band noise scatters by about 1 / sqrt(B T) (the 125 Hz third octave, B = 29 Hz: about
+  6 %); for narrow low bands the tolerance is that scatter. A single measured reverb carries the same uncertainty; the report should give it.
+- Not yet: the doubly complementary octave filterbank (FB_Init), EDR, the views.
+
 ## 9. Questions for the author
 1. **Test set**: which free reverbs (an FDN algorithm, a plate, a spring, a convolution reverb with a known IR)?
 Answer: I will collect a list of free reverbs. We should have at least A Moorer based reverb (Freeverb is a good candidate) in our own referenc plugin). Perhaps we will find source code for Dattoros tank and the coupled allpass from William Gardner. For convolution we can download some IRs from open source libraries. The spring reverb is a special case, since it is strongly dispersive and has a chirp in the impulse response. We will have to find a free example of that as well.
@@ -200,6 +219,10 @@ Lets start with that-
    lag the plugin produces?
 7. **Order of the stereo tools**: is the Spatial Distribution Meter (the most telling picture) the first stereo tool to port, before IACC, LEDT
    and RLE?
+8. **The IEC 61260 tolerance table** (new, 2026-10-22): the author's `getSpec_IEC1260.m` holds the class 0/1/2 masks of IEC 1260:1995 and says
+   "Using for scientific purpose only, no publication allowed (Implementation of standard)". May the table go into the repository (a test of the
+   band filters against the class 1 mask), or stay out? For now the filters are tested by their exact design values (0 dB at the centre,
+   -3.01 dB at both edges), without the table.
 
 ## 10. References
 - D. Extra, U. Simmer, S. Fischer, J. Bitzer, "Artificial reverberation: comparing algorithms by using monaural analysis tools," AES 121st

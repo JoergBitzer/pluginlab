@@ -15,6 +15,7 @@ add_library(pluginlab_measure STATIC
     NullTest.cpp
     Gain.cpp
     Phase.cpp
+    Reverb.cpp
     Spectrogram.cpp
     SweptImpulse.cpp
     SystemClass.cpp

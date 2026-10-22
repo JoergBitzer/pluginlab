@@ -1,5 +1,8 @@
 #include "pluginlab/reference/Designs.h"
 
+#include <algorithm>
+#include <complex>
+
 #include "ReferenceMath.h"
 
 namespace pluginlab::reference
@@ -215,6 +218,61 @@ std::complex<double> getZoelzerAnalogResponse(ZoelzerType type, double frequency
         return 1.0 / boost;
     }
     return boost;
+}
+
+std::vector<BiquadCoefficients> designButterworthBandPass(int order, double sampleRate, double lowEdgeHz, double highEdgeHz)
+{
+    const double twoFs = 2.0 * sampleRate;
+    const double w1 = twoFs * std::tan(detail::kPi * lowEdgeHz / sampleRate);
+    const double w2 = twoFs * std::tan(detail::kPi * highEdgeHz / sampleRate);
+    const double w0Squared = w1 * w2;
+    const double bandwidth = w2 - w1;
+    // all 2 x order poles of the band-pass (two per prototype pole), digital by the bilinear transform
+    std::vector<std::complex<double>> complexPoles;
+    std::vector<double> realPoles;
+    for (int k = 0; k < order; ++k)
+    {
+        const std::complex<double> prototype = std::polar(1.0, detail::kPi * (2.0 * k + order + 1.0) / (2.0 * order));
+        const std::complex<double> scaled = prototype * bandwidth;
+        const std::complex<double> root = std::sqrt(scaled * scaled - 4.0 * w0Squared);
+        for (const std::complex<double> pole : {(scaled + root) / 2.0, (scaled - root) / 2.0})
+        {
+            const std::complex<double> z = (twoFs + pole) / (twoFs - pole);
+            constexpr double kReal = 1.0e-12;
+            if (std::abs(z.imag()) <= kReal)
+            {
+                realPoles.push_back(z.real()); // a wide band near Nyquist: the real prototype pole gives two real poles
+            }
+            else if (z.imag() > 0.0)
+            {
+                complexPoles.push_back(z);    // its conjugate comes from the conjugate prototype pole
+            }
+        }
+    }
+    // one section per conjugate pair, and one per two real poles; each with a zero at z = 1 and one at z = -1
+    std::vector<BiquadCoefficients> sections;
+    for (const std::complex<double>& z : complexPoles)
+    {
+        sections.push_back(makeBiquad(1.0, 0.0, -1.0, 1.0, -2.0 * z.real(), std::norm(z)));
+    }
+    std::sort(realPoles.begin(), realPoles.end());
+    for (size_t index = 0; index + 1 < realPoles.size(); index += 2)
+    {
+        const double p1 = realPoles[index];
+        const double p2 = realPoles[index + 1];
+        sections.push_back(makeBiquad(1.0, 0.0, -1.0, 1.0, -(p1 + p2), p1 * p2));
+    }
+    // 0 dB at the digital image of w0, shared by the sections
+    const double centreHz = sampleRate / detail::kPi * std::atan(std::sqrt(w0Squared) / twoFs);
+    const double gain = std::abs(getCascadeResponse(sections, centreHz, sampleRate));
+    const double perSection = std::pow(gain, -1.0 / static_cast<double>(sections.size()));
+    for (BiquadCoefficients& section : sections)
+    {
+        section.b0 *= perSection;
+        section.b1 *= perSection;
+        section.b2 *= perSection;
+    }
+    return sections;
 }
 
 std::vector<BiquadCoefficients> designButterworth(Pass pass, int order, double sampleRate, double cornerHz)

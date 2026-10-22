@@ -52,6 +52,11 @@ enum class Pass
 std::vector<BiquadCoefficients> designButterworth(Pass pass, int order, double sampleRate, double cornerHz);
 std::complex<double> getAnalogButterworthResponse(Pass pass, int order, double frequencyHz, double cornerHz);
 
+// A Butterworth band-pass (W11.2a, the band filters of the reverb measurements; IEC 61260 uses order 3): the analog low-pass prototype of the
+// order, transformed to the band (s -> (s^2 + w0^2) / (s B), w0^2 = w1 w2, B = w2 - w1, the edges pre-warped), then bilinear. 2 x order poles, one
+// second-order section per pole pair (zeros at z = 1 and z = -1); exactly -3.01 dB at both edges and 0 dB at the digital image of w0
+std::vector<BiquadCoefficients> designButterworthBandPass(int order, double sampleRate, double lowEdgeHz, double highEdgeHz);
+
 // Linkwitz-Riley of order 2, 4 or 8: the Butterworth of half the order twice (-6 dB at the corner); low-pass + (-1)^(order/2) high-pass is an all-pass
 std::vector<BiquadCoefficients> designLinkwitzRiley(Pass pass, int order, double sampleRate, double cornerHz);
 std::complex<double> getAnalogLinkwitzRileyResponse(Pass pass, int order, double frequencyHz, double cornerHz);

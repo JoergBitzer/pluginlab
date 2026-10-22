@@ -14,6 +14,7 @@ add_library(pluginlab_reference STATIC
     Nonlinear.cpp
     Processor.cpp
     StateVariableFilter.cpp
+    SyntheticReverb.cpp
     Utility.cpp)
 
 target_include_directories(pluginlab_reference
@@ -30,5 +31,6 @@ target_link_libraries(pluginlab_reference
         pluginlab_signals
         juce::juce_audio_basics
     PRIVATE
+        juce::juce_dsp
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
