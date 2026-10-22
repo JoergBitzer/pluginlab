@@ -159,6 +159,47 @@ int getOrderAtLeast(int samples)
     }
     return order;
 }
+
+// the analytic signal by FFT: the negative frequencies removed, the positive ones doubled
+std::vector<std::complex<double>> getAnalytic(const std::vector<double>& signal)
+{
+    const int length = static_cast<int>(signal.size());
+    const int order = getOrderAtLeast(length);
+    const int size = 1 << order;
+    juce::dsp::FFT fft(order);
+    std::vector<juce::dsp::Complex<float>> time(static_cast<size_t>(size)), spectrum(static_cast<size_t>(size));
+    for (int sample = 0; sample < length; ++sample)
+    {
+        time[static_cast<size_t>(sample)] = static_cast<float>(signal[static_cast<size_t>(sample)]);
+    }
+    fft.perform(time.data(), spectrum.data(), false);
+    for (int bin = 1; bin < size / 2; ++bin)
+    {
+        spectrum[static_cast<size_t>(bin)] *= 2.0f;
+    }
+    for (int bin = size / 2 + 1; bin < size; ++bin)
+    {
+        spectrum[static_cast<size_t>(bin)] = 0.0f;
+    }
+    fft.perform(spectrum.data(), time.data(), true);
+    std::vector<std::complex<double>> analytic(static_cast<size_t>(length));
+    for (int sample = 0; sample < length; ++sample)
+    {
+        analytic[static_cast<size_t>(sample)] = {time[static_cast<size_t>(sample)].real(), time[static_cast<size_t>(sample)].imag()};
+    }
+    return analytic;
+}
+
+double getMedian(std::vector<double> values)
+{
+    if (values.empty())
+    {
+        return 0.0;
+    }
+    const size_t middle = values.size() / 2;
+    std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(middle), values.end());
+    return values[middle];
+}
 }
 
 std::vector<float> makeImpulseTrain(int count, int periodSamples, float level)
@@ -220,26 +261,8 @@ std::vector<float> makeTone(double frequencyHz, int length, double sampleRate, f
 DelayTrajectory measureTrajectoryFromTone(const std::vector<double>& output, double frequencyHz, double roughDelaySamples, int edgeSamples,
                                           const TrajectorySettings& settings)
 {
-    // the analytic signal by FFT: the negative frequencies removed, the positive ones doubled
     const int length = static_cast<int>(output.size());
-    const int order = getOrderAtLeast(length);
-    const int size = 1 << order;
-    juce::dsp::FFT fft(order);
-    std::vector<juce::dsp::Complex<float>> time(static_cast<size_t>(size)), spectrum(static_cast<size_t>(size));
-    for (int sample = 0; sample < length; ++sample)
-    {
-        time[static_cast<size_t>(sample)] = static_cast<float>(output[static_cast<size_t>(sample)]);
-    }
-    fft.perform(time.data(), spectrum.data(), false);
-    for (int bin = 1; bin < size / 2; ++bin)
-    {
-        spectrum[static_cast<size_t>(bin)] *= 2.0f;
-    }
-    for (int bin = size / 2 + 1; bin < size; ++bin)
-    {
-        spectrum[static_cast<size_t>(bin)] = 0.0f;
-    }
-    fft.perform(spectrum.data(), time.data(), true);
+    const std::vector<std::complex<double>> time = getAnalytic(output);
 
     // y = sin(w (n - tau)): the analytic phase is w (n - tau) - pi/2, so tau = n - (phase + pi/2) / w, up to whole periods of the tone
     const double omega = 2.0 * kPi * frequencyHz / settings.sampleRate;
@@ -249,8 +272,7 @@ DelayTrajectory measureTrajectoryFromTone(const std::vector<double>& output, dou
     bool first = true;
     for (int sample = edgeSamples; sample < length - edgeSamples; ++sample)
     {
-        const std::complex<float> value = time[static_cast<size_t>(sample)];
-        double phase = std::arg(std::complex<double>(value.real(), value.imag()));
+        double phase = std::arg(time[static_cast<size_t>(sample)]);
         // unwrap against the phase the tone would have advanced
         if (! first)
         {
@@ -378,6 +400,133 @@ DelayTrajectory fitTrajectory(std::vector<TrajectoryPoint> points, const Traject
     {
         result.pitchDeviationCents = 1200.0 * std::log2(1.0 / (1.0 - slope));
     }
+    return result;
+}
+
+TimeChangeAnalysis analyseTimeChange(const std::vector<double>& output, double frequencyHz, double roughDelayBefore, double roughDelayAfter, int edgeSamples,
+                                     double sampleRate)
+{
+    // the phase has left its value: 10 % of its whole change, within these limits (the analytic signal's tail after a step falls like 1/n)
+    constexpr double kLowestTolerance = 0.005;
+    constexpr double kHighestTolerance = 0.05;
+    constexpr int kJumpSamples = 64;          // the analytic signal spreads a phase step over some samples (1.3 ms at 48 kHz)
+    constexpr double kDipDb = -0.5;
+    constexpr double kGlideResidual = 0.05;  // radians
+    TimeChangeAnalysis result;
+    const int length = static_cast<int>(output.size());
+    const int first = edgeSamples;
+    const int last = length - edgeSamples;
+    const int quarter = (last - first) / 4;
+    if (quarter < 1)
+    {
+        return result;
+    }
+    const std::vector<std::complex<double>> analytic = getAnalytic(output);
+    const double omega = 2.0 * kPi * frequencyHz / sampleRate;
+    // r(n) = phase(n) - w n, unwrapped against the tone's own advance
+    std::vector<double> residual(static_cast<size_t>(length), 0.0);
+    std::vector<double> envelope(static_cast<size_t>(length), 0.0);
+    double previous = 0.0;
+    for (int sample = first; sample < last; ++sample)
+    {
+        const double expected = previous + omega;
+        double phase = std::arg(analytic[static_cast<size_t>(sample)]);
+        if (sample > first)
+        {
+            phase += 2.0 * kPi * std::round((expected - phase) / (2.0 * kPi));
+        }
+        previous = phase;
+        residual[static_cast<size_t>(sample)] = phase - omega * sample;
+        envelope[static_cast<size_t>(sample)] = std::abs(analytic[static_cast<size_t>(sample)]);
+    }
+    const auto median = [&](const std::vector<double>& values, int from, int to)
+    { return getMedian(std::vector<double>(values.begin() + from, values.begin() + to)); };
+    const double before = median(residual, first, first + quarter);
+    const double after = median(residual, last - quarter, last);
+    const double level = median(envelope, first, first + quarter);
+
+    // the delays: tau = -(r + pi/2) / w, whole periods from the rough delays
+    const double period = sampleRate / frequencyHz;
+    const auto toDelay = [&](double phaseResidual, double rough)
+    {
+        const double tau = -(phaseResidual + kPi / 2.0) / omega;
+        return tau + period * std::round((rough - tau) / period);
+    };
+    result.delayBeforeSamples = toDelay(before, roughDelayBefore);
+    result.delayAfterSamples = toDelay(after, roughDelayAfter);
+
+    const double tolerance = std::clamp(0.1 * std::abs(after - before), kLowestTolerance, kHighestTolerance);
+    int start = -1;
+    int end = -1;
+    for (int sample = first; sample < last; ++sample)
+    {
+        if (start < 0 && std::abs(residual[static_cast<size_t>(sample)] - before) > tolerance)
+        {
+            start = sample;
+        }
+        if (std::abs(residual[static_cast<size_t>(sample)] - after) > tolerance)
+        {
+            end = sample;
+        }
+    }
+    if (start < 0 || end < start)
+    {
+        return result;
+    }
+    result.startSamples = start;
+    result.lengthSamples = end - start + 1;
+    double lowest = level;
+    for (int sample = start; sample <= end; ++sample)
+    {
+        lowest = std::min(lowest, envelope[static_cast<size_t>(sample)]);
+    }
+    result.envelopeDipDb = 20.0 * std::log10(std::max(lowest, 1.0e-12) / level);
+    if (result.lengthSamples <= kJumpSamples)
+    {
+        result.kind = TimeChangeKind::Jump;
+        return result;
+    }
+    // a straight line through the middle 80 % of the change
+    const int margin = static_cast<int>(0.1 * result.lengthSamples);
+    std::vector<TrajectoryPoint> points;
+    for (int sample = start + margin; sample <= end - margin; ++sample)
+    {
+        points.push_back({static_cast<double>(sample), residual[static_cast<size_t>(sample)]});
+    }
+    double meanT = 0.0;
+    double meanR = 0.0;
+    for (const TrajectoryPoint& point : points)
+    {
+        meanT += point.timeSamples;
+        meanR += point.delaySamples;
+    }
+    meanT /= static_cast<double>(points.size());
+    meanR /= static_cast<double>(points.size());
+    double covariance = 0.0;
+    double variance = 0.0;
+    for (const TrajectoryPoint& point : points)
+    {
+        covariance += (point.timeSamples - meanT) * (point.delaySamples - meanR);
+        variance += (point.timeSamples - meanT) * (point.timeSamples - meanT);
+    }
+    const double slope = covariance / variance;
+    double squares = 0.0;
+    for (const TrajectoryPoint& point : points)
+    {
+        const double model = meanR + slope * (point.timeSamples - meanT);
+        squares += (point.delaySamples - model) * (point.delaySamples - model);
+    }
+    result.glideResidualRadians = std::sqrt(squares / static_cast<double>(points.size()));
+    // a glide moves the phase by the whole w (tau_after - tau_before), many turns; a crossfade only by the wrapped difference (at most pi)
+    const double unexplained = std::abs((after - before) + omega * (result.delayAfterSamples - result.delayBeforeSamples));
+    constexpr double kUnexplained = 0.5; // radians
+    if (result.envelopeDipDb > kDipDb && result.glideResidualRadians < kGlideResidual && unexplained < kUnexplained)
+    {
+        result.kind = TimeChangeKind::Glide;
+        result.glidePitchCents = 1200.0 * std::log2(1.0 + slope / omega); // f_out / f = 1 + r'/w = 1 - dtau/dt
+        return result;
+    }
+    result.kind = TimeChangeKind::Crossfade;
     return result;
 }
 }

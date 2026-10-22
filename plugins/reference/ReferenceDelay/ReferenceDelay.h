@@ -135,6 +135,24 @@ const struct
     const std::string help = "Drive of the tanh saturation in the loop: s(u) = tanh(drive u) / drive (gain 1 for small signals); 0 = linear.";
 } g_paramSaturation;
 
+const struct
+{
+    const std::string ID = "switchtime";
+    const std::string name = "Switch time";
+    const std::string unitName = "ms";
+    const float minValue = 1.0f;
+    const float maxValue = 500.0f;
+    const float defaultValue = 100.0f;
+    const int numDecimalPlaces = 1;
+    const bool logFrequency = false;
+    const std::string help = "How long a crossfade or a glide to a new time lasts.";
+} g_paramSwitchTime;
+
+const pluginlab::refplugins::ChoiceSpec g_paramTimeChange{
+    "timechange", "Time change", {"Jump", "Crossfade", "Glide"}, 0,
+    "How a new time takes over (the author's switch algorithms): at once (digital: a click), a crossfade from the old read position to the new "
+    "one, or a glide of the delay (tape: a pitch glide)."};
+
 const pluginlab::refplugins::ChoiceSpec g_paramLfoShape{"lfoshape", "LFO shape", {"Sine", "Triangle"}, 0,
                                                         "Shape of the LFO on the delay time (the triangle with the same peaks)."};
 
@@ -199,6 +217,8 @@ private:
     std::atomic<float>* m_lfoDepthParam = nullptr;
     std::atomic<float>* m_lfoShapeParam = nullptr;
     std::atomic<float>* m_saturationParam = nullptr;
+    std::atomic<float>* m_timeChangeParam = nullptr;
+    std::atomic<float>* m_switchTimeParam = nullptr;
     std::unique_ptr<pluginlab::reference::FeedbackDelay> m_delay;
     std::atomic<double> m_tailSeconds{0.0};
 };

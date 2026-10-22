@@ -15,6 +15,8 @@ constexpr int kInterpolationAllPass = 1;
 constexpr int kLoopOrderAuthors = 1;
 constexpr int kPingPongOn = 1;
 constexpr int kLfoTriangle = 1;
+constexpr int kTimeChangeCrossfade = 1;
+constexpr int kTimeChangeGlide = 2;
 constexpr double kStableLoop = 0.99; // |feedback| + |cross feedback| below this (the loop of two channels stays stable)
 constexpr double kTempoWithoutHost = 120.0;
 constexpr double kSecondsPerMinute = 60.0;
@@ -107,6 +109,17 @@ ref::FeedbackDelaySettings ReferenceDelayAudio::readSetting() const
         settings.lfoShape = ref::LfoShape::Triangle;
     }
     settings.saturationDrive = m_saturationParam->load();
+    const int timeChange = pluginlab::refplugins::getChoiceIndex(m_timeChangeParam);
+    settings.timeChange = ref::TimeChange::Jump;
+    if (timeChange == kTimeChangeCrossfade)
+    {
+        settings.timeChange = ref::TimeChange::Crossfade;
+    }
+    if (timeChange == kTimeChangeGlide)
+    {
+        settings.timeChange = ref::TimeChange::Glide;
+    }
+    settings.switchSamples = m_switchTimeParam->load() * 0.001 * m_sampleRate;
     settings.order = ref::LoopOrder::Exact;
     if (pluginlab::refplugins::getChoiceIndex(m_loopOrderParam) == kLoopOrderAuthors)
     {
@@ -154,6 +167,8 @@ void ReferenceDelayAudio::addParameter(std::vector<std::unique_ptr<juce::RangedA
     paramVector.push_back(jade::makeParameter(g_paramLfoDepth));
     paramVector.push_back(pluginlab::refplugins::makeChoiceParameter(g_paramLfoShape));
     paramVector.push_back(jade::makeParameter(g_paramSaturation));
+    paramVector.push_back(pluginlab::refplugins::makeChoiceParameter(g_paramTimeChange));
+    paramVector.push_back(jade::makeParameter(g_paramSwitchTime));
 }
 
 void ReferenceDelayAudio::prepareParameter(std::unique_ptr<juce::AudioProcessorValueTreeState>& vts)
@@ -173,6 +188,8 @@ void ReferenceDelayAudio::prepareParameter(std::unique_ptr<juce::AudioProcessorV
     m_lfoDepthParam = vts->getRawParameterValue(g_paramLfoDepth.ID);
     m_lfoShapeParam = vts->getRawParameterValue(g_paramLfoShape.ID);
     m_saturationParam = vts->getRawParameterValue(g_paramSaturation.ID);
+    m_timeChangeParam = vts->getRawParameterValue(g_paramTimeChange.ID);
+    m_switchTimeParam = vts->getRawParameterValue(g_paramSwitchTime.ID);
 }
 
 ReferenceDelayGUI::ReferenceDelayGUI(ReferenceDelayAudioProcessor& p, juce::AudioProcessorValueTreeState& apvts)
@@ -183,6 +200,8 @@ ReferenceDelayGUI::ReferenceDelayGUI(ReferenceDelayAudioProcessor& p, juce::Audi
     m_controls.addKnob(g_paramTime);
     m_controls.addChoice(g_paramSync);
     m_controls.addChoice(g_paramInterpolation);
+    m_controls.addChoice(g_paramTimeChange);
+    m_controls.addKnob(g_paramSwitchTime);
     m_controls.addKnob(g_paramFeedback);
     m_controls.addChoice(g_paramLoopFilter);
     m_controls.addKnob(g_paramLowCut);
@@ -196,7 +215,7 @@ ReferenceDelayGUI::ReferenceDelayGUI(ReferenceDelayAudioProcessor& p, juce::Audi
     m_controls.addChoice(g_paramPingPong);
     m_controls.addKnob(g_paramMix);
     addAndMakeVisible(m_controls);
-    m_flow = {{"Delay line", {g_paramTime.ID, g_paramSync.ID, g_paramInterpolation.ID}, 0, {}},
+    m_flow = {{"Delay line", {g_paramTime.ID, g_paramSync.ID, g_paramInterpolation.ID, g_paramTimeChange.ID, g_paramSwitchTime.ID}, 0, {}},
               {"Loop", {g_paramFeedback.ID, g_paramLoopFilter.ID, g_paramLowCut.ID, g_paramHighCut.ID, g_paramLoopOrder.ID, g_paramSaturation.ID}, 0, {}},
               {"LFO on the time", {g_paramLfoRate.ID, g_paramLfoDepth.ID, g_paramLfoShape.ID}, 1, {}},
               {"Stereo", {g_paramCrossFeedback.ID, g_paramPingPong.ID}, 1, {}},
@@ -211,6 +230,7 @@ void ReferenceDelayGUI::updateControls()
     const bool filters = pluginlab::refplugins::getChoiceIndex(m_apvts.getRawParameterValue(g_paramLoopFilter.ID)) == kLoopFilterOn;
     m_controls.setControlEnabled(g_paramLowCut.ID, filters);
     m_controls.setControlEnabled(g_paramHighCut.ID, filters);
+    m_controls.setControlEnabled(g_paramSwitchTime.ID, pluginlab::refplugins::getChoiceIndex(m_apvts.getRawParameterValue(g_paramTimeChange.ID)) != 0);
     const bool lfo = m_apvts.getRawParameterValue(g_paramLfoDepth.ID)->load() > 0.0f;
     m_controls.setControlEnabled(g_paramLfoRate.ID, lfo);
     m_controls.setControlEnabled(g_paramLfoShape.ID, lfo);

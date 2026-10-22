@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <complex>
 #include <vector>
 
@@ -24,6 +25,16 @@ enum class LfoShape
 {
     Sine,
     Triangle
+};
+
+// How a new delay time takes over (W11.1h, the author's switch algorithms): Jump at once (digital: a click), Crossfade from the old read
+// position to the new one over switchSamples (gain linear), Glide: the delay moves linearly to the new one over switchSamples (tape: a pitch glide
+// of f (1 - dtau/dt))
+enum class TimeChange
+{
+    Jump,
+    Crossfade,
+    Glide
 };
 
 enum class LoopOrder
@@ -53,6 +64,9 @@ struct FeedbackDelaySettings
     // a saturation in the loop (W11.1e): what is written into the line is s(u) = tanh(drive u) / drive (gain 1 for small signals, at most
     // 1 / drive); 0: linear. With a saturation |feedback| may reach 1.5: the loop then oscillates at a level the saturation holds.
     double saturationDrive = 0.0;
+    // a change of delaySamples by setSettings while running (W11.1h); with Crossfade or Glide the interpolation is Lagrange during the change
+    TimeChange timeChange = TimeChange::Jump;
+    double switchSamples = 2400.0;
 };
 
 // The reference delay of W11.1 (docs/design/W11-delay-plan.md 7), ported from the author's jade::BasicDelayEffect (BSD 3-Clause, 2024) with the
@@ -99,6 +113,11 @@ private:
     void configure();
     double saturate(double value) const;
     void setLagrange(double delaySamples);
+    // Lagrange taps for any delay (the taps at integer - 1 ... integer + 2 samples back)
+    static void makeLagrange(double delaySamples, int& integer, std::array<double, 4>& taps);
+    double readTaps(size_t channel, int integer, const std::array<double, 4>& taps) const;
+    // the delay of this sample without the LFO: the target, or on its way there (glide)
+    double getBaseDelay() const;
     double readDelayed(size_t channel);
     // the feedback from the wet signal of channel `from` into the line of channel `to`, and the input of channel `from` into that line
     // (stereo: two channels; otherwise the cross feedback and ping-pong do not apply)
@@ -126,13 +145,19 @@ private:
     double m_sampleRate;
     FeedbackDelaySettings m_settings;
     int m_integerDelay = 0;               // Lagrange: floor(D), the fraction between Dint and Dint + 1; all-pass: D minus the all-pass's delay
-    std::vector<double> m_lagrange;       // the weights of the samples Dint - 1, Dint, Dint + 1, Dint + 2 samples back
+    std::array<double, 4> m_lagrange{};   // the weights of the samples Dint - 1, Dint, Dint + 1, Dint + 2 samples back
     double m_allPassCoefficient = 0.0;
     BiquadCoefficients m_lowCut;          // first-order sections (b2 = a2 = 0); identity when off
     BiquadCoefficients m_highCut;
     size_t m_size = 0;
     size_t m_writePosition = 0;
     juce::int64 m_lfoSample = 0;          // samples since the reset (the LFO's phase)
+    // a change of the delay time on its way (W11.1h)
+    double m_fromDelay = 0.0;
+    int m_switchRemaining = 0;
+    int m_switchLength = 0;
+    TimeChange m_switchKind = TimeChange::Jump;
+    bool m_running = false;               // processed since the last reset: a new time is a change, not a start
     std::vector<ChannelState> m_channels;
 };
 }

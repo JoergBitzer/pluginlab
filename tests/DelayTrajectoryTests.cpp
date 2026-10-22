@@ -59,7 +59,7 @@ class DelayTrajectoryTests : public juce::UnitTest
 {
 public:
     DelayTrajectoryTests()
-        : juce::UnitTest("Delay trajectory (W11.1d)", "pluginlab")
+        : juce::UnitTest("Delay trajectory and time change (W11.1d, h)", "pluginlab")
     {
     }
 
@@ -111,9 +111,76 @@ public:
         }
 
         testPlugin();
+        testTimeChange();
     }
 
 private:
+    // W11.1h: the three ways of the reference to change its time, told apart by the tone; the glide's pitch within 1 cent
+    void testTimeChange()
+    {
+        constexpr int kChangeAt = 2 * 48000;
+        constexpr double kSwitch = 4800.0;
+        // 963.8 = 480 + 31.75 periods of 3150 Hz: old and new a quarter period apart (a whole number of periods would hide a crossfade)
+        struct Case
+        {
+            juce::String name;
+            ref::TimeChange change;
+            double to;
+            measure::TimeChangeKind kind;
+        };
+        for (const Case& item : {Case{"jump", ref::TimeChange::Jump, 963.8, measure::TimeChangeKind::Jump},
+                                 Case{"crossfade", ref::TimeChange::Crossfade, 963.8, measure::TimeChangeKind::Crossfade},
+                                 Case{"glide", ref::TimeChange::Glide, 960.0, measure::TimeChangeKind::Glide}})
+        {
+            beginTest("changing the delay time: the " + item.name + " is recognised (480 to " + juce::String(item.to, 1) + " samples)");
+            ref::FeedbackDelaySettings settings = makeSettings(0.0, ref::LfoShape::Sine);
+            settings.timeChange = item.change;
+            settings.switchSamples = kSwitch;
+            ref::FeedbackDelay delay(kSampleRate, settings, 2000.0);
+            const std::vector<float> tone = measure::makeTone(kToneHz, kToneSamples, kSampleRate, 0.5f);
+            juce::AudioBuffer<float> buffer(1, kToneSamples);
+            for (int sample = 0; sample < kToneSamples; ++sample)
+            {
+                buffer.setSample(0, sample, tone[static_cast<size_t>(sample)]);
+            }
+            delay.reset();
+            juce::AudioBuffer<float> before(buffer.getArrayOfWritePointers(), 1, 0, kChangeAt);
+            delay.process(before);
+            settings.delaySamples = item.to;
+            delay.setSettings(settings);
+            juce::AudioBuffer<float> after(buffer.getArrayOfWritePointers(), 1, kChangeAt, kToneSamples - kChangeAt);
+            delay.process(after);
+            std::vector<double> output;
+            for (int sample = 0; sample < kToneSamples; ++sample)
+            {
+                output.push_back(buffer.getSample(0, sample));
+            }
+            const measure::TimeChangeAnalysis analysis = measure::analyseTimeChange(output, kToneHz, 480.0, item.to, kToneEdge, kSampleRate);
+            logMessage("start " + juce::String(analysis.startSamples, 0) + ", length " + juce::String(analysis.lengthSamples, 0) + ", delays "
+                       + juce::String(analysis.delayBeforeSamples, 3) + " -> " + juce::String(analysis.delayAfterSamples, 3) + ", dip "
+                       + juce::String(analysis.envelopeDipDb, 2) + " dB, glide " + juce::String(analysis.glidePitchCents, 2) + " cents, residual "
+                       + juce::String(analysis.glideResidualRadians, 4));
+            expect(analysis.kind == item.kind, "the kind");
+            expectWithinAbsoluteError(analysis.delayBeforeSamples, 480.0, 0.1);
+            expectWithinAbsoluteError(analysis.delayAfterSamples, item.to, 0.1);
+            if (item.change == ref::TimeChange::Jump)
+            {
+                expectWithinAbsoluteError(analysis.startSamples, static_cast<double>(kChangeAt), 16.0, "where the jump is (the analytic signal spreads it)");
+            }
+            else
+            {
+                // a linear crossfade moves the phase very little at its ends: its start and length are blurred (by up to 10 %)
+                expectWithinAbsoluteError(analysis.startSamples, static_cast<double>(kChangeAt), 0.1 * kSwitch, "where the change starts");
+                expectWithinAbsoluteError(analysis.lengthSamples, kSwitch, 0.2 * kSwitch, "its length");
+            }
+            if (item.change == ref::TimeChange::Glide)
+            {
+                // dtau/dt = 480 / 4800 = 0.1: f_out = 0.9 f, 1200 log2(0.9) cents
+                expectWithinAbsoluteError(analysis.glidePitchCents, 1200.0 * std::log2(0.9), 1.0, "the glide's pitch within 1 cent");
+            }
+        }
+    }
+
     // the Reference Delay plugin with its LFO (0.5 Hz, 0.5 ms), feedback 0, as a measurement device: the impulse train finds the LFO
     void testPlugin()
     {

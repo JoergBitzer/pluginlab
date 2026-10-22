@@ -34,6 +34,16 @@ FeedbackDelay::FeedbackDelay(double sampleRate, const FeedbackDelaySettings& set
 
 void FeedbackDelay::setSettings(const FeedbackDelaySettings& settings)
 {
+    // a new time while running: the change of W11.1h starts from where the delay is now
+    const double now = getBaseDelay();
+    const bool changes = m_running && settings.timeChange != TimeChange::Jump && std::abs(settings.delaySamples - m_settings.delaySamples) > 1.0e-9;
+    if (changes)
+    {
+        m_fromDelay = now;
+        m_switchKind = settings.timeChange;
+        m_switchLength = std::max(1, static_cast<int>(std::lround(settings.switchSamples)));
+        m_switchRemaining = m_switchLength;
+    }
     m_settings = settings;
     const double longest = static_cast<double>(m_size - kLineMargin);
     m_settings.delaySamples = std::min(settings.delaySamples, longest);
@@ -63,21 +73,47 @@ void FeedbackDelay::configure()
 }
 
 // the taps at Dint - 1 ... Dint + 2 samples back, the delay d = 1 + fraction inside them: h_k = prod_(n != k) (d - n) / (k - n)
-void FeedbackDelay::setLagrange(double delaySamples)
+void FeedbackDelay::makeLagrange(double delaySamples, int& integer, std::array<double, 4>& taps)
 {
-    m_integerDelay = static_cast<int>(std::floor(delaySamples));
-    const double delay = 1.0 + delaySamples - m_integerDelay;
-    m_lagrange.assign(kLagrangeTaps, 1.0);
+    integer = static_cast<int>(std::floor(delaySamples));
+    const double delay = 1.0 + delaySamples - integer;
     for (int k = 0; k < kLagrangeTaps; ++k)
     {
+        taps[static_cast<size_t>(k)] = 1.0;
         for (int n = 0; n < kLagrangeTaps; ++n)
         {
             if (n != k)
             {
-                m_lagrange[static_cast<size_t>(k)] *= (delay - n) / (k - n);
+                taps[static_cast<size_t>(k)] *= (delay - n) / (k - n);
             }
         }
     }
+}
+
+void FeedbackDelay::setLagrange(double delaySamples)
+{
+    makeLagrange(delaySamples, m_integerDelay, m_lagrange);
+}
+
+double FeedbackDelay::readTaps(size_t channel, int integer, const std::array<double, 4>& taps) const
+{
+    const ChannelState& state = m_channels[channel];
+    double value = 0.0;
+    for (int k = 0; k < kLagrangeTaps; ++k)
+    {
+        value += taps[static_cast<size_t>(k)] * state.line[(m_writePosition + m_size - static_cast<size_t>(integer - 1 + k)) % m_size];
+    }
+    return value;
+}
+
+double FeedbackDelay::getBaseDelay() const
+{
+    if (m_switchRemaining > 0 && m_switchKind == TimeChange::Glide)
+    {
+        const double progress = 1.0 - static_cast<double>(m_switchRemaining) / m_switchLength;
+        return m_fromDelay + (m_settings.delaySamples - m_fromDelay) * progress;
+    }
+    return m_settings.delaySamples;
 }
 
 double FeedbackDelay::saturate(double value) const
@@ -186,6 +222,8 @@ void FeedbackDelay::reset()
     }
     m_writePosition = 0;
     m_lfoSample = 0;
+    m_switchRemaining = 0;
+    m_running = false;
 }
 
 void FeedbackDelay::prepareChannels(int channels)
@@ -207,14 +245,9 @@ double FeedbackDelay::readDelayed(size_t channel)
     {
         return state.line[(m_writePosition + m_size - static_cast<size_t>(back)) % m_size];
     };
-    if (m_settings.interpolation == DelayInterpolation::Lagrange || m_settings.lfoDepthSamples > 0.0)
+    if (m_settings.interpolation == DelayInterpolation::Lagrange || m_settings.lfoDepthSamples > 0.0 || m_switchRemaining > 0)
     {
-        double value = 0.0;
-        for (int k = 0; k < kLagrangeTaps; ++k)
-        {
-            value += m_lagrange[static_cast<size_t>(k)] * at(m_integerDelay - 1 + k);
-        }
-        return value;
+        return readTaps(channel, m_integerDelay, m_lagrange);
     }
     // y(n) = a x(n) + x(n - 1) - a y(n - 1)
     const double input = at(m_integerDelay);
@@ -322,21 +355,41 @@ void FeedbackDelay::process(juce::AudioBuffer<float>& buffer)
     }
     const size_t channels = m_channels.size();
     const bool stereo = channels == 2;
-    const bool modulated = m_settings.lfoDepthSamples > 0.0;
+    m_running = true;
     for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
     {
+        // the delay of this sample: the base (on its way in a glide) plus the LFO; a crossfade also reads at the old delay
+        const double lfo = getDelayAt(m_lfoSample) - m_settings.delaySamples;
+        const bool modulated = m_settings.lfoDepthSamples > 0.0 || m_switchRemaining > 0;
         if (modulated)
         {
-            setLagrange(getDelayAt(m_lfoSample)); // the taps of this sample's delay (the vector keeps its size: no allocation)
+            setLagrange(getBaseDelay() + lfo);
+        }
+        double oldGain = 0.0;
+        int oldInteger = 0;
+        std::array<double, 4> oldTaps{};
+        if (m_switchRemaining > 0 && m_switchKind == TimeChange::Crossfade)
+        {
+            oldGain = static_cast<double>(m_switchRemaining) / m_switchLength;
+            makeLagrange(m_fromDelay + lfo, oldInteger, oldTaps);
         }
         ++m_lfoSample;
+        const auto readWet = [&](size_t channel)
+        {
+            double read = readDelayed(channel);
+            if (oldGain > 0.0)
+            {
+                read = (1.0 - oldGain) * read + oldGain * readTaps(channel, oldInteger, oldTaps);
+            }
+            return filter(channel, read);
+        };
         // Exact: every channel's wet signal is read first, then every line written (the feedback crosses between the channels);
         // the author's order writes with the previous sample's wet signals, then reads
         if (m_settings.order == LoopOrder::Exact)
         {
             for (size_t channel = 0; channel < channels; ++channel)
             {
-                m_channels[channel].wet = filter(channel, readDelayed(channel));
+                m_channels[channel].wet = readWet(channel);
             }
         }
         for (size_t to = 0; to < channels; ++to)
@@ -357,7 +410,7 @@ void FeedbackDelay::process(juce::AudioBuffer<float>& buffer)
         {
             for (size_t channel = 0; channel < channels; ++channel)
             {
-                m_channels[channel].wet = filter(channel, readDelayed(channel));
+                m_channels[channel].wet = readWet(channel);
                 m_channels[channel].lastOutput = m_channels[channel].wet;
             }
         }
@@ -367,6 +420,14 @@ void FeedbackDelay::process(juce::AudioBuffer<float>& buffer)
             buffer.setSample(static_cast<int>(channel), sample, static_cast<float>((1.0 - m_settings.mix) * input + m_settings.mix * m_channels[channel].wet));
         }
         m_writePosition = (m_writePosition + 1) % m_size;
+        if (m_switchRemaining > 0)
+        {
+            --m_switchRemaining;
+            if (m_switchRemaining == 0)
+            {
+                configure(); // the target's taps (and the all-pass's split), not those of the last step of the change
+            }
+        }
     }
 }
 }

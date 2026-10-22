@@ -271,6 +271,20 @@ went (a run-loop handler of a destroyed instance is called, inside the plugin's 
 | PA BucketMan 2.0.0 beta (BBD) | not reliable | noise of its own at -94 dBFS, the echo at about 280 ms smeared over about 100 ms (the BBD's filters and clock modulation): the arrival analysis picks wrong peaks; no BBD model yet (the author) |
 | Reference Delay | 250 ms, -7.96 dB (40 %), mix 0 dB | as set |
 
+### W11.1h changing the delay time (0.80.0, done)
+- `reference::FeedbackDelay`: a new time by `setSettings` while running takes over by `TimeChange::Jump` (at once), `Crossfade` (the old and the
+  new read position, gain linear over switchSamples) or `Glide` (the delay moves linearly; Lagrange taps per sample), from where the delay is
+  (a glide interrupted goes on from its present delay). Reference Delay: Time change, Switch time.
+- `measure::analyseTimeChange`: a 3150 Hz tone, the time changed once; r(n) = phase - w n of the analytic signal is constant before and after.
+  Jump: the change within 64 samples (the analytic signal spreads a step); glide: r moves in a straight line by the whole w (tau_after -
+  tau_before) without a dip, its slope gives the pitch, f (1 - dtau/dt); crossfade: any other (a dip, the phase moves by the wrapped difference).
+  The delays before and after (whole periods from rough values), where the change starts, its length, the dip.
+- Tests: 480 to 960 samples by a glide over 4800: -182.40 cents (expected 1200 log2(0.9) = -182.40), length 4797; a jump and a crossfade to
+  963.8 samples told apart (the delays within 0.1 sample).
+- Limits found: a crossfade between delays a whole number of the tone's periods apart does not show (old and new in phase; the first test value
+  was such a case: 487.3 samples = 31.98 periods); a linear crossfade moves the phase very little at its ends, so its start and length are
+  blurred by up to 10 %. A second tone frequency (or a sweep) would remove both; not needed for "told apart".
+
 ## 9. Questions for the author
 1. **Which delays** form the test set (free ones: e.g. a clean digital delay, a tape echo model, a BBD model, a ping-pong)?
    Answer: all. You will find a full delay class with digital and tape in ~/AudioDev. I have no modell for BBD. I will look for some free examples of delays as well. We will collect a list for some free delay plugins
