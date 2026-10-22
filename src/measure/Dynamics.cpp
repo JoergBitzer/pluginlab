@@ -302,7 +302,16 @@ const char* getTimeModelName(TimeModel model)
     {
         return "detector power and gain smoothed (two stages)";
     }
+    if (model == TimeModel::LevelLinear)
+    {
+        return "level smoothed as an amplitude (linear)";
+    }
     return "gain reduction smoothed in dB";
+}
+
+bool isAtypicalTimeModel(TimeModel model)
+{
+    return model == TimeModel::LevelLinear;
 }
 
 namespace
@@ -347,6 +356,17 @@ std::vector<double> simulateGainDb(const std::vector<double>& levelsDb, const St
             }
             detector = coefficient * detector + (1.0 - coefficient) * level;
             smoothed = getReduction(curve, detector);
+        }
+        else if (model == TimeModel::LevelLinear)
+        {
+            const double amplitude = std::pow(10.0, level / 20.0);
+            double coefficient = release;
+            if (amplitude > detector)
+            {
+                coefficient = attack;
+            }
+            detector = coefficient * detector + (1.0 - coefficient) * amplitude;
+            smoothed = getReduction(curve, 20.0 * std::log10(std::max(detector, 1.0e-10)));
         }
         else
         {
@@ -744,7 +764,7 @@ StepResponse measureStepResponse(const Device& device, int channels, const Stati
     const double hold = step.holdSeconds;
     step.gainDb.resize(static_cast<size_t>(end));
     step.levelsDb.resize(static_cast<size_t>(end));
-    for (const TimeModel model : {TimeModel::GainLog, TimeModel::LevelLog, TimeModel::TwoStage})
+    for (const TimeModel model : {TimeModel::GainLog, TimeModel::LevelLog, TimeModel::TwoStage, TimeModel::LevelLinear})
     {
         step.fits.push_back(fitModel(step, curve, model, hold, fs));
         if (step.fits.back().rmsErrorDb < step.best.rmsErrorDb)

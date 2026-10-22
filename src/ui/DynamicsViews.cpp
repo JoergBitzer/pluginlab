@@ -198,7 +198,12 @@ juce::String writeDynamicsViews(const measure::DynamicsMeasurement& dynamics, do
             std::vector<ChartSeries> series;
             addPhase(series, step, model, step.attackStart, attackShown, fs);
             ChartOptions options;
-            options.title = name + ", " + measure::getTimeModelName(step.best.model) + ": attack (the level steps from " + juce::String(juce::roundToInt(step.levelsDb[static_cast<size_t>(step.attackStart - 1)])) + " to "
+            juce::String model = measure::getTimeModelName(step.best.model);
+            if (measure::isAtypicalTimeModel(step.best.model))
+            {
+                model << " (atypical)";
+            }
+            options.title = name + ", " + model + ": attack (the level steps from " + juce::String(juce::roundToInt(step.levelsDb[static_cast<size_t>(step.attackStart - 1)])) + " to "
                             + juce::String(juce::roundToInt(step.levelsDb[static_cast<size_t>(step.attackStart)])) + " dBFS at 0 ms): attack "
                             + juce::String(parameters.attackSeconds * 1000.0, 2) + " ms";
             options.xLabel = "time after the step in ms";

@@ -284,7 +284,8 @@ private:
         for (const Case& item : {Case{"the gain smoothed in dB", ref::Smoothing::GainLog, measure::TimeModel::GainLog, 0.0},
                                  Case{"the level smoothed in dB", ref::Smoothing::LevelLog, measure::TimeModel::LevelLog, 0.0},
                                  Case{"two stages", ref::Smoothing::TwoStage, measure::TimeModel::TwoStage, 0.0},
-                                 Case{"the gain smoothed in dB with a hold of 30 ms", ref::Smoothing::GainLog, measure::TimeModel::GainLog, 0.03}})
+                                 Case{"the gain smoothed in dB with a hold of 30 ms", ref::Smoothing::GainLog, measure::TimeModel::GainLog, 0.03},
+                                 Case{"the level smoothed as an amplitude (atypical)", ref::Smoothing::LevelLinear, measure::TimeModel::LevelLinear, 0.0}})
         {
             beginTest("the step response: " + item.name + " recognised, the time constants within 2 %");
             ref::CompressorSettings settings = makeSettings();
@@ -305,6 +306,7 @@ private:
                        + " / " + juce::String(step.best.parameters.detectorReleaseSeconds * 1000.0, 3) + " ms, hold " + juce::String(step.best.parameters.holdSeconds * 1000.0, 2)
                        + " ms; settling (3 / 4 dB) " + juce::String(step.attackSettleSeconds * 1000.0, 2) + " / " + juce::String(step.releaseSettleSeconds * 1000.0, 2) + " ms");
             expect(step.best.model == item.model, "the variant");
+            expect(measure::isAtypicalTimeModel(step.best.model) == (item.model == measure::TimeModel::LevelLinear), "atypical only for the linear level");
             expectWithinAbsoluteError(step.best.parameters.attackSeconds, settings.attackSeconds, kTimeShare * settings.attackSeconds, "attack");
             expectWithinAbsoluteError(step.best.parameters.releaseSeconds, settings.releaseSeconds, kTimeShare * settings.releaseSeconds, "release");
             if (item.model == measure::TimeModel::TwoStage)
@@ -339,7 +341,7 @@ private:
         }
         const pluginlab::engine::MeasurementRow* curve = pluginlab::engine::findRow(summary, "static curve: threshold, ratio, knee, makeup");
         expect(curve != nullptr && std::abs(curve->value - settings.thresholdDb) < kParameterDb, "the threshold");
-        const pluginlab::engine::MeasurementRow* time = pluginlab::engine::findRow(summary, "time model (the best of three variants)");
+        const pluginlab::engine::MeasurementRow* time = pluginlab::engine::findRow(summary, "time model (the best of four variants)");
         expect(time != nullptr && std::abs(time->value - settings.attackSeconds * 1000.0) < 0.02 * settings.attackSeconds * 1000.0, "the attack");
         const juce::String line = pluginlab::engine::summarizeDynamics(summary);
         logMessage(line);
@@ -396,7 +398,7 @@ private:
         }
         const juce::String pluginLine = pluginlab::engine::summarizeDynamics(plugin);
         expect(pluginLine.startsWith("-20.0 dBFS, 4.00 : 1, knee 6.0 dB; gain reduction smoothed in dB"), pluginLine);
-        const pluginlab::engine::MeasurementRow* pluginTime = pluginlab::engine::findRow(plugin, "time model (the best of three variants)");
+        const pluginlab::engine::MeasurementRow* pluginTime = pluginlab::engine::findRow(plugin, "time model (the best of four variants)");
         expect(pluginTime != nullptr && std::abs(pluginTime->value - 5.0) < 0.1, "the attack 5 ms");
         const pluginlab::engine::MeasurementRow* lead = pluginlab::engine::findRow(plugin, "look-ahead (the gain moves before the audio)");
         expect(lead != nullptr && juce::roundToInt(lead->value) == 96, "the look-ahead: 96 samples");

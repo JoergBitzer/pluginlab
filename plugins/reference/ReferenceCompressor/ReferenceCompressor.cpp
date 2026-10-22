@@ -93,6 +93,10 @@ int ReferenceCompressorAudio::processSynchronBlock(juce::AudioBuffer<float>& buf
         {
             settings.smoothing = ref::Smoothing::TwoStage;
         }
+        else if (smoothing == 3)
+        {
+            settings.smoothing = ref::Smoothing::LevelLinear;
+        }
         m_compressor = std::make_unique<ref::Compressor>(settings);
         m_setting = setting;
         m_settingValid = true;

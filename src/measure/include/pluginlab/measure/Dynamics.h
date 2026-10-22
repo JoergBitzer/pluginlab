@@ -85,15 +85,22 @@ double getModelGainDb(const StaticFit& fit, double levelDb);
 // different heights), the gain curve, and the model variants fitted to it with the measured static curve as
 // the gain computer: GainLog (the gain reduction smoothed in dB), LevelLog (the detector level smoothed in dB), TwoStage (the detector power
 // smoothed, then the gain in dB); time constants a = exp(-1 / (tau fs)) with smooth branching; a hold before the release. The variant with the
-// smallest error is the result (the paper: three variants, the smallest error chosen).
+// smallest error is the result (the paper: three variants, the smallest error chosen; a fourth since W11.3f, LevelLinear).
 enum class TimeModel
 {
     GainLog,
     LevelLog,
-    TwoStage
+    TwoStage,
+    LevelLinear       // the level smoothed as an amplitude (linear), the gain computer after it (W11.3f, SocaLabs Compressor)
 };
 
 const char* getTimeModelName(TimeModel model);
+
+// Atypical time behaviour (W11.3f): smoothing the linear level before the gain computer makes the attack and release times, read in dB, depend
+// on the height of the level step (an exponential in the amplitude is not one in dB): a large reduction recovers its first decibels quickly
+// and its last ones slowly, a small one evenly. Giannoulis et al. (2012) advise smoothing in the log domain for that reason. The report marks
+// such a device "atypical"
+bool isAtypicalTimeModel(TimeModel model);
 
 struct TimeParameters
 {

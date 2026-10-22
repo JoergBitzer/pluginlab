@@ -291,7 +291,11 @@ void addDynamicsRows(Rows& rows, const measure::Device& device, int channels, co
                << juce::String(time.parameters.detectorReleaseSeconds * 1000.0, 1) << " ms";
     }
     timing << ", hold " << juce::String(time.parameters.holdSeconds * 1000.0, 1) << " ms (the model's error " << juce::String(time.rmsErrorDb, 2) << " dB)";
-    rows.add("dynamics", "time model (the best of three variants)", time.parameters.attackSeconds * 1000.0, timing, "W11.3c, Simmer, Schmidt, Bitzer 2006");
+    if (measure::isAtypicalTimeModel(time.model))
+    {
+        timing << "; atypical: the linear level is smoothed, so attack and release in dB depend on how far the level steps";
+    }
+    rows.add("dynamics", "time model (the best of four variants)", time.parameters.attackSeconds * 1000.0, timing, "W11.3c, Simmer, Schmidt, Bitzer 2006");
     rows.add("dynamics", "attack and release (within 3 / 4 dB of the final value)", dynamics.step.attackSettleSeconds * 1000.0,
              juce::String(dynamics.step.attackSettleSeconds * 1000.0, 1) + " ms, " + juce::String(dynamics.step.releaseSettleSeconds * 1000.0, 1) + " ms",
              "ANSI S3.22");
@@ -966,14 +970,19 @@ juce::String summarizeDynamics(const MeasurementSummary& summary)
     }
     juce::StringArray parts;
     const MeasurementRow* curve = findRow(summary, "static curve: threshold, ratio, knee, makeup");
-    const MeasurementRow* time = findRow(summary, "time model (the best of three variants)");
+    const MeasurementRow* time = findRow(summary, "time model (the best of four variants)");
     if (curve != nullptr)
     {
         parts.add(curve->text.upToFirstOccurrenceOf(", makeup", false, false));
     }
     if (time != nullptr)
     {
-        parts.add(time->text.upToFirstOccurrenceOf(", hold", false, false));
+        juce::String timing = time->text.upToFirstOccurrenceOf(", hold", false, false);
+        if (time->text.contains("; atypical"))
+        {
+            timing << " (atypical)";
+        }
+        parts.add(timing);
     }
     else if (findRow(summary, "dynamics: kind") != nullptr)
     {

@@ -255,12 +255,12 @@ switchable to the paper's two-stage model (detector and gain smoothing in the li
 |---|---|---|---|---|---|---|
 | Reference Compressor | -20.0 dBFS, 4.00 : 1, knee 6.0 dB | gain in dB: 5.00 / 50.0 ms | 0 | peak | single | 100 % |
 | CTAGDRC 1.1.0 | -10.0 dBFS, 2.00 : 1, knee 6.0 dB | gain in dB: 1.99 / 139.9 ms (0.00 dB) | 0 | peak | single | 100 % |
-| SocaLabs Compressor 1.1.11 | -30.0 dBFS, 5.00 : 1, knee 5.0 dB | two stages, the gain stage at its floor: detector 0.64 / 1.3 ms (0.03 dB) | 0 | peak | single | 80 % |
+| SocaLabs Compressor 1.1.11 | -30.0 dBFS, 5.00 : 1, knee 5.0 dB | linear level (atypical): 0.50 / 2.5 ms (0.00 dB; 0.93.0 without it: two stages, 0.03 dB) | 0 | peak | single | 80 % |
 | ZL Compressor 0.6.1 | -32.0 dBFS, 3.00 : 1, knee 16.0 dB | gain in dB: 15.9 / 79.6 ms (0.00 dB) | 0 | peak | single | 126 % |
 | ZeroComp 1.1.7 | none: the steady gain varies by 0.01 dB (no compression at its defaults) | | | | | |
 
-  SocaLabs smooths the linear level (no variant of ours does exactly that; the two-stage model with its gain smoothing at the floor of 0.1 ms
-  comes nearest); its fast release makes 50 Hz distort (THD -15.8 dB at -6 dBFS). CTAGDRC leaves 11 of the 61 rising steps unsettled after
+  SocaLabs smooths the linear level (0.93.0 had no such variant; the two-stage model with its gain smoothing at the floor of 0.1 ms came
+  nearest); its fast release makes 50 Hz distort (THD -15.8 dB at -6 dBFS). CTAGDRC leaves 11 of the 61 rising steps unsettled after
   0.5 s (0.06 dB of hysteresis). ZL Compressor turns the quiet channel down by 126 % of the loud one's reduction, which no link law of
   (1 - link) x + link max(x) gives (a mid/side or sum detector would; not examined yet).
 - Gain curves on music (`W11Plugins/dynamics_reports/gain_curves_drums.md`, MusicRadar real-world drums, loop 01, 3.7 s, 44.1 kHz): the four
@@ -268,7 +268,17 @@ switchable to the paper's two-stage model (detector and gain smoothing in the li
   -22.3 LUFS (ZL); the crest factor rises from 16.4 dB to 20 ... 22.5 dB for the three with attacks above 1 ms or a fast release (the transients
   pass, the body is turned down), CTAGDRC keeps it (16.4 dB).
 - Not yet: the family of curves, threshold over frequency, the hysteresis loop (gates), the gain-reduction heat map and the level histograms
-  of 6; a time model that smooths the linear level.
+  of 6.
+
+### W11.3f addendum: the linear level as a fourth time model (0.94.0, done)
+- `TimeModel::LevelLinear` (and `reference::Smoothing::LevelLinear`, the Reference Compressor's choice "Level (linear)"): the level as an
+  amplitude smoothed with attack and release, the gain computer unsmoothed after it. The author asked to flag it: the report calls it
+  **atypical** ("atypical: the linear level is smoothed, so attack and release in dB depend on how far the level steps"; "(atypical)" in the
+  summary and the views). Why: an exponential in the amplitude is not one in dB, so a large reduction recovers its first decibels quickly and
+  its last ones slowly, a small one evenly; Giannoulis et al. (2012) smooth in the log domain for that reason. ("Non-musical" would judge the
+  sound; "atypical" only says that the time behaviour does not follow the usual design.)
+- Tests: the reference with the linear level recognised (error 0.0000 dB, the other three 0.04 ... 0.60 dB), attack and release exact; only
+  this variant is flagged. SocaLabs Compressor now fits exactly (0.50 / 2.5 ms, 0.00 dB).
 
 ## 9. Questions for the author
 1. **Test set**: which free compressors, limiters and gates (a clean digital compressor, an 1176- or LA-2A-style model, a limiter, a gate)?

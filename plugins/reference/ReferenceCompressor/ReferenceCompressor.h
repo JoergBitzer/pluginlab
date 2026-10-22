@@ -166,9 +166,10 @@ const pluginlab::refplugins::ChoiceSpec g_paramDetector{
     "detector", "Detector", {"Peak", "RMS"}, 0, "Peak: 20 lg |x| per sample; RMS: the moving mean square over the RMS window."};
 
 const pluginlab::refplugins::ChoiceSpec g_paramSmoothing{
-    "smoothing", "Smoothing", {"Gain (dB)", "Level (dB)", "Two stages"}, 0,
+    "smoothing", "Smoothing", {"Gain (dB)", "Level (dB)", "Two stages", "Level (linear)"}, 0,
     "Where attack and release act: on the gain reduction in dB (Giannoulis' recommendation), on the detector level in dB (the gain computer "
-    "after it), or the detector's power first (2 / 20 ms) and then the gain reduction in dB (Simmer, Schmidt, Bitzer 2006)."};
+    "after it), the detector's power first (2 / 20 ms) and then the gain reduction in dB (Simmer, Schmidt, Bitzer 2006), or on the level as "
+    "an amplitude (atypical: the times in dB depend on the step's height)."};
 
 class ReferenceCompressorAudio : public SynchronBlockProcessor
 {

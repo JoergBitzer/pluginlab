@@ -18,12 +18,14 @@ namespace pluginlab::reference
 // and the gain makeup - s applied to the input delayed by the look-ahead.
 // Where the smoothing is (the model variants of Simmer, Schmidt, Bitzer 2006 and the plan's comments, W11.3c): GainLog smooths the gain
 // reduction in dB (Giannoulis' recommendation); LevelLog smooths the detector level in dB and the gain computer follows it unsmoothed; TwoStage
-// smooths the detector's power (linear, its own attack and release) and then the gain reduction in dB
+// smooths the detector's power (linear, its own attack and release) and then the gain reduction in dB; LevelLinear smooths the level as an
+// amplitude (linear) and the gain computer follows it unsmoothed (W11.3f: an atypical design, its times in dB depend on the step's height)
 enum class Smoothing
 {
     GainLog,
     LevelLog,
-    TwoStage
+    TwoStage,
+    LevelLinear
 };
 
 enum class Detector

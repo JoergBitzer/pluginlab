@@ -172,6 +172,18 @@ void Compressor::process(juce::AudioBuffer<float>& buffer)
                 m_detector[channel] = coefficient * m_detector[channel] + (1.0 - coefficient) * level;
                 m_smoothed[channel] = computeReduction(m_detector[channel]);
             }
+            else if (m_settings.smoothing == Smoothing::LevelLinear)
+            {
+                // the level as an amplitude smoothed (linear), the gain computer unsmoothed after it
+                const double amplitude = std::pow(10.0, level / 20.0);
+                double coefficient = m_release;
+                if (amplitude > m_detector[channel])
+                {
+                    coefficient = m_attack;
+                }
+                m_detector[channel] = coefficient * m_detector[channel] + (1.0 - coefficient) * amplitude;
+                m_smoothed[channel] = computeReduction(20.0 * std::log10(std::max(m_detector[channel], 1.0e-10)));
+            }
             else
             {
                 if (m_settings.smoothing == Smoothing::TwoStage)

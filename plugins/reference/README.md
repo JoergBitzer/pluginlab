@@ -111,7 +111,7 @@ A new setting rebuilds the network (it starts empty).
 | Detector, RMS window | Peak / RMS, 1 ... 100 ms | 20 lg \|x\| per sample, or the moving mean square |
 | Stereo link | 0 ... 100 % | x = (1 - link) x_c + link max(x) |
 | Threshold, Ratio, Knee | -60 ... 0 dBFS, 1 ... 20, 0 ... 24 dB | the gain computer of Giannoulis et al. (2012), quadratic soft knee |
-| Smoothing | Gain (dB) / Level (dB) / Two stages | where attack and release act (the model variants of W11.3c; two stages: the detector power with 2 / 20 ms first) |
+| Smoothing | Gain (dB) / Level (dB) / Two stages / Level (linear) | where attack and release act (the model variants of W11.3c; two stages: the detector power with 2 / 20 ms first; linear level: atypical, 0.94.0) |
 | Attack, Release, Hold | 0.1 ... 200 ms, 5 ... 2000 ms, 0 ... 200 ms | a = exp(-1 / (tau fs)), smooth branching; the hold delays the release |
 | Look-ahead | 0 ... 10 ms | the audio delayed, the detector not; reported as the latency |
 | Makeup | -12 ... 24 dB | a fixed gain after the compression |
