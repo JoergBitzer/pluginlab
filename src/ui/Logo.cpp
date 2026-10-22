@@ -31,7 +31,7 @@ juce::Image makeLogo(int height)
 {
     // a "JB" monogram (Jade Benchmark) on a JadeRed rounded square, the name beside it ("Jade" red, "Benchmark" gray)
     const int width = height * 4;
-    juce::Image image(juce::Image::ARGB, width, height, true);
+    juce::Image image(juce::Image::ARGB, width, height, true, juce::SoftwareImageType());
     juce::Graphics g(image);
     const auto size = static_cast<float>(height);
     g.setColour(kLogoBackground);

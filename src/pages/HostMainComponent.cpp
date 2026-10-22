@@ -23,7 +23,12 @@ constexpr int kLoadedWidthName = 200;
 constexpr int kLoadedWidthFormat = 60;
 constexpr int kLoadedWidthParameters = 90;
 constexpr int kLoadedListWidth = 380;
-const juce::String kPluginSetWildcard = "*" + pluginlab::engine::kPluginSetExtension;
+// a function, not a global made from another global: kPluginSetExtension is an inline variable of a header, and the order in which globals
+// of different files are made is not defined (on Windows this one came first and crashed at startup, 0.80.0)
+juce::String getPluginSetWildcard()
+{
+    return "*" + pluginlab::engine::kPluginSetExtension;
+}
 }
 
 HostMainComponent::HostMainComponent(pluginlab::engine::MeasurementEngine& engine,
@@ -282,7 +287,7 @@ void HostMainComponent::showEditorOfSlot(int slotIndex)
 void HostMainComponent::savePluginSet()
 {
     m_chooser = std::make_unique<juce::FileChooser>("Save the plugin set", m_settings.getListFolder().getChildFile("plugins" + pluginlab::engine::kPluginSetExtension),
-                                                    kPluginSetWildcard);
+                                                    getPluginSetWildcard());
     m_chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
                            [this](const juce::FileChooser& chooser)
                            {
@@ -304,7 +309,7 @@ void HostMainComponent::savePluginSet()
 
 void HostMainComponent::loadPluginSet()
 {
-    m_chooser = std::make_unique<juce::FileChooser>("Load a plugin set", m_settings.getListFolder(), kPluginSetWildcard);
+    m_chooser = std::make_unique<juce::FileChooser>("Load a plugin set", m_settings.getListFolder(), getPluginSetWildcard());
     m_chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                            [this](const juce::FileChooser& chooser)
                            {

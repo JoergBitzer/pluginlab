@@ -39,7 +39,7 @@ juce::Colour getPlotColour(int index)
 juce::Image renderResponsePlot(const std::vector<double>& frequencies, const std::vector<PlotCurve>& curves, const std::vector<PlotCurve>& differences,
                                const ResponsePlotOptions& options)
 {
-    juce::Image image(juce::Image::RGB, options.width, options.height, true);
+    juce::Image image(juce::Image::RGB, options.width, options.height, true, juce::SoftwareImageType()); // the same on every platform (see SpectrogramImage)
     juce::Graphics g(image);
     g.fillAll(kBackground);
     g.setFont(juce::FontOptions(kFontHeight));

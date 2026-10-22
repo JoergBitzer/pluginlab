@@ -60,7 +60,9 @@ float getRowLevel(const std::vector<float>& frame, double binHz, double low, dou
 
 juce::Image renderSpectrogramImage(const measure::Spectrogram& spectrogram, const SpectrogramImageOptions& options)
 {
-    juce::Image image(juce::Image::RGB, options.width, options.height, true);
+    // a software image: drawing and the pixels written directly must not be reordered (a Direct2D image on Windows writes the Graphics
+    // context's drawing at its end, over the pixels; found in CI, 0.80.0)
+    juce::Image image(juce::Image::RGB, options.width, options.height, true, juce::SoftwareImageType());
     juce::Graphics g(image);
     g.fillAll(kBackground);
     g.setFont(juce::FontOptions(kFontHeight));

@@ -72,33 +72,13 @@ jobs:
           key: ${{ matrix.name }}-release
           max-size: 2G
 
-      # Windows: with debug information in the Release build (the call stack of a crash in CI has names)
       - name: Configure
         shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            # Git Bash would turn "/O2" and the like into paths: no conversion for this command
-            MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" cmake -S . -B build -DCMAKE_BUILD_TYPE=Release "-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Zi" "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG /OPT:REF /OPT:ICF"
-          else
-            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          fi
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         shell: bash
         run: cmake --build build --config Release --parallel 4
-
-      # Diagnosis (0.73.1): PluginLabHost ended with an access violation at startup on Windows (v0.70.4, even --write-version); the call
-      # stack from the debugger of the Windows SDK
-      - name: PluginLabHost at startup under the debugger (Windows)
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $cdb = "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe"
-          $exe = (Get-ChildItem -Recurse build -Filter PluginLabHost.exe | Select-Object -First 1).FullName
-          Write-Host "PluginLabHost: $exe"
-          & $cdb -g -G -lines -c "kP 40; q" $exe --write-version "$env:RUNNER_TEMP\\version.txt"
-          Write-Host "exit code: $LASTEXITCODE"
 
       # pluginval first: the scripts download it (tools/run_pluginval.*), the validator tests of PluginLabTests then find it
       # and must not be skipped (PLUGINLAB_REQUIRE_PLUGINVAL)

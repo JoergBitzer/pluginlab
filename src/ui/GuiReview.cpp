@@ -74,7 +74,7 @@ double getLinearDistance(juce::Colour first, juce::Colour second)
 template <typename Function>
 juce::Image mapPixels(const juce::Image& source, Function function)
 {
-    juce::Image result(juce::Image::ARGB, source.getWidth(), source.getHeight(), true);
+    juce::Image result(juce::Image::ARGB, source.getWidth(), source.getHeight(), true, juce::SoftwareImageType());
     for (int y = 0; y < source.getHeight(); ++y)
     {
         for (int x = 0; x < source.getWidth(); ++x)
@@ -194,7 +194,7 @@ juce::Image makeContactSheet(const std::vector<std::pair<juce::String, juce::Ima
     const int rows = (count + columns - 1) / columns;
     const int cellWidth = tileWidth + kGap;
     const int cellHeight = tileHeight + kLabelHeight + kGap;
-    juce::Image sheet(juce::Image::RGB, columns * cellWidth + kGap, rows * cellHeight + kGap, true);
+    juce::Image sheet(juce::Image::RGB, columns * cellWidth + kGap, rows * cellHeight + kGap, true, juce::SoftwareImageType());
     juce::Graphics g(sheet);
     g.fillAll(juce::Colour(0xff808080));
     g.setFont(juce::FontOptions(15.0f));
