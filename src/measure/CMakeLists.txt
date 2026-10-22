@@ -17,6 +17,7 @@ add_library(pluginlab_measure STATIC
     Phase.cpp
     Reverb.cpp
     ReverbTexture.cpp
+    ReverbVariance.cpp
     Spectrogram.cpp
     SweptImpulse.cpp
     SystemClass.cpp

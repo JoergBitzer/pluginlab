@@ -136,4 +136,44 @@ struct DecayRelief
 };
 
 DecayRelief getDecayRelief(const std::vector<double>& response, int start, int end, double sampleRate, int frameSize = 1024, int hop = 256);
+
+// Time variance (W11.2d, docs/design/W11-reverb-plan.md 4.5): one instance, impulses far apart (each response meets a modulation at another
+// phase). Per response its decay (Schroeder, T30) and their spread; the strongest early peaks of the first response followed through all of them
+// (the author's method, AES 121: a modulated reflection spreads, a fixed one does not). Averaging the responses would cancel a modulated tail, so
+// every decay is taken from one response alone.
+struct VarianceSettings
+{
+    double sampleRate = 48000.0;
+    double latencySamples = 0.0;
+    double earlySeconds = 0.05;       // the peaks: the strongest within this after the onset ...
+    int peaks = 8;                    // ... this many
+    int peakSearch = 3;               // a peak is followed within +-this many samples
+    double spreadVariant = 0.05;      // a peak whose value scatters by more than this (std / |mean|) is a modulated reflection
+};
+
+struct PeakSpread
+{
+    double timeSeconds = 0.0;         // in the first response, after the impulse
+    double meanValue = 0.0;
+    double valueSpread = 0.0;         // the standard deviation of its value over the responses, relative to |mean|
+    double timeSpreadSamples = 0.0;   // the standard deviation of its position
+};
+
+struct TimeVariance
+{
+    std::vector<double> t30PerResponse;
+    double t30Mean = 0.0;
+    double t30Spread = 0.0;           // standard deviation, seconds
+    std::vector<PeakSpread> peaks;
+    double largestValueSpread = 0.0;
+    bool timeVariant = false;         // a peak scatters by more than spreadVariant
+};
+
+// output: one channel of the response to makeImpulseTrain(count, periodSamples, ...) (each period longer than the tail)
+TimeVariance analyseTimeVariance(const std::vector<double>& output, int count, int periodSamples, const VarianceSettings& settings);
+
+// The interrupted-noise method of ISO 3382-1 (natural for time-variant reverbs): noise bursts, each followed by silence; the decays after the
+// bursts averaged in energy (10 ms blocks), the line from -5 to -35 dB below the steady level
+std::vector<float> makeInterruptedNoise(int bursts, int burstSamples, int periodSamples, float level, int seed);
+double getInterruptedNoiseT30(const std::vector<double>& output, int bursts, int burstSamples, int periodSamples, double sampleRate);
 }

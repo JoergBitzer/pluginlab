@@ -6,7 +6,9 @@
 
 #include "pluginlab/measure/Reverb.h"
 #include "pluginlab/reference/Biquad.h"
+#include "pluginlab/measure/DelayTrajectory.h"
 #include "pluginlab/reference/Designs.h"
+#include "pluginlab/reference/FdnReverb.h"
 #include "pluginlab/reference/SchroederReverb.h"
 #include "pluginlab/reference/SyntheticReverb.h"
 
@@ -243,6 +245,7 @@ public:
             expectWithinAbsoluteError(analysis.preDelaySeconds, 0.012, kPreDelayTolerance, "the pre-delay to the first reflection");
         }
         testTexture();
+        testVariance();
 
     }
 
@@ -320,6 +323,80 @@ public:
             }
             expect(atComb, "at a comb delay (or a multiple)");
         }
+    }
+
+    // W11.2d: the FDN reference fixed and modulated: decays per response, early peaks over the responses, interrupted noise
+    void testVariance()
+    {
+        constexpr int kResponses = 10;
+        const int period = static_cast<int>(2.5 * kSampleRate); // 1.5 s: 100 dB down after 2.5 s
+        for (const bool modulated : {false, true})
+        {
+            juce::String name = "a fixed FDN";
+            if (modulated)
+            {
+                name = "a modulated FDN (1 Hz, 8 samples)";
+            }
+            beginTest(name + ": the responses' T30 agree within 2 %, the early peaks " + juce::String(modulated ? "scatter" : "stay") + ", interrupted noise alike");
+            ref::FdnReverbSettings settings;
+            if (modulated)
+            {
+                settings.lfoRateHz = 1.0;
+                settings.lfoDepthSamples = 8.0;
+            }
+            ref::FdnReverb fdn(settings);
+            const std::vector<float> train = measure::makeImpulseTrain(kResponses, period, 1.0f);
+            const std::vector<double> output = render(fdn, train);
+            const measure::TimeVariance variance = measure::analyseTimeVariance(output, kResponses, period, {});
+            logMessage("T30 " + juce::String(variance.t30Mean, 4) + " s +- " + juce::String(variance.t30Spread * 1000.0, 1) + " ms, largest peak spread "
+                       + juce::String(variance.largestValueSpread, 3) + " over " + juce::String(static_cast<int>(variance.peaks.size())) + " peaks");
+            // the responses agree within their spread (2 %); fixed: T30 = 1.5 s; modulated: the interpolation in the loop damps the highs on every
+            // circulation (Lagrange: below 1 towards Nyquist), the broadband decay is shorter, the 500 Hz octave keeps 1.5 s
+            expectLessThan(variance.t30Spread, kDecayTolerance * variance.t30Mean, "the responses agree");
+            for (const double t30 : variance.t30PerResponse)
+            {
+                expectWithinAbsoluteError(t30, variance.t30Mean, 3.0 * std::max(variance.t30Spread, 1.0e-4), "a response's T30 within 3 spreads of the mean");
+            }
+            if (! modulated)
+            {
+                expectWithinAbsoluteError(variance.t30Mean, 1.5, 1.5 * kDecayTolerance, "T30");
+            }
+            const std::vector<double> first(output.begin(), output.begin() + period);
+            const measure::ReverbAnalysis analysis = measure::analyseReverb(first, {});
+            for (const measure::BandDecay& band : analysis.octaves)
+            {
+                if (std::abs(band.band.centreHz - 501.187) < 1.0)
+                {
+                    logMessage("the 500 Hz octave: T30 " + juce::String(band.times.t30, 3) + " s");
+                    expectWithinAbsoluteError(band.times.t30, 1.5, 1.5 * 0.03, "the 500 Hz octave keeps T30 (within 3 %: one response)");
+                }
+            }
+            expect(variance.timeVariant == modulated, "time-variant exactly when modulated");
+
+            const int burst = static_cast<int>(1.0 * kSampleRate);
+            const int burstPeriod = burst + period;
+            fdn.reset();
+            const std::vector<double> noiseOutput = render(fdn, measure::makeInterruptedNoise(4, burst, burstPeriod, 0.1f, 3));
+            const double interrupted = measure::getInterruptedNoiseT30(noiseOutput, 4, burst, burstPeriod, kSampleRate);
+            logMessage("interrupted noise: T30 " + juce::String(interrupted, 3) + " s");
+            expectWithinAbsoluteError(interrupted, variance.t30Mean, variance.t30Mean * 0.05, "the interrupted noise's T30 as the impulse responses' (four bursts: within 5 %)");
+        }
+    }
+
+    static std::vector<double> render(ref::Processor& processor, const std::vector<float>& input)
+    {
+        juce::AudioBuffer<float> buffer(1, static_cast<int>(input.size()));
+        for (size_t sample = 0; sample < input.size(); ++sample)
+        {
+            buffer.setSample(0, static_cast<int>(sample), input[sample]);
+        }
+        processor.process(buffer);
+        std::vector<double> output;
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            output.push_back(buffer.getSample(0, sample));
+        }
+        return output;
     }
 
 private:

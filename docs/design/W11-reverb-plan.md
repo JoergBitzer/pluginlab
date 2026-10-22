@@ -214,6 +214,18 @@ decaying Gaussian noise with a known T60 per band): every value of 4 has an expe
   EDR's decay time 2.0 s within 5 % (500 Hz ... 4 kHz); Schroeder's reverb: repetition 0.26 at a comb delay (1422 samples), never mixed, late
   kurtosis 59 (the paper: "far from" Gaussian).
 
+### W11.2d time variance (0.83.0, done)
+- `reference::FdnReverb`: 8 coprime delay lines, a Householder matrix, per line the gain for an exact T60 (Jot and Chaigne), pre-delay, two
+  outputs; optionally an LFO per line on its length (Lagrange per sample).
+- `measure::analyseTimeVariance`: one instance, impulses 2.5 s apart; each response's T30 alone (averaging would cancel a modulated tail) and
+  their spread; the 8 strongest early peaks of the first response followed through all responses (the author's AES 121 method): the spread of
+  their values; time-variant above 5 %. `measure::getInterruptedNoiseT30`: ISO 3382-1's interrupted noise, the decays averaged in energy.
+- Tests: the fixed FDN: T30 1.5028 s in every response, the peaks do not move, interrupted noise 1.504 s; the modulated FDN (1 Hz, 8 samples):
+  time-variant (peak spread 1.3), the responses agree (spread 0.6 %), the 500 Hz octave keeps 1.52 s, interrupted noise as the impulses.
+- Found: the modulation shortens the broadband decay (1.41 s for 1.5 s): the interpolation in the loop damps the highs on every circulation
+  (the same mark of the interpolation as in the delay's loop filter, W11.1b). A modulated reverb's T60 at high frequencies is shorter than its
+  fixed version's: worth a line in the report of a real modulated reverb.
+
 ## 9. Questions for the author
 1. **Test set**: which free reverbs (an FDN algorithm, a plate, a spring, a convolution reverb with a known IR)?
 Answer: I will collect a list of free reverbs. We should have at least A Moorer based reverb (Freeverb is a good candidate) in our own referenc plugin). Perhaps we will find source code for Dattoros tank and the coupled allpass from William Gardner. For convolution we can download some IRs from open source libraries. The spring reverb is a special case, since it is strongly dispersive and has a chirp in the impulse response. We will have to find a free example of that as well.
